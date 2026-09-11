@@ -90,6 +90,9 @@ Invariants, enforced structurally rather than remembered:
 
 ## 1.4 What is implemented
 
+Screen-by-screen description, interaction model and design language:
+[ui.md](ui.md). The summary below is the functional list.
+
 - CPU frequency floor/ceiling per cluster; release; profiles; home dashboard
 - Governor per cluster (best-effort, usually needs root, the UI says so)
 - GPU page (goes through sysfs, **not** PowerHAL)
@@ -223,14 +226,20 @@ A read-only detection scheme is designed in
 implemented**. The descriptor probe (`PowerHal.descriptor`) is implemented and is
 the zero-side-effect way to identify the binder first.
 
-## P9 — Requests are issued by Shizuku, not by this app 🟠
+## P9 — Requests must retain a stable owner 🟠
 
-`ShizukuBinderWrapper` routes the transaction through Shizuku's process, so MTK
-sees **Shizuku** as the client. The app cannot attribute requests to itself and
-cannot clean up after itself.
+The prior implementation sent PowerHAL transactions through
+`ShizukuBinderWrapper`, so MTK saw **Shizuku** as the client. That made the
+request owner shared and made handle cleanup vulnerable to a Shizuku process
+restart.
 
-Moving the `transact` into `RuntimeUserService` (the app's own elevated process)
-would make the app the client. **Not started.**
+**Implemented in 0.3.5, not yet verified on device:** acquire and release now
+run inside the app's daemon `RuntimeUserService`, matching the reference app's
+shape. `PowerHal` reaches it through `IRuntimeService`; the elevated service
+resolves `power_hal_mgr_service` and performs both binder transactions. The
+returned handle therefore belongs to one stable UserService process and is
+released from that same process. Check the runtime-service uid in the diagnostic
+report and verify repeated apply/release cycles with an external monitor.
 
 ## P10 — The app cannot read the frequency limits on this device 🔴
 
@@ -305,6 +314,18 @@ process spawns per screen visit. That is now a single batched call
 
 `CpuReapplyService` calls `CpuControl.apply` on a timer. It has never been run
 against a device already holding stale requests.
+
+## P16 — 0.3.5 single-value and range paths need hardware verification 🟠
+
+The reference app's smali was rechecked. Its one-point control submits all four
+per-policy resources (`MIN`, `MAX`, `MIN_HL`, `MAX_HL`) with the same kHz value;
+the old app path was not the same as this app's soft-only pair.
+
+**Implemented in 0.3.5, not yet verified on device:** equal endpoints now send
+that same four-resource request, so one tap on the segment control is a genuine
+single-value lock. Unequal endpoints deliberately send only the soft `MIN` and
+`MAX` pair, preserving a range rather than accidentally turning it into a hard
+lock. The log names the selected path and its exact endpoints.
 
 ---
 
@@ -423,6 +444,30 @@ In order. Do not skip 1.
 4. **Run S3's experiment**: small values on every cluster, then read back.
 5. Only then start on P1 with real evidence.
 
+## The reference material
+
+`reference/` holds the third-party material this protocol was worked out from:
+the reference application's APK, the decompiler output for it, memory dumps, and
+the vendor files fetched from public repositories while researching PowerHAL.
+
+**It is git-ignored except for its own `README.md`** — those files are a third
+party's, and this repository is public. `reference/README.md` lists what is in
+each subdirectory and where it came from.
+
+Two things to know before using it:
+
+- **`reference/decompiled/smali/` is the reliable copy.** A Java decompiler cannot
+  rebuild Kotlin suspend-function state machines or inline lambda bodies — it
+  emits dispatch stubs with the real logic missing, which is why a call site
+  searched for in the Java output appeared not to exist. The smali has it. When
+  something cannot be found in the Java, search the smali before concluding it is
+  not there. This is recorded in [pitfalls.md](pitfalls.md#10).
+- **The protocol facts are in [protocol.md](protocol.md), with sources** — prefer
+  those over re-reading the dump. The dump is for questions the facts do not
+  answer.
+
+Nothing under `reference/` is needed to build or run the app.
+
 ## Rules that have already cost time
 
 - `reference/` holds third-party material and is git-ignored except its README.
@@ -438,7 +483,9 @@ In order. Do not skip 1.
 
 | task | file |
 |---|---|
+| what the app looks like and how it is operated | [ui.md](ui.md) |
 | the protocol, with sources | [protocol.md](protocol.md) |
+| third-party reference material, and how to read it | `reference/README.md` |
 | why something is the way it is | [pitfalls.md](pitfalls.md) |
 | layers, invariants, testing gaps | [architecture.md](architecture.md) |
 | what this device can and cannot observe | [device-vivo-v2430a.md](device-vivo-v2430a.md) |
