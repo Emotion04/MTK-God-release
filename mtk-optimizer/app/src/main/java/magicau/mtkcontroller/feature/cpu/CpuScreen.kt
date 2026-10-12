@@ -1,14 +1,19 @@
 package magicau.mtkcontroller.feature.cpu
 
-import androidx.compose.animation.AnimatedVisibility
+import magicau.mtkcontroller.ui.components.FailureNote
+import magicau.mtkcontroller.ui.components.LocalNavBarClearance
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.graphics.Path
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,22 +21,26 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Create
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,12 +50,36 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleResumeEffect
-import magicau.mtkcontroller.BuildConfig
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.delay
+import magicau.mtkcontroller.R
+import magicau.mtkcontroller.domain.model.CpuLayoutMode
+import magicau.mtkcontroller.domain.model.RangeControlMode
+import magicau.mtkcontroller.ui.components.FrequencyGauge
+import magicau.mtkcontroller.ui.components.ProfileTagRow
+import magicau.mtkcontroller.ui.displayLabel
+import magicau.mtkcontroller.ui.theme.LocalShapeStyle
 
+/**
+ * CPU 调频页。
+ *
+ * ## 页面顺序 = 决策顺序
+ *
+ * 标签 → 仪表 → 频率区间 →（左下角）高级设置 → 操作。
+ * 先看现在被压到哪儿（仪表），再定区间（最常调的）；温控档位和调速器是选一次就
+ * 放着的低频控件，收进二级页，不占首屏。
+ *
+ * ## 不写页眉
+ *
+ * 版本号、簇数量那些是开发时确认环境用的，对用户是噪声。
+ */
 @Composable
 fun CpuScreen(
     state: CpuUiState,
@@ -55,12 +88,25 @@ fun CpuScreen(
     onApply: () -> Unit,
     onRelease: () -> Unit,
     onEmergencyRestore: () -> Unit,
+    onToggleLoad: () -> Unit = {},
     onSaveProfile: (String) -> Unit,
+    /** 点标签：把方案装进编辑区（不应用）。-1 表示"默认"。 */
+    onSelectProfile: (Int) -> Unit = {},
+    /** 长按标签：重命名 / 删除。 */
+    onLongPressProfile: (Int) -> Unit = {},
+    /** 一个方案都没有时，一键建两个示例。 */
+    onCreateExampleProfiles: () -> Unit = {},
+    onDeleteProfile: (Int) -> Unit = {},
+    onRenameProfile: (Int, String) -> Unit = { _, _ -> },
+    /** 打开「高级设置」二级页（温控档位 + 调速器）。 */
+    onOpenAdvanced: () -> Unit = {},
+    /** 这一页是否正显示。为假时不跑周期读取。 */
+    samplingActive: Boolean = true,
+    onReadCaps: suspend () -> Unit = {},
     modifier: Modifier = Modifier,
     onResume: () -> Unit = {},
 ) {
-    // Re-check PowerHAL whenever the screen comes back to the foreground: the
-    // user may have granted Shizuku while the CPU tab was in the background.
+    // 从后台回到前台时重查一次 PowerHAL：用户可能在别的页面刚授权 Shizuku。
     LifecycleResumeEffect(Unit) {
         onResume()
         onPauseOrDispose { }
@@ -75,94 +121,105 @@ fun CpuScreen(
 
     if (state.edits.isEmpty()) {
         EmptyState(
-            title = "未检测到 CPU 簇",
-            body = "设备上没有找到 cpufreq 策略目录。模拟器通常没有,真机上应能看到 policy0/policy4/…",
+            title = stringResource(R.string.cpu_no_clusters_title),
+            body = stringResource(R.string.cpu_no_clusters_body),
             modifier = modifier,
         )
         return
     }
 
     var showSaveDialog by remember { mutableStateOf(false) }
-    // Governor is deliberately collapsed: it is a secondary knob that needs
-    // root on most ROMs, so it should not dominate a screen whose job is
-    // frequency limits.
-    var governorExpanded by remember { mutableStateOf(false) }
+    // 长按标签后的重命名/删除入口。放在这里而不是父级，是因为它只服务于
+    // 这一行标签，父级没必要知道有这么一个菜单。
+    var profileMenuFor by remember { mutableStateOf<Int?>(null) }
+    var renamingProfile by remember { mutableStateOf<Int?>(null) }
 
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 110.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = LocalNavBarClearance.current),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        item { Header(state) }
-
+        // 方案标签永远在第一位：它决定下面所有控件的取值，属于"先选方案再微调"。
         item {
-            GovernorSection(
-                edits = state.edits,
-                expanded = governorExpanded,
-                enabled = !state.busy,
-                onToggle = { governorExpanded = !governorExpanded },
-                onGovernorChange = onGovernorChange,
+            ProfileTagRow(
+                names = state.profiles.map { it.name },
+                // 高亮跟**编辑区**，不是跟"已应用" —— 点标签只装载，不应用。
+                // 跟已应用的话，点任何标签都会是「默认」亮着。
+                activeIndex = state.profiles.indexOfFirst { it.id == state.editorProfileId },
+                onSelect = onSelectProfile,
+                onLongPress = { index -> profileMenuFor = index },
+                onAdd = { showSaveDialog = true },
             )
         }
 
-        itemsIndexed(
-            items = state.edits,
-            key = { _, edit -> edit.cluster.policy },
-        ) { index, edit ->
-            ClusterCard(
-                edit = edit,
-                enabled = !state.busy,
-                onRange = { lo, hi -> onRange(index, lo, hi) },
-            )
-        }
-
-        item {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
-                        onClick = onApply,
-                        enabled = !state.busy && state.powerHal.available,
-                        modifier = Modifier.weight(1f),
-                    ) { Text("应用") }
-
-                    OutlinedButton(
-                        onClick = onRelease,
-                        enabled = !state.busy && state.powerHal.available,
-                        modifier = Modifier.weight(1f),
-                    ) { Text("释放") }
-                }
-
-                // Deliberately not styled as a normal action: it is the way out
-                // of a cluster pinned by a lost request, which no other control
-                // can undo.
-                OutlinedButton(
-                    onClick = onEmergencyRestore,
-                    enabled = !state.busy,
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text("紧急恢复(直接写内核,绕过 PowerHAL)") }
-
-                OutlinedButton(
-                    onClick = { showSaveDialog = true },
-                    enabled = !state.busy && state.edits.any { it.cluster.availableFreqs.isNotEmpty() },
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text("保存为方案") }
-
-                if (!state.powerHal.available && state.powerHal.checked) {
+        // 一个方案都没有时给一句话和一个按钮。用户不知道"方案"是什么之前，
+        // 不会去点末尾那个孤零零的 +。
+        if (state.profiles.isEmpty()) {
+            item {
+                Column {
                     Text(
-                        text = state.powerHal.reason ?: "调频当前不可用",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
+                        stringResource(R.string.profile_empty_title),
+                        style = MaterialTheme.typography.titleSmall,
                     )
-                }
-
-                state.message?.let {
                     Text(
-                        text = it,
+                        stringResource(R.string.profile_empty_sub),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    FilledTonalButton(
+                        onClick = onCreateExampleProfiles,
+                        modifier = Modifier.padding(top = 8.dp),
+                    ) { Text(stringResource(R.string.profile_create_examples)) }
                 }
             }
+        }
+
+        // 仪表提到最上面：它是这一页唯一"一眼看懂现在什么状况"的东西。
+        item { CapsPanel(state, onReadCaps, samplingActive) }
+
+        when (state.layoutMode) {
+            // 分卡片：每个核簇一张，高级入口挂在最后一格的左下角。
+            CpuLayoutMode.PER_CLUSTER -> {
+                itemsIndexed(
+                    items = state.edits,
+                    key = { _, edit -> edit.cluster.policy },
+                ) { index, edit ->
+                    ClusterCard(
+                        edit = edit,
+                        enabled = !state.busy,
+                        mode = state.rangeControlMode,
+                        onRange = { lo, hi -> onRange(index, lo, hi) },
+                    )
+                }
+                item { AdvancedEntry(state, onOpenAdvanced) }
+            }
+
+            // 合并卡片：频率区间和高级入口在同一张卡里，入口在卡片左下角。
+            CpuLayoutMode.UNIFIED -> item {
+                Card(Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Text(stringResource(R.string.cpu_range_title), style = MaterialTheme.typography.titleSmall)
+                        state.edits.forEachIndexed { index, edit ->
+                            RangeRow(edit, !state.busy, state.rangeControlMode) { lo, hi -> onRange(index, lo, hi) }
+                        }
+                        AdvancedEntry(state, onOpenAdvanced)
+                    }
+                }
+            }
+        }
+
+        item {
+            ActionsSection(
+                state = state,
+                onApply = onApply,
+                onRelease = onRelease,
+                onToggleLoad = onToggleLoad,
+                onEmergencyRestore = onEmergencyRestore,
+                onSaveProfile = { showSaveDialog = true },
+            )
         }
     }
 
@@ -175,146 +232,110 @@ fun CpuScreen(
             },
         )
     }
+
+    // 长按标签：先给一个只有两个动作的菜单，而不是直接弹重命名输入框 ——
+    // 长按的意图可能是删除，不该先逼用户面对一个文本框。
+    profileMenuFor?.let { index ->
+        val profile = state.profiles.getOrNull(index)
+        if (profile == null) {
+            profileMenuFor = null
+        } else {
+            AlertDialog(
+                onDismissRequest = { profileMenuFor = null },
+                title = { Text(profile.name) },
+                text = {
+                    Column {
+                        TextButton(
+                            onClick = { profileMenuFor = null; renamingProfile = index },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text(stringResource(R.string.action_rename)) }
+                        TextButton(
+                            onClick = { profileMenuFor = null; onDeleteProfile(index) },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text(stringResource(R.string.action_delete)) }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { profileMenuFor = null }) {
+                        Text(stringResource(R.string.action_cancel))
+                    }
+                },
+            )
+        }
+    }
+
+    renamingProfile?.let { index ->
+        val profile = state.profiles.getOrNull(index)
+        if (profile == null) {
+            renamingProfile = null
+        } else {
+            SaveProfileDialog(
+                initialName = profile.name,
+                title = stringResource(R.string.cpu_rename_profile),
+                onDismiss = { renamingProfile = null },
+                onConfirm = { newName ->
+                    onRenameProfile(index, newName)
+                    renamingProfile = null
+                },
+            )
+        }
+    }
+
 }
 
+/**
+ * 「高级设置」入口：**小字 + 小按钮**，左对齐贴在频率区间的左下角。
+ *
+ * 摘要一直显示（当前档位、当前调速器），所以收起来不等于看不见 ——
+ * 入口本身就把状态说清楚了，不需要点进去确认。
+ */
 @Composable
-private fun Header(state: CpuUiState) {
-    val clusters = state.edits.map { it.cluster }
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text("CPU 调频", style = MaterialTheme.typography.titleLarge)
+private fun AdvancedEntry(state: CpuUiState, onClick: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        TextButton(onClick = onClick, contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)) {
+            Text(
+                stringResource(R.string.cpu_advanced),
+                style = MaterialTheme.typography.labelMedium,
+            )
+            Icon(
+                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                modifier = Modifier.height(16.dp),
+                tint = MaterialTheme.colorScheme.primary,
+            )
+        }
+        // 文案先在 composable 上下文里取好 —— `buildString` 的 lambda 不是
+        // composable 上下文，里面调不了 `stringResource`。
+        //
+        // 显示**编辑区选的**档位，后面括号标出生效状态 ——
+        // 只显示已生效的话，用户选完还看不出自己选了什么。
+        val editing = state.thermalIndexEdit
+        val thermalBadge = editing
+            ?.let { stringResource(R.string.cpu_thermal_badge, it) }
+            ?: stringResource(R.string.cpu_thermal_badge_none)
+        val pendingSuffix = if (editing != null && editing != state.thermalPolicyIndex) {
+            stringResource(R.string.cpu_pending_suffix)
+        } else {
+            ""
+        }
+        val governors = state.edits.map { it.governor ?: "—" }.distinct().joinToString("/")
         Text(
-            // The cluster count is shown because it is discovered at runtime:
-            // two-, three- and four-cluster SoCs all land here.
-            text = "检测到 ${clusters.size} 个簇 · " +
-                clusters.joinToString(" / ") { "${it.cpus.size}核" },
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            text = state.activeProfileName?.let { "当前方案:$it" } ?: "未套用方案",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        // The version sits here, not only on the log screen, because "which
-        // build am I looking at" has twice been the actual question behind a
-        // bug report and the log screen is not where anyone looks.
-        Text(
-            text = "版本 ${BuildConfig.VERSION_NAME} · 分段条:点一下锁死 / 点第二个值选范围 / 拖动选范围",
+            "$thermalBadge$pendingSuffix · $governors",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
 
-/**
- * Collapsible governor picker covering every cluster.
- *
- * Collapsed by default: it is one row summarising the current governor, and it
- * expands to a radio list. A dropdown per cluster inside an already-scrollable
- * card was awkward to hit and made the screen much longer than it needed to be.
- */
-@Composable
-private fun GovernorSection(
-    edits: List<ClusterEdit>,
-    expanded: Boolean,
-    enabled: Boolean,
-    onToggle: () -> Unit,
-    onGovernorChange: (Int, String) -> Unit,
-) {
-    val writable = edits.any { it.cluster.governorWritable }
-    val summary = edits.map { it.governor ?: "—" }.distinct().joinToString(" / ")
-
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(enabled = enabled, onClick = onToggle)
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text("CPU 调速器", style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        summary,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Icon(
-                    imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
-                    contentDescription = if (expanded) "收起" else "展开",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
-            AnimatedVisibility(visible = expanded) {
-                Column(modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 10.dp)) {
-                    if (!writable) {
-                        Text(
-                            "当前无法写入调速器节点,选择后可能不会生效。",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.padding(start = 8.dp, bottom = 6.dp),
-                        )
-                    }
-                    edits.forEachIndexed { index, edit ->
-                        Text(
-                            edit.cluster.label,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(start = 8.dp, top = 6.dp, bottom = 2.dp),
-                        )
-                        val governors = edit.cluster.governors.ifEmpty {
-                            listOfNotNull(edit.cluster.currentGovernor)
-                        }
-                        if (governors.isEmpty()) {
-                            Text(
-                                "该设备未报告可用调速器",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(start = 8.dp, bottom = 2.dp),
-                            )
-                        }
-                        governors.forEach { governor ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .selectable(
-                                        selected = edit.governor == governor,
-                                        role = Role.RadioButton,
-                                        enabled = enabled,
-                                        onClick = { onGovernorChange(index, governor) },
-                                    )
-                                    .padding(horizontal = 8.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                RadioButton(
-                                    selected = edit.governor == governor,
-                                    onClick = null,
-                                    enabled = enabled,
-                                )
-                                Text(governor, style = MaterialTheme.typography.bodyMedium)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
+// ==================== 频率区间 ====================
 
 @Composable
 private fun ClusterCard(
     edit: ClusterEdit,
     enabled: Boolean,
+    mode: RangeControlMode,
     onRange: (Int, Int) -> Unit,
 ) {
-    val freqs = edit.cluster.availableFreqs
-    val lastIndex = freqs.lastIndex.coerceAtLeast(0)
-
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -325,98 +346,64 @@ private fun ClusterCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(edit.cluster.label, style = MaterialTheme.typography.titleMedium)
+                Text(edit.cluster.displayLabel(), style = MaterialTheme.typography.titleMedium)
                 Text(
-                    text = edit.cluster.currentFreqKhz?.let { "${it / 1000} MHz" } ?: "—",
+                    text = stringResource(R.string.cpu_core_count, edit.cluster.cpus.size),
                     style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            RangeRow(edit, enabled, mode, onRange)
+        }
+    }
+}
 
-            if (freqs.isEmpty()) {
-                Text(
-                    text = "该簇没有可用的频率列表,无法调节。" +
-                        (edit.cluster.driver?.let { "(驱动:$it)" } ?: ""),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-                return@Column
-            }
-
-            SegmentBar(
+/** 一个核簇的频率区间控件：标题 + 当前范围 + 调节条。 */
+@Composable
+private fun RangeRow(
+    edit: ClusterEdit,
+    enabled: Boolean,
+    mode: RangeControlMode,
+    onRange: (Int, Int) -> Unit,
+) {
+    val freqs = edit.cluster.availableFreqs
+    if (freqs.isEmpty()) {
+        Text(
+            stringResource(R.string.cpu_no_freq_table, edit.cluster.displayLabel()),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+        )
+        return
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Bottom,
+        ) {
+            Text(edit.cluster.displayLabel(), style = MaterialTheme.typography.bodyMedium)
+            Text(
+                "${edit.minFreqKhz / 1000} – ${edit.maxFreqKhz / 1000} MHz",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        when (mode) {
+            RangeControlMode.SEGMENT -> SegmentBar(
                 count = freqs.size,
                 minIndex = edit.minIndex,
                 maxIndex = edit.maxIndex,
                 enabled = enabled,
                 onRange = onRange,
             )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                LimitLabel("min", edit.minFreqKhz)
-                LimitLabel("max", edit.maxFreqKhz)
-            }
-        }
-    }
-}
-
-/** "min 1234 MHz" — Latin labels, monospaced value so the row does not jitter. */
-@Composable
-private fun LimitLabel(name: String, freqKhz: Long) {
-    Row(
-        verticalAlignment = Alignment.Bottom,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Text(
-            name,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            "${freqKhz / 1000} MHz",
-            style = MaterialTheme.typography.bodyMedium,
-        )
-    }
-}
-
-@Composable
-private fun SaveProfileDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
-    var name by remember { mutableStateOf("") }
-
-    androidx.compose.material3.AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("保存为方案") },
-        text = {
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                label = { Text("方案名称") },
-                singleLine = true,
+            RangeControlMode.SLIDER -> RangeHandleBar(
+                count = freqs.size,
+                minIndex = edit.minIndex,
+                maxIndex = edit.maxIndex,
+                enabled = enabled,
+                onRange = onRange,
             )
-        },
-        confirmButton = {
-            TextButton(onClick = { onConfirm(name.ifBlank { "未命名方案" }) }) { Text("保存") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
-    )
-}
-
-@Composable
-internal fun EmptyState(title: String, body: String, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier.fillMaxWidth().padding(32.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(title, style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
-        Text(
-            body,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
+        }
     }
 }
 
@@ -515,7 +502,7 @@ private fun SegmentBar(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
-                    .clip(RoundedCornerShape(3.dp))
+                    .clip(LocalShapeStyle.current.chip)
                     .background(
                         when {
                             isEdge && shownFrom != shownTo -> MaterialTheme.colorScheme.tertiary
@@ -524,6 +511,359 @@ private fun SegmentBar(
                         }
                     ),
             )
+        }
+    }
+}
+
+/**
+ * 内核频率约束总览：每簇的下限、上限、当前频率。
+ *
+ * 三个数是这套机制的全部真相 —— **上限**是温控/限幅层写的，我们发的频率请求改不动它；
+ * **下限**是我们能设的；**当前**是 Governor 按利用率选的。
+ * 只看"当前频率"会分不清是上限被压住还是负载没上去，所以三个一起摆出来。
+ *
+ * 轮询用 repeatOnLifecycle(STARTED)：退到后台立刻停，不持续耗电。
+ */
+@Composable
+private fun CapsPanel(state: CpuUiState, onReadCaps: suspend () -> Unit, active: Boolean) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    // active 为假时不起轮询：相邻标签页现在会预组合，不门控的话
+    // 两页会同时每秒读几次内核。
+    LaunchedEffect(lifecycleOwner, active) {
+        if (!active) return@LaunchedEffect
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                onReadCaps()
+                delay(2000)
+            }
+        }
+    }
+    if (state.caps.isEmpty()) return
+
+    // 并排一行：几簇放一起才能横向比较"哪一簇被压得更狠"。
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            state.caps.forEach { cap ->
+                val cluster = state.edits.firstOrNull { it.cluster.policy == cap.policy }?.cluster
+                Column(
+                    modifier = Modifier.weight(1f),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        if (cluster != null) cluster.displayLabel() else cap.policy,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
+                    FrequencyGauge(
+                        currentKhz = cap.curKhz?.toLong(),
+                        maxLimitKhz = cap.maxKhz?.toLong(),
+                        minLimitKhz = cap.minKhz?.toLong(),
+                        // 量程取硬件上限：固定不变，红弧的长度才可比。
+                        hardwareMaxKhz = cluster?.maxFreqKhz?.takeIf { it > 0 }
+                            ?: cap.maxKhz?.toLong() ?: 0L,
+                        compact = true,
+                    )
+                }
+            }
+        }
+        // 只有画了红弧才解释红弧。读不到时不画红也不画绿，环是中性灰 ——
+        // 那不需要一句话去解释，环下面的"上限 —"已经说完了。
+        if (state.caps.any { it.maxKhz != null }) {
+            Text(
+                stringResource(R.string.cpu_gauge_blocked),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 10.dp),
+            )
+        }
+    }
+}
+
+// ==================== 操作区 ====================
+
+/** 页面底部的动作：应用 / 释放、满载负载、强制恢复、保存方案。 */
+@Composable
+private fun ActionsSection(
+    state: CpuUiState,
+    onApply: () -> Unit,
+    onRelease: () -> Unit,
+    onToggleLoad: () -> Unit,
+    onEmergencyRestore: () -> Unit,
+    onSaveProfile: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                onClick = onApply,
+                enabled = !state.busy && state.powerHal.available,
+                modifier = Modifier.weight(1f),
+            ) { Text(stringResource(R.string.action_apply)) }
+
+            FilledTonalButton(
+                onClick = onRelease,
+                enabled = !state.busy && state.powerHal.available,
+                modifier = Modifier.weight(1f),
+            ) { Text(stringResource(R.string.action_release)) }
+        }
+
+        // 功能区：小按钮 + 图标，横排。不用整行大按钮 —— 这几项都不是主流程，
+        // 占满宽度会把「应用/释放」压下去，而那才是这一页的主动作。
+        // 做成 FlowRow 是为了后面加东西时不用重新排版。
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            // 满载负载。**必须在 App 进程里跑**：adb 起的 busy loop 落在根 cpuset，
+            // 有效利用率被压到极低，超大核会停在最低频，用它验证频率只会得到错误结论。
+            SmallAction(
+                icon = if (state.loadActive) Icons.Filled.Close else Icons.Filled.PlayArrow,
+                label = if (state.loadActive) {
+                    stringResource(R.string.cpu_load_stop, state.loadSeconds)
+                } else {
+                    stringResource(R.string.cpu_load_start)
+                },
+                enabled = !state.busy,
+                onClick = onToggleLoad,
+            )
+            // Deliberately not styled as a normal action: it is the way out
+            // of a cluster pinned by a lost request, which no other control can undo.
+            SmallAction(
+                icon = Icons.Filled.Refresh,
+                label = stringResource(R.string.cpu_emergency_restore),
+                enabled = !state.busy,
+                onClick = onEmergencyRestore,
+            )
+            SmallAction(
+                icon = Icons.Filled.Create,
+                label = stringResource(R.string.cpu_save_profile),
+                enabled = !state.busy && state.edits.any { it.cluster.availableFreqs.isNotEmpty() },
+                onClick = onSaveProfile,
+            )
+        }
+
+        if (state.loadActive) {
+            state.loadFreqs.forEach { (policy, mhz) ->
+                Text(
+                    if (mhz > 0) {
+                        stringResource(R.string.cpu_load_freq, policy, mhz)
+                    } else {
+                        stringResource(R.string.cpu_policy_unread, policy)
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+
+        if (!state.powerHal.available && state.powerHal.checked) {
+            Text(
+                text = state.powerHal.reason ?: stringResource(R.string.cpu_unavailable),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+
+        state.message?.let { FailureNote(failure = it) }
+    }
+}
+
+@Composable
+private fun SaveProfileDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit,
+    initialName: String = "",
+    title: String? = null,
+) {
+    var name by remember { mutableStateOf(initialName) }
+    // onClick 的 lambda 不是 composable 上下文，文案要先取出来。
+    val unnamed = stringResource(R.string.cpu_profile_unnamed)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        // 默认标题从资源取 —— 参数默认值里不能调 stringResource。
+        title = { Text(title ?: stringResource(R.string.cpu_save_profile)) },
+        text = {
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text(stringResource(R.string.cpu_profile_name_label)) },
+                singleLine = true,
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(name.ifBlank { unnamed }) },
+            ) { Text(stringResource(R.string.action_save)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+        },
+    )
+}
+
+@Composable
+internal fun EmptyState(title: String, body: String, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier.fillMaxWidth().padding(32.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(title, style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
+        Text(
+            body,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+/**
+ * 功能区里的一个小按钮：图标 + 短标签。
+ *
+ * 用 tonal 而不是实底：这一区都是"偶尔用一次"的动作，实底会把
+ * 「应用 / 释放」的主次关系压反。
+ */
+@Composable
+private fun SmallAction(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    FilledTonalButton(
+        onClick = onClick,
+        enabled = enabled,
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+    ) {
+        Icon(icon, contentDescription = null, modifier = Modifier.height(18.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(label, style = MaterialTheme.typography.labelLarge)
+    }
+}
+
+/**
+ * 双向指针条：**和分段条同一套视觉**，两端各加一个三角指针。
+ *
+ * ## 为什么不用 Material 的 `RangeSlider`
+ *
+ * 两个问题。一是**吃不住拖动** —— 它内部用 `draggable`，和外面标签页的
+ * `HorizontalPager` 抢手势时经常抢输，于是调范围的同时页面也翻过去了。
+ * 分段条用 `detectHorizontalDragGestures` + `change.consume()`，一直是稳的，
+ * 所以这里用同一套手势管线。
+ * 二是外观：这一页的两种调节方式如果长得完全不一样，用户会以为它们不是
+ * 同一件事的两个做法。
+ *
+ * ## 手势：就近抓一根
+ *
+ * 按下时看离哪个指针近，那一次拖动就只动它。这样不需要"精确按住指针"，
+ * 也不会出现"想拖上限却把下限带跑了"。
+ */
+@Composable
+private fun RangeHandleBar(
+    count: Int,
+    minIndex: Int,
+    maxIndex: Int,
+    enabled: Boolean,
+    onRange: (Int, Int) -> Unit,
+) {
+    if (count <= 1) {
+        Text(
+            stringResource(R.string.cpu_single_freq),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        return
+    }
+
+    var widthPx by remember { mutableStateOf(0) }
+    /** 这一次拖动动的是哪一根：true = 下限。 */
+    var draggingMin by remember { mutableStateOf<Boolean?>(null) }
+    // 颜色必须在**组合期**取出来。Canvas 的绘制 lambda 不是 @Composable 上下文，
+    // 里面读 MaterialTheme 会编译不过 —— 这项目里踩过一次了。
+    val handleColor = MaterialTheme.colorScheme.primary
+    val trackColor = MaterialTheme.colorScheme.surfaceVariant
+
+    fun indexAt(x: Float): Int =
+        if (widthPx <= 0) 0 else ((x / widthPx) * count).toInt().coerceIn(0, count - 1)
+
+    /** 第 i 格的中心横坐标，指针画在这里。 */
+    fun centerOf(i: Int): Float = (i + 0.5f) / count * widthPx
+
+    Column(modifier = Modifier.fillMaxWidth().onSizeChanged { widthPx = it.width }) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(30.dp)
+                .then(
+                    if (!enabled) Modifier else Modifier
+                        .pointerInput(count, widthPx) {
+                            detectHorizontalDragGestures(
+                                onDragStart = { offset ->
+                                    draggingMin =
+                                        kotlin.math.abs(offset.x - centerOf(minIndex)) <=
+                                            kotlin.math.abs(offset.x - centerOf(maxIndex))
+                                    val i = indexAt(offset.x)
+                                    if (draggingMin == true) {
+                                        onRange(minOf(i, maxIndex), maxIndex)
+                                    } else {
+                                        onRange(minIndex, maxOf(i, minIndex))
+                                    }
+                                },
+                                onDragEnd = { draggingMin = null },
+                                onDragCancel = { draggingMin = null },
+                                onHorizontalDrag = { change, _ ->
+                                    // **必须吃掉。** 不吃的话这一次横向拖动会同时
+                                    // 被标签页的 Pager 拿去翻页。
+                                    change.consume()
+                                    val i = indexAt(change.position.x)
+                                    if (draggingMin == true) {
+                                        onRange(minOf(i, maxIndex), maxIndex)
+                                    } else {
+                                        onRange(minIndex, maxOf(i, minIndex))
+                                    }
+                                },
+                            )
+                        }
+                ),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            repeat(count) { i ->
+                val inRange = i in minIndex..maxIndex
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clip(LocalShapeStyle.current.chip)
+                        .background(
+                            if (inRange) handleColor else trackColor
+                        ),
+                )
+            }
+        }
+
+        // 三角指针。画在条**下面**，尖端朝上指着它标记的那一格中心。
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(11.dp),
+        ) {
+            if (widthPx <= 0) return@Canvas
+            listOf(minIndex, maxIndex).forEach { index ->
+                val cx = (index + 0.5f) / count * size.width
+                val path = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(cx, 0f)
+                    lineTo(cx - 5.dp.toPx(), size.height)
+                    lineTo(cx + 5.dp.toPx(), size.height)
+                    close()
+                }
+                drawPath(path, handleColor)
+            }
         }
     }
 }

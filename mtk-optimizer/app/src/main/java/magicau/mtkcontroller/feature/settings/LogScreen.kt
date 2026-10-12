@@ -1,5 +1,7 @@
 package magicau.mtkcontroller.feature.settings
 
+import magicau.mtkcontroller.ui.components.FailureNote
+import magicau.mtkcontroller.ui.components.SUB_SCREEN_EXTRA_PADDING
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -12,15 +14,17 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import magicau.mtkcontroller.BuildConfig
+import magicau.mtkcontroller.R
 import magicau.mtkcontroller.data.log.LogLevel
 
 /**
@@ -46,9 +50,11 @@ fun LogScreen(
         if (entries.isNotEmpty()) listState.scrollToItem(entries.lastIndex)
     }
 
+    val levelName = stringResource(state.logLevel.labelRes)
+
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
-            "${BuildConfig.VERSION_NAME} · ${state.logLevel.label} · 长按可选中文字",
+            stringResource(R.string.log_header, BuildConfig.VERSION_NAME, levelName),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp),
@@ -60,23 +66,25 @@ fun LogScreen(
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Button(onClick = onCopyReport, modifier = Modifier.weight(1f)) { Text("复制报告") }
-            OutlinedButton(onClick = onExportReport, modifier = Modifier.weight(1f)) { Text("导出报告") }
-            OutlinedButton(onClick = onClear) { Text("清空") }
+            Button(onClick = onCopyReport, modifier = Modifier.weight(1f)) {
+                Text(stringResource(R.string.log_copy_report))
+            }
+            FilledTonalButton(onClick = onExportReport, modifier = Modifier.weight(1f)) {
+                Text(stringResource(R.string.log_export_report))
+            }
+            FilledTonalButton(onClick = onClear) { Text(stringResource(R.string.action_clear)) }
         }
 
-        state.backupMessage?.let { message ->
-            Text(
-                message,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+        state.backupMessage?.let { failure ->
+            FailureNote(
+                failure = failure,
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 6.dp),
             )
         }
 
         if (entries.isEmpty()) {
             Text(
-                "还没有日志。切换功能或重新探测后这里会有内容。",
+                stringResource(R.string.log_empty),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(16.dp),
@@ -87,7 +95,7 @@ fun LogScreen(
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 110.dp),
+            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = SUB_SCREEN_EXTRA_PADDING),
             verticalArrangement = Arrangement.spacedBy(3.dp),
         ) {
             items(entries, key = { it.id }) { entry ->

@@ -1,6 +1,7 @@
 package magicau.mtkcontroller.data.lab
 
 import android.content.Context
+import magicau.mtkcontroller.R
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.Dispatchers
@@ -9,11 +10,14 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import magicau.mtkcontroller.data.Message
 import magicau.mtkcontroller.data.log.AppLog
 import magicau.mtkcontroller.data.powerhal.PerfLockController
 import magicau.mtkcontroller.data.powerhal.PowerHal
 import magicau.mtkcontroller.data.profileStore
 import magicau.mtkcontroller.data.sysfs.Sysfs
+import magicau.mtkcontroller.data.thermal.THERMAL_POLICY_RESOURCE
+import magicau.mtkcontroller.data.thermal.ThermalPolicyController
 import magicau.mtkcontroller.domain.model.CpuCluster
 
 /**
@@ -122,13 +126,21 @@ class LabController(
         clusters: List<CpuCluster>,
         values: Map<String, Int>,
         hold: Boolean,
+        durationMs: Int = TEST_DURATION_MS,
     ): Verdict {
         val nodes = resolveNodes(feature, clusters)
 
         // 1. Capability: no node, no feature. This is the check that makes id
         //    drift a non-event — a moved id simply reports as unsupported
         //    instead of writing a value to whatever now owns that id.
-        val missing = nodes.firstOrNull { nodeValue(it.second) == null }?.second
+        //
+        //    只有**确认不存在**才拦。读不到不拦：节点只是回读探针，真正的通道是
+        //    PowerHAL opcode。SELinux 和 cpufreq 权限位让大量能用的节点读不到，
+        //    而 SELinux 拒目录搜索时里层文件报的是 ENOENT 而不是 EACCES ——
+        //    把那种 ENOENT 当成"不存在"，就会把能用的功能全毙掉。
+        //    见 Sysfs.states() / Sysfs.absenceIsProven()。
+        val states = Sysfs.states(nodes.map { it.second })
+        val missing = nodes.firstOrNull { states[it.second] == Sysfs.NodeState.ABSENT }?.second
         if (missing != null) {
             val verdict = Verdict(
                 state = State.UNSUPPORTED.name,
@@ -150,16 +162,35 @@ class LabController(
             }
         }
 
-        val duration = if (hold) 0 else TEST_DURATION_MS
+        val duration = if (hold) 0 else durationMs
         AppLog.i(
             TAG,
             "[${feature.key}] 测试下发 " + pairs.joinToString(", ") { "${it.first}=${it.second}" } +
-                " · ${if (hold) "保持(不过期)" else "${TEST_DURATION_MS / 1000} 秒后自动失效"}",
+                " · ${if (hold) "保持(不过期)" else "${durationMs / 1000} 秒后自动失效"}",
         )
 
-        val outcome = lock.apply(pairs, duration)
+        // 温控策略索引不走实验室自己的锁，走统一的温控档位控制器。
+        //
+        // 那是同一个 PowerHAL 资源（PERF_RES_THERMAL_POLICY）的第三条写路径。
+        // 各拿一把句柄的话，用户可能同时被实验室和 CPU 页持有 —— 现象是
+        // "我设了却没用 / 设完又弹回去"，而两边界面各自显示正常。
+        // 控制器保证一次只有一把句柄，并在本次实验结束后把用户选的那一档放回去。
+        //
+        // 判据用 baseId 而不是 key 字符串：key 是给人看的，改个名字不该悄悄
+        // 把这条路静默改回旧的竞争行为。
+        val outcome = if (feature.baseId == THERMAL_POLICY_RESOURCE) {
+            val index = values.values.firstOrNull()
+            if (index == null) {
+                PerfLockController.Outcome(false, Message(R.string.lock_no_resources))
+            } else {
+                val thermal = ThermalPolicyController.requestLab(index, duration)
+                PerfLockController.Outcome(thermal.success, thermal.message, thermal.detail)
+            }
+        } else {
+            lock.apply(pairs, duration)
+        }
         if (!outcome.success) {
-            val verdict = Verdict(State.NO_EFFECT.name, "下发被拒绝: ${outcome.message}")
+            val verdict = Verdict(State.NO_EFFECT.name, "下发被拒绝: ${AppLog.text(outcome.message)}")
             AppLog.w(TAG, "[${feature.key}] ${verdict.detail}")
             record(feature.key, verdict)
             return verdict
@@ -233,7 +264,7 @@ class LabController(
 
         val outcome = lock.apply(pairs, duration)
         if (!outcome.success) {
-            val verdict = Verdict(State.NO_EFFECT.name, "下发被拒绝: ${outcome.message}")
+            val verdict = Verdict(State.NO_EFFECT.name, "下发被拒绝: ${AppLog.text(outcome.message)}")
             AppLog.w(TAG, "[手动] ${verdict.detail}")
             return verdict
         }
@@ -258,10 +289,31 @@ class LabController(
     }
 
     /** Drop every lab request and mark that the observations are now stale. */
+    /**
+     * 只释放实验室的请求，不动观测记录。
+     *
+     * 自动扫档必须用它：上一档的请求如果还没过期就发下一档，两把锁会叠在一起，
+     * 到时看到的 cap 分不清是哪一档的功劳。
+     */
+    suspend fun releaseRequests() {
+        val outcome = lock.release()
+        AppLog.i(TAG, "释放实验室请求: ${AppLog.text(outcome.message)}")
+        // 温控档位是另一条路进来的，lock 管不到它。
+        // releaseLab 只在实验室正持有时动作，不会碰用户选的那一档。
+        val thermal = ThermalPolicyController.releaseLab()
+        AppLog.i(TAG, "释放实验室温控档位: ${AppLog.text(thermal.message)}")
+    }
+
     suspend fun reset(): String {
         val outcome = lock.release()
-        AppLog.i(TAG, "实验室全部恢复: ${outcome.message}")
-        return if (outcome.success) "已释放实验室的所有请求" else outcome.message
+        AppLog.i(TAG, "实验室全部恢复: ${AppLog.text(outcome.message)}")
+        val thermal = ThermalPolicyController.releaseLab()
+        AppLog.i(TAG, "实验室温控档位恢复: ${AppLog.text(thermal.message)}")
+        return when {
+            !outcome.success -> outcome.message.resolve(context)
+            !thermal.success -> thermal.message.resolve(context)
+            else -> context.getString(R.string.lab_released_all)
+        }
     }
 
     private fun buildPairs(
@@ -270,6 +322,17 @@ class LabController(
         values: Map<String, Int>,
     ): List<Pair<String, String>> {
         val base = feature.baseId ?: return emptyList()
+
+        if (feature.perCore) {
+            // **偏移是 (核序号 + 1)，不是核序号。** `_CPU_n` 这一族的第一格
+            // （0x0080C000 / 0x00810000）是"整簇"，cpu0 从 +0x100 开始。
+            // 用 +0x100*i 会把 cpu0 写成整簇开关，而且看起来"有效果"——
+            // 那是最难查的一类错。
+            return (0 until LabCores.COUNT).mapNotNull { core ->
+                val value = values[LabCores.key(core)] ?: return@mapNotNull null
+                PowerHal.commandId(base, core + 1) to value.toString()
+            }
+        }
 
         if (!feature.perCluster) {
             val value = values.values.firstOrNull() ?: return emptyList()

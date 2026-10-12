@@ -1,5 +1,6 @@
 package magicau.mtkcontroller.feature.lab
 
+import magicau.mtkcontroller.ui.components.SUB_SCREEN_EXTRA_PADDING
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -15,7 +16,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -62,12 +63,12 @@ fun RawTestScreen(
 
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 110.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = SUB_SCREEN_EXTRA_PADDING),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
             Text(
-                "逐个 ID 单独下发,看内核怎么回应。这是唯一能确定「哪个 ID 在这台机器上真的生效」的办法 —— " +
+                "逐个 ID 单独下发，看系统怎么回应。" +
                     "之前的解释都是推测,而且都错了。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -86,13 +87,14 @@ fun RawTestScreen(
                             FilterChip(
                                 selected = state.policy == cluster.policy,
                                 onClick = { onPolicy(cluster.policy) },
-                                label = { Text("${cluster.policy} · ${cluster.cpus.size}核") },
+                                label = { Text("${cluster.policy}，${cluster.cpus.size}核") },
                             )
                         }
                     }
                     state.cluster?.let { cluster ->
+                        // ui-check:ignore 实验室页就该显示集群与索引
                         Text(
-                            "index=${cluster.index} · 可用 ${cluster.availableFreqs.size} 档 · " +
+                            "index=${cluster.index}，可用 ${cluster.availableFreqs.size} 档，" +
                                 "范围 ${cluster.minFreqKhz / 1000}-${cluster.maxFreqKhz / 1000}MHz",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -178,7 +180,7 @@ fun RawTestScreen(
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text(if (state.busy) "发送中…" else "发送并读回") }
 
-                OutlinedButton(onClick = onReset, modifier = Modifier.fillMaxWidth()) {
+                FilledTonalButton(onClick = onReset, modifier = Modifier.fillMaxWidth()) {
                     Text("释放(撤销本次下发)")
                 }
 

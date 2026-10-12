@@ -4,6 +4,9 @@ import android.os.IBinder
 import android.os.Parcel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import magicau.mtkcontroller.R
+import magicau.mtkcontroller.data.Failure
+import magicau.mtkcontroller.data.Message
 import magicau.mtkcontroller.data.privilege.PrivilegeManager
 import rikka.shizuku.ShizukuBinderWrapper
 import rikka.shizuku.SystemServiceHelper
@@ -11,7 +14,7 @@ import rikka.shizuku.SystemServiceHelper
 /**
  * MediaTek's PowerHAL manager, reached through Shizuku.
  *
- * The protocol belongs to MediaTek and is documented in `docs/protocol.md` with
+ * The protocol belongs to MediaTek and is documented in `docs/cpu/protocol.md` with
  * primary sources. Its shape:
  *
  *  - service name `power_hal_mgr_service`, interface
@@ -25,7 +28,7 @@ import rikka.shizuku.SystemServiceHelper
  *    are two independent entries and min != max expresses a real range
  *
  * Transaction codes are a property of the ROM's interface revision, not of the
- * device — see `docs/architecture.md` for the detection plan. The values below
+ * device — see `docs/dev/architecture.md` for the detection plan. The values below
  * are correct for the development device and must not be assumed portable.
  */
 object PowerHal {
@@ -42,13 +45,26 @@ object PowerHal {
     const val BASE_MAX = 0x404000      // PERF_RES_CPUFREQ_MAX_CLUSTER_n
 
     /**
-     * Hard limits — a separate mechanism from the soft pair above, written by
-     * libpowerhal to /proc/ppm/policy/hard_userlimit_cpu_freq only. Setting
-     * both halves to one value hard-locks the cluster. Unused today; kept
-     * because the protocol is worth recording.
+     * Independent floor/ceiling in the public BSP. The backing node is ROM-dependent;
+     * lack of app access to the legacy proc node does not prove HAL support is absent.
      */
     const val BASE_HARD_MIN = 0x408000 // PERF_RES_CPUFREQ_MIN_HL_CLUSTER_n
     const val BASE_HARD_MAX = 0x40c000 // PERF_RES_CPUFREQ_MAX_HL_CLUSTER_n
+
+    /**
+     * vivo 私有的调度器资源，opcode 取自本机 `/vendor/etc/powercontable.xml`。
+     *
+     * 厂商自己的跑分场景（`powerscntbl.xml` 里 hint 3160，
+     * 注释 `benchmark mode package switch boost`）在把 policy7 的软下限顶到 3250000 的
+     * **同时**下发这几条。我们只发频率从来不携它们，所以软下限一直被压在 2300。
+     *
+     * 完整出处与下一轮实验见 `docs/vperf-resources.md`。
+     */
+    const val SCHED_CLOSE_PELT_ENABLE = 0x1000c900 // PERF_RES_SCHED_CLOSE_PELT_ENABLE
+    const val SCHED_ADAPTIVE_MARGIN = 0x1000c200 // PERF_RES_SCHED_ADAPTIVE_MARGIN
+    const val SCHED_PACKING_CPU = 0x1000c500 // PERF_RES_SCHED_PACKING_CPU
+    const val KICK_IDLE_SPEED_UP = 0x1000c800 // PERF_RES_KICK_IDLE_SPEED_UP
+    const val SCHED_UCLAMP_MIN_TA = 0x01408300 // PERF_RES_SCHED_UCLAMP_MIN_TA
 
     // Named against a vendor command table. An earlier pass called 0x00c04000
     // GPU_MIN and 0x00c04100 GPU_MAX; both were wrong - the pair is the ceiling
@@ -75,11 +91,31 @@ object PowerHal {
     fun commandId(base: Int, policyIndex: Int): String =
         String.format("0x%08X", policyIndex * 0x100 + base)
 
-    sealed interface Result {
-        val message: String
+    /**
+     * 已经是完整 opcode 的，只做格式化，不加 policy 偏移。
+     *
+     * 给非按簇的资源用（vivo 的调度器那族 `0x1000c900` 之类）。
+     * 错用 [commandId] 会给它们加上 `policyIndex * 0x100`，opcode 就跑到了别的资源上，
+     * 而且不报错 —— 只在日志里看到一条没人理的 hint。
+     */
+    fun fixedCommandId(opcode: Int): String = String.format("0x%08X", opcode)
 
-        data class Success(val handler: Int, override val message: String) : Result
-        data class Failure(override val message: String) : Result
+    sealed interface Result {
+        val message: Message
+
+        /** 原始错误，默认收起、可复制。界面用 `FailureNote` 展示。 */
+        val detail: String?
+
+        data class Success(
+            val handler: Int,
+            override val message: Message,
+            override val detail: String? = null,
+        ) : Result
+
+        data class Failure(
+            override val message: Message,
+            override val detail: String? = null,
+        ) : Result
     }
 
     /** Resolve the hidden service and wrap it so transact runs in Shizuku's process. */
@@ -104,7 +140,6 @@ object PowerHal {
             val reply = Parcel.obtain()
             try {
                 target.transact(INTERFACE_TRANSACTION, data, reply, 0)
-                reply.readException()
                 reply.readString()
             } finally {
                 data.recycle()
@@ -142,36 +177,57 @@ object PowerHal {
         pairs: List<Pair<String, String>>,
         durationMs: Int = 0,
     ): Result = withContext(Dispatchers.IO) {
-        if (pairs.isEmpty() || pairs.size % 2 != 0) {
-            return@withContext Result.Failure("命令数组必须成对且非空")
+        if (pairs.isEmpty()) {
+            return@withContext Result.Failure(Message(R.string.powerhal_pairs_required))
         }
         val commands = pairs.flatMap { listOf(it.first, it.second) }.map { it.toIntValue() }
-        val handler = PrivilegeManager.powerHalAcquire(commands.toIntArray(), durationMs)
-            ?: return@withContext Result.Failure("提权服务未连接，无法下发 PowerHAL 请求")
-        if (handler > 0) Result.Success(handler, "调频已应用")
-        else Result.Failure("PowerHAL 返回无效句柄: $handler")
+        when (val call = PrivilegeManager.powerHalAcquire(commands.toIntArray(), durationMs)) {
+            is PrivilegeManager.CallResult.Ok -> {
+                val handler = call.value
+                if (handler > 0) Result.Success(handler, Message(R.string.powerhal_applied))
+                // 固件回了 0 或负数：把那个数留下，它是唯一能拿给固件侧对质的凭据。
+                else Result.Failure(
+                    Message(R.string.powerhal_invalid_handler, listOf(handler)),
+                    detail = "handle=$handler",
+                )
+            }
+            // 服务没连上：摘要已经把这件事说清楚了，没有原话可看，detail 留空。
+            is PrivilegeManager.CallResult.Unavailable ->
+                Result.Failure(Message(R.string.powerhal_no_service_apply))
+            is PrivilegeManager.CallResult.Failed -> Result.Failure(
+                Message(R.string.powerhal_call_failed),
+                detail = Failure.detailOf(call.error),
+            )
+        }
     }
 
     /**
      * Release a previously acquired handler.
      *
-     * The reference app calls this as `transact(0x17, parcel, null, 1)` — a
+     * Firmware expects this as `transact(0x17, parcel, null, 1)` — a
      * oneway call with no reply parcel. Sending a reply and waiting for it
      * (flags = 0) does not release the request, which is why releasing
      * appeared to do nothing and the frequency limits stayed in force.
      */
     suspend fun release(handler: Int): Result = withContext(Dispatchers.IO) {
-        if (handler <= 0) return@withContext Result.Failure("没有可释放的请求")
-        when (PrivilegeManager.powerHalRelease(handler)) {
-            true -> Result.Success(0, "调频已释放")
-            false -> Result.Failure("调频释放请求失败")
-            null -> Result.Failure("提权服务未连接，无法释放 PowerHAL 请求")
+        if (handler <= 0) return@withContext Result.Failure(Message(R.string.release_nothing_pending))
+        when (val call = PrivilegeManager.powerHalRelease(handler)) {
+            is PrivilegeManager.CallResult.Ok ->
+                if (call.value) Result.Success(0, Message(R.string.powerhal_released))
+                else Result.Failure(Message(R.string.powerhal_release_failed), detail = "service returned false")
+            is PrivilegeManager.CallResult.Unavailable ->
+                Result.Failure(Message(R.string.powerhal_no_service_release))
+            is PrivilegeManager.CallResult.Failed -> Result.Failure(
+                Message(R.string.powerhal_call_failed),
+                detail = Failure.detailOf(call.error),
+            )
         }
     }
 
-    /** Values arrive as decimal or "0x…" hex, matching the reference app. */
+    /** Values arrive as decimal or "0x…" hex. */
     private fun String.toIntValue(): Int = trim().let {
         if (it.startsWith("0x", ignoreCase = true)) it.substring(2).toLong(16).toInt()
         else it.toInt()
     }
 }
+

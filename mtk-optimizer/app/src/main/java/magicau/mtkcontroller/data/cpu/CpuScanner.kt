@@ -9,7 +9,7 @@ import java.io.File
 /**
  * Discovers CPU clusters by scanning cpufreq policy directories at runtime.
  *
- * Deliberately probe-based: the reference app worked across many SoCs because
+ * Deliberately probe-based: probing across SoCs works because
  * it never hardcoded policy numbers. A Dimensity 9300+ exposes policy0/4/7,
  * but 4+4 and 4+2+2 layouts exist too, so we enumerate.
  */

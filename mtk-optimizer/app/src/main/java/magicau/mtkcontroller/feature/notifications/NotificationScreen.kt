@@ -1,5 +1,9 @@
 package magicau.mtkcontroller.feature.notifications
 
+import androidx.compose.ui.res.stringResource
+import magicau.mtkcontroller.R
+
+import magicau.mtkcontroller.ui.components.SUB_SCREEN_EXTRA_PADDING
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.provider.Settings
@@ -13,7 +17,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -57,12 +61,12 @@ fun NotificationScreen(
 
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 110.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = SUB_SCREEN_EXTRA_PADDING),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         item {
             Text(
-                "点击应用进入 Android 原生通知设置。",
+                stringResource(R.string.notif_hint),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -73,13 +77,13 @@ fun NotificationScreen(
                 value = query,
                 onValueChange = { query = it },
                 singleLine = true,
-                label = { Text("搜索应用") },
+                label = { Text(stringResource(R.string.notif_search)) },
                 modifier = Modifier.fillMaxWidth(),
             )
         }
 
         item {
-            OutlinedButton(
+            FilledTonalButton(
                 onClick = {
                     context.startActivity(
                         Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
@@ -87,7 +91,7 @@ fun NotificationScreen(
                     )
                 },
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text("本应用的通知设置") }
+            ) { Text(stringResource(R.string.notif_app_settings)) }
         }
 
         items(filtered, key = { it.packageName }) { app ->

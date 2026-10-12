@@ -22,11 +22,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import magicau.mtkcontroller.ui.theme.adaptiveAccent
 import magicau.mtkcontroller.ui.theme.isDarkScheme
+import androidx.compose.material3.Switch
+import magicau.mtkcontroller.ui.theme.LocalShapeStyle
 
 /**
  * Grouped settings card: a clean white panel lifted off the light grey ground
@@ -42,7 +46,7 @@ fun SettingsCard(
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
+        shape = LocalShapeStyle.current.card,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.5.dp),
     ) {
@@ -73,6 +77,34 @@ fun SettingsRow(
     trailing: (@Composable () -> Unit)? = null,
     onClick: (() -> Unit)? = null,
 ) {
+    SettingsRow(
+        iconPainter = rememberVectorPainter(icon),
+        iconTint = iconTint,
+        title = title,
+        subtitle = subtitle,
+        trailingText = trailingText,
+        trailing = trailing,
+        onClick = onClick,
+    )
+}
+
+/**
+ * [iconPainter] 给"图标集里没有、只能自己画矢量图"的场合用。
+ *
+ * 项目只依赖 material-icons-core（56 个），像"实验室烧瓶"这种语义明确却没有的图形，
+ * 与其引 extended（涨几十 MB），不如在 `res/drawable/` 画一个。两条重载分开是为了
+ * 让调用点写起来还是 `SettingsRow(icon = …, …)` 的样子。
+ */
+@Composable
+fun SettingsRow(
+    iconPainter: Painter,
+    iconTint: Color,
+    title: String,
+    subtitle: String? = null,
+    trailingText: String? = null,
+    trailing: (@Composable () -> Unit)? = null,
+    onClick: (() -> Unit)? = null,
+) {
     val base = Modifier.fillMaxWidth()
     val clickable = if (onClick != null) base.clickable(onClick = onClick) else base
 
@@ -82,19 +114,19 @@ fun SettingsRow(
     val tint = iconTint.adaptiveAccent(isDarkScheme())
 
     Row(
-        modifier = clickable.padding(horizontal = 16.dp, vertical = 13.dp),
+        modifier = clickable.padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Box(
             modifier = Modifier
-                .size(32.dp)
-                .clip(RoundedCornerShape(9.dp))
+                .size(28.dp)
+                .clip(LocalShapeStyle.current.iconBox)
                 .background(tint.copy(alpha = 0.14f)),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                imageVector = icon,
+                painter = iconPainter,
                 contentDescription = null,
                 tint = tint,
                 modifier = Modifier.size(18.dp),
@@ -132,4 +164,68 @@ fun SectionLabel(text: String, modifier: Modifier = Modifier) {
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = modifier.padding(start = 8.dp, top = 6.dp, bottom = 2.dp),
     )
+}
+
+/**
+ * 带开关的设置行。**全应用只有这一个实现。**
+ *
+ * 之前 `ToggleRow` 在首页和调校页各写了一份，签名和布局都不同 —— 同一个名字
+ * 两种长相。合并成一个：所有槽位可选，调用方只填用得上的。
+ *
+ * ## 行高按 Material 3
+ *
+ * 有副标题两行 → 72dp；只有标题一行 → 56dp。**行高由内容决定，不靠堆说明撑开**：
+ * 说明长了进 [info] 的浮层，不写进副标题。
+ *
+ * @param icon 可选的分类图标。重要选项才给，全给就等于没有分类。
+ * @param subtitle 一行补充说明。超过一行请改写或移进 [info]。
+ * @param chipText 状态方框的文字。**状态走这里，不要拼进 [title]。**
+ * @param info 说明浮层的正文。给了才渲染 ⓘ。
+ */
+@Composable
+fun ToggleRow(
+    title: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    icon: ImageVector? = null,
+    iconTint: Color = MaterialTheme.colorScheme.primary,
+    subtitle: String? = null,
+    chipText: String? = null,
+    chipTone: StatusTone = StatusTone.Neutral,
+    info: String? = null,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = if (subtitle == null) 6.dp else 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        if (icon != null) {
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(LocalShapeStyle.current.iconBox)
+                    .background(iconTint.copy(alpha = 0.14f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(18.dp))
+            }
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            subtitle?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        chipText?.let { StatusChip(it, chipTone) }
+        info?.let { FeatureInfo(title, it) }
+        Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
+    }
 }

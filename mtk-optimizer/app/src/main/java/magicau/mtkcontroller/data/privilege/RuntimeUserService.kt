@@ -48,7 +48,28 @@ class RuntimeUserService : IRuntimeService.Stub {
         }
     }.getOrElse { "ERROR: ${it.javaClass.simpleName}: ${it.message}" }
 
+    override fun axMaintenance(kind: String, pkg: String): String = runCatching { AxMaintenance.run(kind, pkg) }.getOrElse { "ERROR:${it.message}" }
+    override fun fakeBattery(command: String): String = runCatching { FakeBattery.dispatch(command) }.getOrElse { "ERROR:${it.message}" }
+
+    override fun foregroundApp(): String = runCatching { ForegroundApp.current() }
+        .getOrElse { "ERROR:${it.javaClass.simpleName}: ${it.message}" }
+    private val vivoTouch = VivoTouchSession()
+    override fun vivoTouchRequest(level: Int): String = vivoTouch.request(level)
+    private val vivoDisplay = VivoDisplaySession()
+    override fun vivoDisplayRequest(fps: Int): String = vivoDisplay.request(fps)
+
     override fun getUid(): Int = Process.myUid()
+    override fun cameraProbe(): String = magicau.mtkcontroller.data.diag.CameraCollector.collect()
+    override fun romControlProbe(): String = magicau.mtkcontroller.data.diag.RomControlProbe.collect()
+    private val romConfigs = magicau.mtkcontroller.data.diag.RomConfigTransfer()
+    override fun openRomConfig(index: Int): String = try { romConfigs.open(index) }
+        catch (e: Exception) { "ERROR:${e.javaClass.simpleName}: ${e.message}" }
+    override fun readRomConfig(token: String, offset: Int): ByteArray = romConfigs.chunk(token, offset)
+    override fun closeRomConfig(token: String) = romConfigs.close(token)
+    override fun discoverRomImplementation(): String = romConfigs.discover()
+    private val vivoLimit = VivoLimitSession()
+    override fun vivoCpuLimitProbe(start: Boolean): String = vivoLimit.request(start)
+    override fun vivoPolicyProbe(start: Boolean, profile: Int): String = vivoLimit.request(start, profile)
 
     /**
      * PowerHAL retains requests under the calling process. Do the actual

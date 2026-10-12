@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
+import magicau.mtkcontroller.R
 import android.content.Intent
 import android.database.ContentObserver
 import android.os.Build
@@ -136,9 +137,9 @@ class ThermalBrightnessService : Service() {
         val manager = getSystemService(NotificationManager::class.java) ?: return
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "高温降亮度恢复",
+            getString(R.string.notif_brightness_title),
             NotificationManager.IMPORTANCE_MIN,
-        ).apply { description = "在设备过热被系统压低亮度后恢复亮度" }
+        ).apply { description = getString(R.string.notif_brightness_text) }
         manager.createNotificationChannel(channel)
     }
 
@@ -150,8 +151,8 @@ class ThermalBrightnessService : Service() {
             PendingIntent.FLAG_IMMUTABLE,
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("高温降亮度恢复已开启")
-            .setContentText("设备过热时会自动恢复屏幕亮度")
+            .setContentTitle(getString(R.string.notif_brightness_on))
+            .setContentText(getString(R.string.notif_brightness_on_text))
             .setSmallIcon(android.R.drawable.ic_menu_view)
             .setContentIntent(intent)
             .setOngoing(true)

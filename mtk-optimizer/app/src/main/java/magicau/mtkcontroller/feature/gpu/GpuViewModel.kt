@@ -7,6 +7,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import magicau.mtkcontroller.di.AppContainer
+import magicau.mtkcontroller.data.Failure
+import magicau.mtkcontroller.data.Message
+
 import magicau.mtkcontroller.domain.model.GpuInfo
 
 data class GpuUiState(
@@ -15,7 +18,8 @@ data class GpuUiState(
     val info: GpuInfo = GpuInfo(),
     val minIndex: Int = 0,
     val maxIndex: Int = 0,
-    val message: String? = null,
+    /** 本次操作的结果。摘要与原始错误分两层，界面用 `FailureNote` 展示。 */
+    val message: Failure? = null,
 ) {
     val freqs get() = info.availableFreqs
     val minKhz: Long? get() = freqs.getOrNull(minIndex)
@@ -56,7 +60,7 @@ class GpuViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             _state.value = s.copy(busy = true, message = null)
             val outcome = container.gpuTuner.apply(s.info, s.minKhz, s.maxKhz)
-            _state.value = _state.value.copy(busy = false, message = outcome.message)
+            _state.value = _state.value.copy(busy = false, message = Failure(outcome.message, outcome.detail))
         }
     }
 
@@ -66,7 +70,7 @@ class GpuViewModel(private val container: AppContainer) : ViewModel() {
             val handler = container.profileRepository.gpuHandler()
             val outcome = container.gpuTuner.release(_state.value.info, handler)
             if (outcome.success) container.profileRepository.setGpuHandler(0)
-            _state.value = _state.value.copy(busy = false, message = outcome.message)
+            _state.value = _state.value.copy(busy = false, message = Failure(outcome.message, outcome.detail))
         }
     }
 }

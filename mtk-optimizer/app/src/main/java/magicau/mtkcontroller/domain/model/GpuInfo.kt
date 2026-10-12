@@ -23,13 +23,13 @@ enum class GpuChannel {
     DEVFREQ,
     ;
 
-    val displayName: String
-        get() = when (this) {
-            NONE -> "未检测到 GPU 调频接口"
-            GPUFREQ_V2 -> "GPUFreq v2 (/proc/gpufreqv2)"
-            GPUFREQ_V1 -> "GPUFreq v1 (/proc/gpufreq)"
-            DEVFREQ -> "devfreq (mtk-mali)"
-        }
+    /**
+     * 给用户看的名字在界面层（`ui/OptionLabels.kt`）—— 这里只给身份。
+     *
+     * **界面文案不带节点路径。** 之前写的是 `GPUFreq v2 (/proc/gpufreqv2)` 这种 ——
+     * 那是内核接口的路径，用户不认识，而且换台机器可能就不叫这个。
+     * 用户需要知道的是"这个软件走的哪条路"，不是路的名字。
+     */
 }
 
 @Serializable
@@ -48,7 +48,16 @@ data class GpuInfo(
     val governor: String? = null,
     val oppTable: List<GpuOpp> = emptyList(),
 ) {
-    val controllable: Boolean get() = channel != GpuChannel.NONE
+    /**
+     * A channel is not the same as a usable control.
+     *
+     * On vivo PD2430A the devfreq directory exists (`/sys/class/devfreq/mtk-mali`
+     * passes `test -e`) while every file inside it is SELinux-denied to shell, so
+     * the scan yields a channel with an empty frequency table. Reporting that as
+     * controllable puts a working-looking slider on screen that can only ever
+     * answer "failed to map" — worse than saying the device has no GPU control.
+     */
+    val controllable: Boolean get() = channel != GpuChannel.NONE && availableFreqs.isNotEmpty()
 
     /** For GPUFreq v2 the OPP index is what gets written, so expose the mapping. */
     fun oppIndexFor(freqKhz: Long): Int? =

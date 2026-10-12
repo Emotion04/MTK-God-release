@@ -6,11 +6,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import magicau.mtkcontroller.R
+import magicau.mtkcontroller.data.Failure
+import magicau.mtkcontroller.data.Message
 import magicau.mtkcontroller.data.log.AppLog
 import magicau.mtkcontroller.data.profile.ProfileRepository
 import magicau.mtkcontroller.data.settings.SettingsRepository
 import magicau.mtkcontroller.domain.model.Backup
 import magicau.mtkcontroller.domain.model.BackupPreferences
+import magicau.mtkcontroller.domain.model.BackupCategory
 
 /**
  * Reads and writes the user's configuration as a single JSON file.
@@ -25,6 +29,7 @@ import magicau.mtkcontroller.domain.model.BackupPreferences
 class BackupRepository(
     private val profileRepository: ProfileRepository,
     private val settingsRepository: SettingsRepository,
+    private val vivo: magicau.mtkcontroller.data.tweaks.VivoTweaks,
 ) {
 
     private companion object {
@@ -48,13 +53,24 @@ class BackupRepository(
         return "mtk-god-backup-%d-%02d%02d.json".format(days, hh, mm)
     }
 
-    suspend fun export(resolver: ContentResolver, uri: Uri): String = withContext(Dispatchers.IO) {
+    /**
+     * 导出到文件。
+     *
+     * [categories] 决定文件里带哪几类内容 —— 用户经常只想搬方案，
+     * 而厂商配置备份在别的机型上是无效的，不该被迫一起带走。
+     */
+    suspend fun export(
+        resolver: ContentResolver,
+        uri: Uri,
+        categories: Set<BackupCategory> = BackupCategory.ALL,
+    ): Failure = withContext(Dispatchers.IO) {
         runCatching {
             val backup = Backup(
                 exportedAtEpochMs = System.currentTimeMillis(),
-                profiles = profileRepository.profiles.first(),
-                activeProfileId = profileRepository.activeProfileId.first(),
-                preferences = BackupPreferences(
+                smartPlatform = if (BackupCategory.SMART_PLATFORM in categories) vivo.smartBackup() else null,
+                profiles = if (BackupCategory.PROFILES in categories) profileRepository.profiles.first() else emptyList(),
+                activeProfileId = if (BackupCategory.PROFILES in categories) profileRepository.activeProfileId.first() else null,
+                preferences = if (BackupCategory.PREFERENCES !in categories) BackupPreferences() else BackupPreferences(
                     themeMode = settingsRepository.themeMode.first(),
                     palette = settingsRepository.themePalette.first(),
                     navBarStyle = settingsRepository.navBarStyle.first(),
@@ -68,12 +84,15 @@ class BackupRepository(
             )
             val bytes = json.encodeToString(backup).toByteArray()
             resolver.openOutputStream(uri)?.use { it.write(bytes) }
-                ?: return@runCatching "无法写入所选位置"
-            AppLog.i(TAG, "已导出 ${backup.profiles.size} 个方案到 $uri")
-            "已导出 ${backup.profiles.size} 个方案 · ${backup.preferences.homeCards?.size ?: 0} 张主页卡片"
+                ?: return@runCatching Failure(
+                    Message(R.string.backup_write_failed),
+                    detail = uri.toString(),
+                )
+            AppLog.i(TAG, "已导出 ${backup.profiles.size} 个方案（${categories.size} 类）到 $uri")
+            Failure(Message(R.string.backup_exported, listOf(backup.profiles.size)))
         }.getOrElse {
             AppLog.e(TAG, "导出失败", it)
-            "导出失败: ${it.javaClass.simpleName}: ${it.message}"
+            Failure(Message(R.string.backup_export_failed), detail = Failure.detailOf(it))
         }
     }
 
@@ -83,6 +102,7 @@ class BackupRepository(
             val text = resolver.openInputStream(uri)?.use { it.readBytes().decodeToString() }
                 ?: error("无法读取所选文件")
             val backup = json.decodeFromString<Backup>(text)
+            backup.smartPlatform?.let { magicau.mtkcontroller.data.tweaks.SmartBackupCodec.validate(it) }
             require(backup.schema in Backup.SUPPORTED_SCHEMAS) {
                 "备份格式版本 ${backup.schema} 不受支持(当前支持 ${Backup.SUPPORTED_SCHEMAS})"
             }
@@ -91,12 +111,29 @@ class BackupRepository(
         }.onFailure { AppLog.e(TAG, "解析备份失败", it) }
     }
 
-    /** Replace the profiles and preferences with the contents of [backup]. */
-    suspend fun apply(backup: Backup): String = withContext(Dispatchers.IO) {
+    /**
+     * 应用备份内容。
+     *
+     * [categories] 决定实际写入哪几类 —— 与导出时的取舍分开，因为用户可能
+     * 拿到别人给的备份文件，只想取其中一部分。
+     */
+    suspend fun apply(
+        backup: Backup,
+        categories: Set<BackupCategory> = BackupCategory.ALL,
+    ): Failure = withContext(Dispatchers.IO) {
         runCatching {
-            profileRepository.replaceAll(backup.profiles, backup.activeProfileId)
+            if (BackupCategory.SMART_PLATFORM in categories) {
+                backup.smartPlatform?.let { vivo.importSmartBackup(it) }
+            }
+            if (BackupCategory.PROFILES in categories) {
+                profileRepository.replaceAll(backup.profiles, backup.activeProfileId)
+            }
 
-            val prefs = backup.preferences
+            val prefs = if (BackupCategory.PREFERENCES in categories) {
+                backup.preferences
+            } else {
+                BackupPreferences()
+            }
             prefs.themeMode?.let { settingsRepository.setThemeMode(it) }
             prefs.palette?.let { settingsRepository.setThemePalette(it) }
             prefs.navBarStyle?.let { settingsRepository.setNavBarStyle(it) }
@@ -108,10 +145,16 @@ class BackupRepository(
             prefs.homeCards?.takeIf { it.isNotEmpty() }?.let { settingsRepository.replaceCards(it) }
 
             AppLog.i(TAG, "导入完成: ${backup.profiles.size} 个方案")
-            "已导入 ${backup.profiles.size} 个方案"
+            Failure(
+                if (backup.smartPlatform != null) {
+                    Message(R.string.backup_imported_with_smart, listOf(backup.profiles.size))
+                } else {
+                    Message(R.string.backup_imported, listOf(backup.profiles.size))
+                },
+            )
         }.getOrElse {
             AppLog.e(TAG, "导入失败", it)
-            "导入失败: ${it.javaClass.simpleName}: ${it.message}"
+            Failure(Message(R.string.backup_import_failed), detail = Failure.detailOf(it))
         }
     }
 }

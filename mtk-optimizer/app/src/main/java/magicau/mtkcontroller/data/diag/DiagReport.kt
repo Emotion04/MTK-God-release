@@ -1,7 +1,10 @@
 package magicau.mtkcontroller.data.diag
 
+import android.content.Context
 import android.os.Build
 import magicau.mtkcontroller.BuildConfig
+import magicau.mtkcontroller.data.cpu.CpuControl
+import magicau.mtkcontroller.data.log.AppLog
 import magicau.mtkcontroller.data.lab.LabProbe
 import magicau.mtkcontroller.data.log.LogEntry
 import magicau.mtkcontroller.data.powerhal.PowerHal
@@ -22,9 +25,13 @@ import java.util.Locale
 object DiagReport {
 
     fun build(
+        // 探测项的标题是资源，报告里要解析成文本。**报告正文其余部分是固定格式的
+        // 字段名与设备原文，按数据处理，不进资源** —— 它的用途就是可 grep、可对比。
+        context: Context,
         report: CapabilityReport?,
         entries: List<LogEntry>,
         sections: List<LabProbe.Section> = emptyList(),
+        cpuStatus: CpuControl.Status? = null,
     ): String = buildString {
         appendLine("# MTK God 诊断报告")
         appendLine("# 生成时间: ${timestamp(System.currentTimeMillis())}")
@@ -47,7 +54,21 @@ object DiagReport {
         appendLine("version      : ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE})")
         appendLine("interface    : ${PowerHal.INTERFACE_TOKEN}")
         appendLine("service      : ${PowerHal.SERVICE_NAME}")
+        appendLine("log_level    : ${AppLog.currentLevel()}")
+        appendLine("timezone     : ${java.util.TimeZone.getDefault().id}")
         appendLine()
+
+        cpuStatus?.let { cpu ->
+            section("CPU 请求与最后一次验证（不是实时采样）")
+            appendLine("handler      : ${cpu.handler}")
+            appendLine("range_path   : soft MIN/MAX + hard MAX; point adds hard MIN")
+            cpu.applied.forEach { setting ->
+                appendLine("requested    : ${setting.policy} ${setting.minFreqKhz}-${setting.maxFreqKhz} kHz")
+            }
+            appendLine("verification : ${cpu.verification}")
+            appendLine("detail       : ${cpu.verificationDetail ?: "尚未验证"}")
+            appendLine()
+        }
 
         if (report == null) {
             appendLine("(尚未探测:请先打开 设置 → 诊断信息 并点一次「重新探测」)")
@@ -92,7 +113,10 @@ object DiagReport {
 
             section("探测项")
             report.checks.forEach { check ->
-                appendLine("[${if (check.ok) "OK " else "NG "}] ${check.category.title} / ${check.label}")
+                appendLine(
+                    "[${if (check.ok) "OK " else "NG "}] " +
+                        "${context.getString(check.category.titleRes)} / ${check.label.resolve(context)}",
+                )
                 check.detail.lineSequence().forEach { appendLine("        $it") }
             }
             appendLine()
@@ -103,7 +127,7 @@ object DiagReport {
             sections.forEach { s ->
                 appendLine("-- ${s.title}")
                 s.readings.forEach { r ->
-                    appendLine("${r.label} = ${r.value ?: "(不存在)"}")
+                    appendLine("${r.label} = ${r.value ?: "(不可读或不存在)"}")
                     appendLine("    node: ${r.node}")
                 }
             }
@@ -116,6 +140,8 @@ object DiagReport {
         } else {
             entries.forEach { appendLine(it.format()) }
         }
+
+        append(EnvironmentProbe.section(EnvironmentProbe.findings))
     }
 
     private fun StringBuilder.section(title: String) {

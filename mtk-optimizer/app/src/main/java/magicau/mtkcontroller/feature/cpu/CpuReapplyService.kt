@@ -6,11 +6,14 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
+import magicau.mtkcontroller.R
+import magicau.mtkcontroller.data.Message
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -100,6 +103,7 @@ class CpuReapplyService : Service() {
 
             AppLog.i(TAG, "开始轮询,间隔 ${intervalMs}ms,${clusters.size} 个簇")
             while (isActive) {
+                delay(intervalMs)
                 val settings = container.cpuControl.lastApplied()
                 if (settings.isEmpty()) {
                     AppLog.w(TAG, "没有可重放的设置,轮询停止")
@@ -108,12 +112,17 @@ class CpuReapplyService : Service() {
                 }
 
                 val outcome = runCatching {
-                    container.cpuControl.apply(clusters, settings)
-                }.getOrElse { CpuControl.Outcome(false, "轮询异常: ${it.javaClass.simpleName}: ${it.message}") }
+                    container.cpuControl.reapply(clusters)
+                }.getOrElse {
+                    if (it is CancellationException) throw it
+                    CpuControl.Outcome(
+                        false,
+                        Message(R.string.cpu_poll_exception, listOf("${it.javaClass.simpleName}: ${it.message}")),
+                    )
+                }
 
-                if (!outcome.success) AppLog.w(TAG, "轮询下发失败: ${outcome.message}")
+                if (!outcome.success) AppLog.w(TAG, "轮询下发失败: ${AppLog.text(outcome.message)}")
 
-                delay(intervalMs)
             }
         }
     }
@@ -129,9 +138,9 @@ class CpuReapplyService : Service() {
         val manager = getSystemService(NotificationManager::class.java) ?: return
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "CPU 频率轮询",
+            getString(R.string.reapply_channel_name),
             NotificationManager.IMPORTANCE_MIN,
-        ).apply { description = "按设定间隔反复下发 CPU 频率上下限" }
+        ).apply { description = getString(R.string.reapply_channel_desc) }
         manager.createNotificationChannel(channel)
     }
 
@@ -144,8 +153,8 @@ class CpuReapplyService : Service() {
         )
         val seconds = intervalMs / 1000.0
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("正在维持 CPU 频率限制")
-            .setContentText("每 ${"%.1f".format(seconds)} 秒重新下发一次")
+            .setContentTitle(getString(R.string.reapply_title))
+            .setContentText(getString(R.string.reapply_every, "%.1f".format(seconds)))
             .setSmallIcon(android.R.drawable.ic_menu_manage)
             .setContentIntent(intent)
             .setOngoing(true)

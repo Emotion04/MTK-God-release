@@ -25,7 +25,7 @@ import magicau.mtkcontroller.domain.model.CpuCluster
  * system.
  *
  * Node paths come from primary sources but are **not portable** — MediaTek moves
- * ids and node names between BSP revisions (see `docs/protocol.md` §11). A
+ * ids and node names between BSP revisions (see `docs/cpu/protocol.md` §11). A
  * missing node is therefore normal and reported as such; its presence is itself
  * the capability answer.
  */
@@ -278,3 +278,4 @@ object LabProbe {
     /** These nodes report kHz; parse without throwing on anything unexpected. */
     private fun String.tooLong(): Long? = trim().toLongOrNull()
 }
+

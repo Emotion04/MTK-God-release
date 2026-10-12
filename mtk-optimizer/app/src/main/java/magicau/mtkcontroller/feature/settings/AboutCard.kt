@@ -50,6 +50,13 @@ import magicau.mtkcontroller.BuildConfig
 import magicau.mtkcontroller.ui.components.InsetDivider
 import magicau.mtkcontroller.ui.components.SettingsCard
 import java.net.URL
+import androidx.compose.ui.res.imageResource
+import androidx.compose.ui.res.stringResource
+import magicau.mtkcontroller.R
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 
 /** Everything shown in the about block. One place to edit contact details. */
 private object Author {
@@ -58,10 +65,10 @@ private object Author {
     const val WECHAT = "1695617871"
     const val EMAIL = "infpc@msn.com"
     const val GITHUB = "https://github.com/Emotion04"
+    const val COOLAPK_UID = "3089423"
+    const val COOLAPK_URL = "https://www.coolapk.com/u/$COOLAPK_UID"
 
-    /** GitHub's avatar endpoint is public and needs no auth. */
-    val AVATAR_URL = "https://github.com/$NAME.png?size=200"
-}
+    }
 
 /**
  * Profile-style about block.
@@ -73,7 +80,10 @@ private object Author {
 @Composable
 fun AboutCard(modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    val avatar = rememberRemoteAvatar(Author.AVATAR_URL)
+    // 头像打包在 res/drawable 里，不走网络。
+    // 曾经的做法是每次打开这一页去 GitHub 拉一次，结果网络一抽风就只剩一个字母兜底，
+    // 而且为了一张静态图每次都发一个第三方请求。图不变，就不该联网。
+    val avatar = ImageBitmap.imageResource(R.drawable.avatar_author)
 
     SettingsCard(modifier = modifier) {
         Row(
@@ -107,13 +117,18 @@ fun AboutCard(modifier: Modifier = Modifier) {
         ContactRow(
             icon = Icons.Filled.Person,
             tint = Color(0xFF12B7F5),
-            label = "QQ",
+            label = stringResource(R.string.about_label_qq),
             value = Author.QQ,
-            actionHint = "打开聊天",
+            actionHint = stringResource(R.string.about_action_qq_card),
+            copyValue = Author.QQ,
             onClick = {
-                val scheme = "mqqwpa://im/chat?chat_type=wpa&uin=${Author.QQ}&version=1&src_type=web"
-                if (!context.tryOpen(scheme)) {
-                    context.openUrl("https://wpa.qq.com/msgrd?v=3&uin=${Author.QQ}&site=qq&menu=yes")
+                // 资料卡走 mqqapi://card/show_pslcard。mqq:// 与 mqqwpa:// 只能开聊天，
+                // 陌生用户点进去会停在一个空会话，而不是先看到你是谁。
+                val card = "mqqapi://card/show_pslcard" +
+                    "?src_type=internal&version=1&uin=${Author.QQ}" +
+                    "&card_type=person&source=qrcode"
+                if (!context.tryOpen(card)) {
+                    context.openUrl("https://qzone.qq.com/${Author.QQ}")
                 }
             },
         )
@@ -122,13 +137,22 @@ fun AboutCard(modifier: Modifier = Modifier) {
         ContactRow(
             icon = Icons.Filled.Share,
             tint = Color(0xFF07C160),
-            label = "微信",
+            label = stringResource(R.string.about_label_wechat),
             value = Author.WECHAT,
-            actionHint = "复制",
+            actionHint = stringResource(R.string.about_action_copy_open),
+            copyValue = Author.WECHAT,
             onClick = {
                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                // 微信没有开放的加好友接口（官方明确回复"不支持"），所以这里的
+                // 动作是"复制 + 打开微信"，用户粘进搜索框即可。这比伪造一个会静默
+                // 失败的 scheme 诚实。
                 clipboard.setPrimaryClip(ClipData.newPlainText("wechat", Author.WECHAT))
-                Toast.makeText(context, "微信号已复制", Toast.LENGTH_SHORT).show()
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.about_wechat_copied),
+                    Toast.LENGTH_LONG,
+                ).show()
+                context.tryOpen("weixin://")
             },
         )
 
@@ -136,9 +160,10 @@ fun AboutCard(modifier: Modifier = Modifier) {
         ContactRow(
             icon = Icons.Filled.Email,
             tint = Color(0xFFEA4335),
-            label = "邮箱",
+            label = stringResource(R.string.about_label_email),
             value = Author.EMAIL,
-            actionHint = "发邮件",
+            actionHint = stringResource(R.string.about_action_mail),
+            copyValue = Author.EMAIL,
             onClick = { context.openUrl("mailto:${Author.EMAIL}") },
         )
 
@@ -146,15 +171,33 @@ fun AboutCard(modifier: Modifier = Modifier) {
         ContactRow(
             icon = Icons.Filled.Star,
             tint = Color(0xFF6A4C93),
-            label = "GitHub",
+            label = stringResource(R.string.about_label_github),
             value = Author.NAME,
-            actionHint = "打开主页",
+            actionHint = stringResource(R.string.about_action_homepage),
+            copyValue = Author.GITHUB,
             onClick = { context.openUrl(Author.GITHUB) },
+        )
+
+        InsetDivider()
+        ContactRow(
+            icon = Icons.Filled.Star,
+            tint = Color(0xFF11AA55),
+            label = stringResource(R.string.about_label_coolapk),
+            value = Author.COOLAPK_UID,
+            actionHint = stringResource(R.string.about_action_homepage),
+            copyValue = Author.COOLAPK_URL,
+            onClick = {
+                // 酷安没有公开的用户主页 deeplink 文档，所以先试通用 scheme，
+                // 不成立就走网页 —— 网页版一定能打开，用户至少不会点进一片空白。
+                if (!context.tryOpen("coolmarket://u/${Author.COOLAPK_UID}")) {
+                    context.openUrl(Author.COOLAPK_URL)
+                }
+            },
         )
 
         InsetDivider(startIndent = 16.dp)
         Text(
-            text = "versionCode ${BuildConfig.VERSION_CODE} · ${BuildConfig.APPLICATION_ID}",
+            text = "versionCode ${BuildConfig.VERSION_CODE}，${BuildConfig.APPLICATION_ID}",
             style = MaterialTheme.typography.bodySmall,
             fontFamily = FontFamily.Monospace,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -175,7 +218,7 @@ private fun Avatar(bitmap: ImageBitmap?) {
         if (bitmap != null) {
             Image(
                 bitmap = bitmap,
-                contentDescription = "头像",
+                contentDescription = stringResource(R.string.about_avatar),
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.size(62.dp),
             )
@@ -189,6 +232,7 @@ private fun Avatar(bitmap: ImageBitmap?) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ContactRow(
     icon: ImageVector,
@@ -196,11 +240,28 @@ private fun ContactRow(
     label: String,
     value: String,
     actionHint: String,
+    /** 长按复制的内容。联系方式要能被复制走，否则用户只能手抄。 */
+    copyValue: String,
     onClick: () -> Unit,
 ) {
+    val context = LocalContext.current
+    val clipboard = LocalClipboardManager.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            // 整行都是点击目标，不只是末尾那个按钮 —— 一行里只有一小块能点，
+            // 用户会先点空一次才知道要点哪。
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = {
+                    clipboard.setText(AnnotatedString(copyValue))
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.action_copied),
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                },
+            )
             .padding(horizontal = 16.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -226,19 +287,6 @@ private fun ContactRow(
 
         AssistChip(onClick = onClick, label = { Text(actionHint) })
     }
-}
-
-@Composable
-private fun rememberRemoteAvatar(url: String): ImageBitmap? {
-    var bitmap by remember(url) { mutableStateOf<ImageBitmap?>(null) }
-    LaunchedEffect(url) {
-        bitmap = withContext(Dispatchers.IO) {
-            runCatching {
-                URL(url).openStream().use { BitmapFactory.decodeStream(it)?.asImageBitmap() }
-            }.getOrNull()
-        }
-    }
-    return bitmap
 }
 
 private fun Context.openUrl(url: String) {

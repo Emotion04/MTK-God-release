@@ -1,5 +1,9 @@
 package magicau.mtkcontroller.feature.settings
 
+import magicau.mtkcontroller.data.tweaks.TweakCommands
+import magicau.mtkcontroller.R
+import magicau.mtkcontroller.data.tweaks.TouchBackend
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -8,6 +12,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import magicau.mtkcontroller.data.Failure
+import magicau.mtkcontroller.data.Message
 import magicau.mtkcontroller.data.diag.CapabilityReport
 import magicau.mtkcontroller.data.diag.DiagReport
 import magicau.mtkcontroller.data.lab.LabProbe
@@ -18,12 +24,20 @@ import magicau.mtkcontroller.data.settings.SettingsRepository
 import magicau.mtkcontroller.di.AppContainer
 import magicau.mtkcontroller.domain.model.ApplyMode
 import magicau.mtkcontroller.domain.model.Backup
+import magicau.mtkcontroller.domain.model.CpuLayoutMode
+import magicau.mtkcontroller.domain.model.RangeControlMode
 import magicau.mtkcontroller.domain.model.NavBarStyle
+import magicau.mtkcontroller.domain.model.NavBarVisibility
+import magicau.mtkcontroller.domain.model.TabRestoreMode
 import magicau.mtkcontroller.domain.model.ThemeMode
 import magicau.mtkcontroller.ui.navigation.Destination
 import magicau.mtkcontroller.ui.theme.AppPalette
+import magicau.mtkcontroller.data.privilege.PrivilegeManager
 
 data class SettingsUiState(
+    val brightnessBackend: magicau.mtkcontroller.data.tweaks.BrightnessBackend = magicau.mtkcontroller.data.tweaks.BrightnessBackend.LEGACY,
+    val touchBackend: TouchBackend = TouchBackend.LEGACY,
+    val touchBackendMessage: magicau.mtkcontroller.data.Failure? = null,
     val loading: Boolean = true,
     val defaultTab: Destination = Destination.HOME,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
@@ -36,10 +50,39 @@ data class SettingsUiState(
     val logEntries: List<LogEntry> = emptyList(),
     /** Parsed but not yet applied; non-null while the confirm dialog shows. */
     val backupFileName: String = "",
+    /** 当前选的频率配合项 id；null = 不带配合项（默认）。 */
+    val freqCompanionId: String? = null,
+    /** 配合项的中文名，设置页副标题用。 */
+    val freqCompanionLabel: String = "",
+    /** true = 只发下限，不设上限。 */
+    val freqRangeMode: TweakCommands.RangeMode = TweakCommands.RangeMode.RANGE,
+    /** 授权状态。界面不直接读权限层 —— 那是系统副作用，统一经 ViewModel。 */
+    val privilege: magicau.mtkcontroller.data.privilege.PrivilegeState =
+        magicau.mtkcontroller.data.privilege.PrivilegeState(),
+    val motionSpeed: magicau.mtkcontroller.ui.theme.MotionSpeed = magicau.mtkcontroller.ui.theme.MotionSpeed.SYSTEM,
+    val tabSwipeMode: magicau.mtkcontroller.ui.navigation.TabSwipeMode =
+        magicau.mtkcontroller.ui.navigation.TabSwipeMode.NEAREST,
+    val cpuLayoutMode: CpuLayoutMode = CpuLayoutMode.PER_CLUSTER,
+    val rangeControlMode: RangeControlMode = RangeControlMode.SEGMENT,
+    val navBarVisibility: NavBarVisibility = NavBarVisibility.AUTO_HIDE,
+    /** 切回标签时保留原二级页面，还是回到标签主页。 */
+    val tabRestoreMode: TabRestoreMode = TabRestoreMode.KEEP,
+    /** 自定义强调色的色相，0–360。 */
+    val customHue: Int = SettingsRepository.DEFAULT_CUSTOM_HUE,
+    /** 自定义强调色的浓度，0–100。 */
+    val customConcentration: Int = SettingsRepository.DEFAULT_CUSTOM_CONCENTRATION,
+    val shapeStyle: magicau.mtkcontroller.ui.theme.ShapeStyle =
+        magicau.mtkcontroller.ui.theme.ShapeStyle.STANDARD,
     val pendingImport: Backup? = null,
+    /** 导出时带哪几类。默认全选。 */
+    val exportCategories: Set<magicau.mtkcontroller.domain.model.BackupCategory> =
+        magicau.mtkcontroller.domain.model.BackupCategory.ALL,
+    /** 导入时写入哪几类。默认全选。 */
+    val importCategories: Set<magicau.mtkcontroller.domain.model.BackupCategory> =
+        magicau.mtkcontroller.domain.model.BackupCategory.ALL,
     /** Latest capability probe, so the exported report is complete. */
     val report: CapabilityReport? = null,
-    val backupMessage: String? = null,
+    val backupMessage: Failure? = null,
     val busy: Boolean = false,
 )
 
@@ -48,7 +91,109 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     private val _state = MutableStateFlow(SettingsUiState())
     val state: StateFlow<SettingsUiState> = _state.asStateFlow()
 
+    fun setBrightnessBackend(backend: magicau.mtkcontroller.data.tweaks.BrightnessBackend) {
+        if (_state.value.busy) return
+        viewModelScope.launch {
+            _state.value = _state.value.copy(busy = true)
+            try {
+                val result = container.tweakRepository.setBrightnessBackend(backend)
+                _state.value = _state.value.copy(touchBackendMessage = Failure(result.message, result.detail))
+            } finally { _state.value = _state.value.copy(busy = false) }
+        }
+    }
+
+    fun setTabSwipeMode(mode: magicau.mtkcontroller.ui.navigation.TabSwipeMode) {
+        viewModelScope.launch { container.settingsRepository.setTabSwipeMode(mode.name) }
+    }
+
+    fun setCpuLayoutMode(mode: CpuLayoutMode) {
+        viewModelScope.launch { container.settingsRepository.setCpuLayoutMode(mode.name) }
+    }
+
+    fun setRangeControlMode(mode: RangeControlMode) {
+        viewModelScope.launch { container.settingsRepository.setRangeControlMode(mode.name) }
+    }
+
+    fun setCustomHue(hueDeg: Int) {
+        // 只在自定义档位下写。别处改色相没有意义，还会把用户没选过的值写进存储。
+        if (_state.value.palette != AppPalette.CUSTOM) return
+        viewModelScope.launch { container.settingsRepository.setCustomAccent(hueDeg, _state.value.customConcentration) }
+    }
+
+    fun setCustomConcentration(concentration: Int) {
+        if (_state.value.palette != AppPalette.CUSTOM) return
+        viewModelScope.launch { container.settingsRepository.setCustomAccent(_state.value.customHue, concentration) }
+    }
+
+    fun setTabRestoreMode(mode: TabRestoreMode) {
+        viewModelScope.launch { container.settingsRepository.setTabRestoreMode(mode.name) }
+    }
+
+    fun setNavBarVisibility(mode: NavBarVisibility) {
+        viewModelScope.launch { container.settingsRepository.setNavBarVisibility(mode.name) }
+    }
+
+    fun setMotionSpeed(speed: magicau.mtkcontroller.ui.theme.MotionSpeed) {
+        viewModelScope.launch { container.settingsRepository.setMotionSpeed(speed.name) }
+    }
+
+
+    fun setShapeStyle(style: magicau.mtkcontroller.ui.theme.ShapeStyle) {
+        viewModelScope.launch { container.settingsRepository.setShapeStyle(style.name) }
+    }
+
+    fun setFreqRangeMode(mode: TweakCommands.RangeMode) {
+        viewModelScope.launch { container.tweakRepository.setFreqRangeMode(mode) }
+    }
+
+    fun setFreqCompanion(id: String?) {
+        viewModelScope.launch {
+            container.tweakRepository.setFreqSchedCompanion(id)
+        }
+    }
+
+    fun setTouchBackend(backend: TouchBackend) {
+        if (_state.value.busy) return
+        viewModelScope.launch {
+            _state.value = _state.value.copy(busy = true)
+            try {
+                val result = container.tweakRepository.setTouchBackend(backend)
+                _state.value = _state.value.copy(touchBackendMessage = Failure(result.message, result.detail))
+            } finally { _state.value = _state.value.copy(busy = false) }
+        }
+    }
+
     init {
+        // 只设下限这个选项的状态也必须读回来，否则单选按钮永远显示默认值 ——
+        // 数据写进去了（DataStore 里确实有 freq_floor_only），界面不知道。
+        viewModelScope.launch {
+            container.tweakRepository.freqRangeMode.collect { mode ->
+                // 只存枚举本身；文案由界面按 labelRes 取 —— 这层不产出句子。
+                _state.value = _state.value.copy(freqRangeMode = mode)
+            }
+        }
+        viewModelScope.launch {
+            container.tweakRepository.freqSchedCompanion.collect { companion ->
+                _state.value = _state.value.copy(
+                    freqCompanionId = companion?.name,
+                    freqCompanionLabel = companion?.name
+                        ?.let { id ->
+                            container.context.getString(TweakCommands.Companion.valueOf(id).labelRes)
+                        }
+                        ?: container.context.getString(R.string.freq_companion_off),
+                )
+            }
+        }
+        viewModelScope.launch {
+            container.tweakRepository.brightnessBackend.collect { backend ->
+                _state.value = _state.value.copy(brightnessBackend = backend)
+            }
+        }
+        viewModelScope.launch {
+            container.tweakRepository.touchBackend.collect { backend ->
+                _state.value = _state.value.copy(touchBackend = backend)
+            }
+        }
         _state.value = _state.value.copy(
             backupFileName = container.backupRepository.suggestedFileName(System.currentTimeMillis()),
         )
@@ -63,6 +208,54 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             container.settingsRepository.themeMode.collect { name ->
                 _state.value = _state.value.copy(loading = false, themeMode = ThemeMode.fromName(name))
+            }
+        }
+        viewModelScope.launch {
+            magicau.mtkcontroller.data.privilege.PrivilegeManager.state.collect { p ->
+                _state.value = _state.value.copy(privilege = p)
+            }
+        }
+        viewModelScope.launch {
+            container.settingsRepository.tabSwipeMode.collect { name ->
+                _state.value = _state.value.copy(
+                    tabSwipeMode = magicau.mtkcontroller.ui.navigation.TabSwipeMode.fromName(name),
+                )
+            }
+        }
+        viewModelScope.launch {
+            container.settingsRepository.motionSpeed.collect { name ->
+                _state.value = _state.value.copy(motionSpeed = magicau.mtkcontroller.ui.theme.MotionSpeed.fromName(name))
+            }
+        }
+        viewModelScope.launch {
+            container.settingsRepository.cpuLayoutMode.collect { name ->
+                _state.value = _state.value.copy(cpuLayoutMode = CpuLayoutMode.fromName(name))
+            }
+        }
+        viewModelScope.launch {
+            container.settingsRepository.rangeControlMode.collect { name ->
+                _state.value = _state.value.copy(rangeControlMode = RangeControlMode.fromName(name))
+            }
+        }
+        viewModelScope.launch {
+            container.settingsRepository.navBarVisibility.collect { name ->
+                _state.value = _state.value.copy(navBarVisibility = NavBarVisibility.fromName(name))
+            }
+            container.settingsRepository.tabRestoreMode.collect { name ->
+                _state.value = _state.value.copy(tabRestoreMode = TabRestoreMode.fromName(name))
+            }
+            container.settingsRepository.customHue.collect { hue ->
+                _state.value = _state.value.copy(customHue = hue)
+            }
+            container.settingsRepository.customConcentration.collect { c ->
+                _state.value = _state.value.copy(customConcentration = c)
+            }
+        }
+        viewModelScope.launch {
+            container.settingsRepository.shapeStyle.collect { name ->
+                _state.value = _state.value.copy(
+                    shapeStyle = magicau.mtkcontroller.ui.theme.ShapeStyle.fromName(name),
+                )
             }
         }
         viewModelScope.launch {
@@ -149,7 +342,9 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     fun exportBackup(uri: android.net.Uri) {
         viewModelScope.launch {
             _state.value = _state.value.copy(busy = true, backupMessage = null)
-            val result = container.backupRepository.export(container.context.contentResolver, uri)
+            val result = container.backupRepository.export(
+                container.context.contentResolver, uri, _state.value.exportCategories,
+            )
             _state.value = _state.value.copy(busy = false, backupMessage = result)
         }
     }
@@ -164,20 +359,33 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
                 onFailure = {
                     _state.value.copy(
                         busy = false,
-                        backupMessage = "读取失败: ${it.message ?: it.javaClass.simpleName}",
+                        backupMessage = Failure(
+                            Message(R.string.import_read_failed),
+                            detail = it.message ?: it.javaClass.simpleName,
+                        ),
                     )
                 },
             )
         }
     }
 
+    /** 勾选/取消一类。导入导出各一份，互不影响。 */
+    fun toggleExportCategory(category: magicau.mtkcontroller.domain.model.BackupCategory, on: Boolean) {
+        val next = _state.value.exportCategories.toMutableSet().apply { if (on) add(category) else remove(category) }
+        _state.value = _state.value.copy(exportCategories = next)
+    }
+
+    fun toggleImportCategory(category: magicau.mtkcontroller.domain.model.BackupCategory, on: Boolean) {
+        val next = _state.value.importCategories.toMutableSet().apply { if (on) add(category) else remove(category) }
+        _state.value = _state.value.copy(importCategories = next)
+    }
+
     fun confirmImport() {
         val backup = _state.value.pendingImport ?: return
         viewModelScope.launch {
             _state.value = _state.value.copy(busy = true, pendingImport = null)
-            val result = container.backupRepository.apply(backup)
-            _state.value = _state.value.copy(busy = false, backupMessage = result)
-        }
+            val result = container.backupRepository.apply(backup, _state.value.importCategories)
+            _state.value = _state.value.copy(busy = false, backupMessage = result)        }
     }
 
     fun cancelImport() {
@@ -206,16 +414,23 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         val current = _state.value
         val clusters = runCatching { container.cpuScanner.scan(deep = false) }.getOrDefault(emptyList())
         val sections = runCatching { LabProbe.readAll(container.context, clusters) }.getOrDefault(emptyList())
-        return DiagReport.build(current.report, current.logEntries, sections)
+        return DiagReport.build(
+            container.context, current.report, current.logEntries, sections, container.cpuControl.status.value,
+        )
     }
 
     fun copyReport() {
         viewModelScope.launch {
         val text = buildReport()
         val clipboard = container.context.getSystemService(android.content.ClipboardManager::class.java)
-        clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("MTK God 诊断报告", text))
+        clipboard?.setPrimaryClip(
+            android.content.ClipData.newPlainText(
+                container.context.getString(R.string.report_title_plain),
+                text,
+            ),
+        )
         _state.value = _state.value.copy(
-            backupMessage = "报告已复制(${text.length} 字符),可直接粘贴发送",
+            backupMessage = Failure(Message(R.string.report_copied, listOf(text.length))),
         )
         }
     }
@@ -227,11 +442,26 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
                 withContext(Dispatchers.IO) {
                     container.context.contentResolver.openOutputStream(uri)?.use {
                         it.write(text.toByteArray())
-                    } ?: error("无法写入所选位置")
+                    } ?: error(container.context.getString(R.string.report_write_failed))
                 }
-                "报告已导出(${text.length} 字符)"
-            }.getOrElse { "导出失败: ${it.message ?: it.javaClass.simpleName}" }
+                Failure(Message(R.string.report_exported, listOf(text.length)))
+            }.getOrElse {
+                Failure(
+                    Message(R.string.report_export_failed),
+                    detail = it.message ?: it.javaClass.simpleName,
+                )
+            }
             _state.value = _state.value.copy(backupMessage = result)
         }
+    }
+
+    /**
+     * 触发 Shizuku 授权。
+     *
+     * 界面不直接调 PrivilegeManager：授权是系统副作用，只能由 ViewModel 发起，
+     * 这样它和"应用/释放频率"走同一条意图路径，也才可能被测试替换。
+     */
+    fun requestAuth() {
+        PrivilegeManager.requestPermission()
     }
 }

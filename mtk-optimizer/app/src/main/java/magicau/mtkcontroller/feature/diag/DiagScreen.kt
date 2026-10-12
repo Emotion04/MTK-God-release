@@ -1,5 +1,10 @@
 package magicau.mtkcontroller.feature.diag
 
+import androidx.compose.ui.res.stringResource
+import magicau.mtkcontroller.R
+import magicau.mtkcontroller.ui.text
+
+import magicau.mtkcontroller.ui.components.SUB_SCREEN_EXTRA_PADDING
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -18,7 +23,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -57,12 +62,12 @@ fun DiagScreen(
 
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 110.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = SUB_SCREEN_EXTRA_PADDING),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
             Text(
-                "真机首次运行后,把这里的结果截图发我,即可确认探测是否准确。",
+                stringResource(R.string.diag_hint),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -70,16 +75,16 @@ fun DiagScreen(
 
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onRefresh, modifier = Modifier.weight(1f)) { Text("重新探测") }
-                OutlinedButton(onClick = onRequestPermission, modifier = Modifier.weight(1f)) {
-                    Text("授权 Shizuku")
+                FilledTonalButton(onClick = onRefresh, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.diag_refresh)) }
+                FilledTonalButton(onClick = onRequestPermission, modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.action_authorize_shizuku))
                 }
             }
         }
 
         item {
-            OutlinedButton(onClick = onVerify, modifier = Modifier.fillMaxWidth()) {
-                Text("读取实时 sysfs 上下限")
+            FilledTonalButton(onClick = onVerify, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.diag_read_limits))
             }
         }
 
@@ -112,7 +117,7 @@ private fun CategoryCard(category: CheckCategory, checks: List<CapabilityReport.
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Text(category.title, style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(category.titleRes), style = MaterialTheme.typography.titleMedium)
                     Text(
                         text = "${checks.count { it.ok }}/${checks.size}",
                         style = MaterialTheme.typography.labelMedium,
@@ -146,7 +151,7 @@ private fun CheckRow(check: CapabilityReport.Check) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(check.label, style = MaterialTheme.typography.bodyMedium)
+            Text(check.label.text(), style = MaterialTheme.typography.bodyMedium)
             Text(
                 text = if (check.ok) "✓" else "✗",
                 color = if (check.ok) OkColor else MaterialTheme.colorScheme.error,
@@ -170,16 +175,17 @@ private fun PrivilegeDetailCard(report: CapabilityReport) {
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Text("提权详情", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.diag_privilege_detail), style = MaterialTheme.typography.titleMedium)
             HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
             Text(
+                // 标签进资源，值保持设备原文。
                 buildString {
-                    appendLine("模式: ${privilege.mode}")
+                    appendLine(stringResource(R.string.diag_priv_mode, privilege.mode))
                     appendLine("uid: ${privilege.uid}")
-                    appendLine("Shizuku 版本: ${privilege.shizukuVersion}")
-                    appendLine("UserService 已绑定: ${report.remoteBound}")
-                    appendLine("UserService 实际 uid: ${report.remoteUid ?: "—"}")
-                    privilege.message?.let { appendLine("备注: $it") }
+                    appendLine(stringResource(R.string.diag_priv_shizuku, privilege.shizukuVersion))
+                    appendLine(stringResource(R.string.diag_priv_bound, report.remoteBound))
+                    appendLine(stringResource(R.string.diag_priv_uid, report.remoteUid ?: "—"))
+                    privilege.message?.let { appendLine(stringResource(R.string.diag_priv_note, it)) }
                 }.trim(),
                 style = MaterialTheme.typography.bodySmall,
                 fontFamily = FontFamily.Monospace,

@@ -8,6 +8,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import magicau.mtkcontroller.R
+import magicau.mtkcontroller.data.Message
 import magicau.mtkcontroller.data.diag.CapabilityReport
 import magicau.mtkcontroller.data.diag.CheckCategory
 import magicau.mtkcontroller.data.privilege.PrivilegeManager
@@ -48,7 +50,7 @@ class DiagViewModel(private val container: AppContainer) : ViewModel() {
             val clusters = container.cpuScanner.scan()
             val limits = container.capabilityProbe.readAppliedLimits(clusters)
             val text = if (limits.isEmpty()) {
-                "没有可读取的簇"
+                container.context.getString(R.string.diag_no_clusters)
             } else {
                 limits.entries.joinToString("\n") { (policy, pair) ->
                     "$policy: min=${pair.first?.div(1000) ?: "?"} MHz, max=${pair.second?.div(1000) ?: "?"} MHz"
@@ -59,7 +61,7 @@ class DiagViewModel(private val container: AppContainer) : ViewModel() {
                 report = current.copy(
                     checks = current.checks + CapabilityReport.Check(
                         category = CheckCategory.CPU,
-                        label = "实时 sysfs 上下限",
+                        label = Message(R.string.diag_realtime_limits),
                         ok = limits.isNotEmpty(),
                         detail = text,
                     ),

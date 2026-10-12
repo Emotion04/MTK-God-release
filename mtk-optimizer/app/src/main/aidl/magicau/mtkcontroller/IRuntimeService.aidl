@@ -24,4 +24,28 @@ interface IRuntimeService {
 
     /** Queue release of a handle previously acquired by this UserService. */
     boolean powerHalRelease(int handler);
+    /** Appended to preserve existing transaction IDs. */
+    String cameraProbe();
+    String romControlProbe();
+    String openRomConfig(int index);
+    byte[] readRomConfig(String token, int offset);
+    void closeRomConfig(String token);
+    String discoverRomImplementation();
+    String vivoCpuLimitProbe(boolean start);
+    String vivoPolicyProbe(boolean start, int profile);
+    /** 0 探测，正数请求 Hz，-1 释放。 */
+    String vivoDisplayRequest(int fps);
+    String vivoTouchRequest(int level);
+    String axMaintenance(String kind, String pkg);
+
+    /**
+     * 当前前台应用包名；拿不到返回空串并附原因。
+     *
+     * 走 dumpsys 解析而不是反射 IActivityTaskManager —— 隐藏 API 的签名随 ROM 变，
+     * 而 dumpsys 的输出在 uid 2000 下可读，读不到就明确说读不到。
+     */
+    String foregroundApp();
+
+    /** 假电量 / 假充电；command ∈ level:<n> | charge | discharge | reset。 */
+    String fakeBattery(String command);
 }

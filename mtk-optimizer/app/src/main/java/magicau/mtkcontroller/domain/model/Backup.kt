@@ -18,9 +18,10 @@ data class Backup(
     val profiles: List<Profile> = emptyList(),
     val activeProfileId: String? = null,
     val preferences: BackupPreferences = BackupPreferences(),
+    val smartPlatform: magicau.mtkcontroller.data.tweaks.SmartBackup? = null,
 ) {
     companion object {
-        const val CURRENT_SCHEMA = 1
+        const val CURRENT_SCHEMA = 2
 
         /** Refuse files we cannot understand rather than importing them halfway. */
         val SUPPORTED_SCHEMAS = 1..CURRENT_SCHEMA

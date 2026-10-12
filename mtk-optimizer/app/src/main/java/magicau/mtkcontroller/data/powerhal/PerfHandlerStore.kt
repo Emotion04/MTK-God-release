@@ -14,11 +14,16 @@ import magicau.mtkcontroller.data.profileStore
  * name is a request we can still release, and one we cannot name is stuck until
  * the process that issued it dies.
  */
-class PerfHandlerStore(private val context: Context) {
+interface PerfHandleStorage {
+    suspend fun get(name: String): Int
+    suspend fun set(name: String, value: Int)
+}
+
+class PerfHandlerStore(private val context: Context) : PerfHandleStorage {
 
     private fun keyFor(name: String) = intPreferencesKey("perf_handler_$name")
 
-    suspend fun get(name: String): Int {
+    override suspend fun get(name: String): Int {
         val prefs = context.profileStore.data.first()
         prefs[keyFor(name)]?.let { return it }
 
@@ -34,9 +39,10 @@ class PerfHandlerStore(private val context: Context) {
         return 0
     }
 
-    suspend fun set(name: String, value: Int) {
+    override suspend fun set(name: String, value: Int) {
         context.profileStore.edit {
             if (value <= 0) it.remove(keyFor(name)) else it[keyFor(name)] = value
+            if (name == CPU_LEGACY_NAME) it.remove(LEGACY_INT_KEY)
         }
     }
 

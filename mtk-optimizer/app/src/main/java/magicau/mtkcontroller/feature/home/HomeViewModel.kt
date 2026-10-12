@@ -1,5 +1,6 @@
 package magicau.mtkcontroller.feature.home
 
+import magicau.mtkcontroller.R
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
@@ -13,6 +14,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import magicau.mtkcontroller.data.Failure
+import magicau.mtkcontroller.data.Message
+
 import magicau.mtkcontroller.data.privilege.PrivilegeManager
 import magicau.mtkcontroller.data.privilege.PrivilegeState
 import magicau.mtkcontroller.di.AppContainer
@@ -27,7 +31,6 @@ import magicau.mtkcontroller.feature.thermal.ThermalBrightnessService
 /** One cluster's rolling frequency history, used by the chart. */
 data class ClusterSeries(
     val policy: String,
-    val label: String,
     val maxKhz: Long,
     val samples: List<Long>,
 )
@@ -51,7 +54,8 @@ data class HomeUiState(
     val privilege: PrivilegeState = PrivilegeState(),
     val gpu: GpuInfo = GpuInfo(),
     val tweaks: TweakUiState = TweakUiState(),
-    val message: String? = null,
+    /** 本次操作的结果。摘要与原始错误分两层，界面用 `FailureNote` 展示。 */
+    val message: Failure? = null,
 )
 
 class HomeViewModel(private val container: AppContainer) : ViewModel() {
@@ -67,6 +71,9 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
     private val history = linkedMapOf<String, ArrayDeque<Long>>()
 
     init {
+        // 进首页先把开关的本地记录换成设备真实状态。首页和调校页共用同一份
+        // DataStore，两处任一同步过，另一处就是对的。
+        viewModelScope.launch { container.tweakRepository.syncSwitchStateFromDevice() }
         viewModelScope.launch {
             container.settingsRepository.homeCards.collect { cards ->
                 _state.value = _state.value.copy(loading = false, cards = cards)
@@ -119,7 +126,7 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             _state.value = _state.value.copy(busy = true, message = null)
             val outcome = container.tweakRepository.setTouchOptimization(enabled, _state.value.tweaks.touchRate)
-            _state.value = _state.value.copy(busy = false, message = outcome.message)
+            _state.value = _state.value.copy(busy = false, message = Failure(outcome.message, outcome.detail))
         }
     }
 
@@ -127,7 +134,7 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             _state.value = _state.value.copy(busy = true, message = null)
             val outcome = container.tweakRepository.setTouchOptimization(true, rate)
-            _state.value = _state.value.copy(busy = false, message = outcome.message)
+            _state.value = _state.value.copy(busy = false, message = Failure(outcome.message, outcome.detail))
         }
     }
 
@@ -135,7 +142,7 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             _state.value = _state.value.copy(busy = true, message = null)
             val outcome = container.tweakRepository.setAutoRotate(enabled)
-            _state.value = _state.value.copy(busy = false, message = outcome.message)
+            _state.value = _state.value.copy(busy = false, message = Failure(outcome.message, outcome.detail))
         }
     }
 
@@ -143,7 +150,7 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             _state.value = _state.value.copy(busy = true, message = null)
             val outcome = container.tweakRepository.setRotationSuggestion(enabled)
-            _state.value = _state.value.copy(busy = false, message = outcome.message)
+            _state.value = _state.value.copy(busy = false, message = Failure(outcome.message, outcome.detail))
         }
     }
 
@@ -155,7 +162,7 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
                 if (enabled) ThermalBrightnessService.start(container.context)
                 else ThermalBrightnessService.stop(container.context)
             }
-            _state.value = _state.value.copy(busy = false, message = outcome.message)
+            _state.value = _state.value.copy(busy = false, message = Failure(outcome.message, outcome.detail))
         }
     }
 
@@ -213,7 +220,6 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
                 val series = clusters.map { cluster ->
                     ClusterSeries(
                         policy = cluster.policy,
-                        label = cluster.label,
                         maxKhz = cluster.maxFreqKhz.coerceAtLeast(1L),
                         samples = history[cluster.policy]?.toList().orEmpty(),
                     )
@@ -238,7 +244,10 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
             _state.value = _state.value.copy(busy = true, message = null)
             val profile = container.profileRepository.profiles.first().firstOrNull { it.id == profileId }
             if (profile == null) {
-                _state.value = _state.value.copy(busy = false, message = "方案不存在")
+                _state.value = _state.value.copy(
+                    busy = false,
+                    message = Failure(Message(R.string.profile_missing)),
+                )
                 return@launch
             }
             val clusters = _state.value.clusters.ifEmpty { container.cpuScanner.scan() }
@@ -247,7 +256,7 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
                 container.profileRepository.setActiveProfile(profile.id)
                 container.syncCpuReapply()
             }
-            _state.value = _state.value.copy(busy = false, message = outcome.message)
+            _state.value = _state.value.copy(busy = false, message = Failure(outcome.message, outcome.detail))
         }
     }
 
@@ -258,7 +267,7 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
             if (outcome.success) container.profileRepository.setActiveProfile(null)
             // Polling would just re-acquire what we released.
             CpuReapplyService.stop(container.context)
-            _state.value = _state.value.copy(busy = false, message = outcome.message)
+            _state.value = _state.value.copy(busy = false, message = Failure(outcome.message, outcome.detail))
         }
     }
 

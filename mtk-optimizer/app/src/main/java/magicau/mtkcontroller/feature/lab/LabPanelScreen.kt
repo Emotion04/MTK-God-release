@@ -1,5 +1,6 @@
 package magicau.mtkcontroller.feature.lab
 
+import magicau.mtkcontroller.ui.components.SUB_SCREEN_EXTRA_PADDING
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -13,7 +14,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -55,13 +56,13 @@ fun LabPanelScreen(
 
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 110.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = SUB_SCREEN_EXTRA_PADDING),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
-                    "内核实际在执行的限制。这个页面不做任何写入。",
+                    "系统实际在执行的限制。这个页面不做任何写入。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -71,11 +72,11 @@ fun LabPanelScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        "读到 ${state.readingsFound}/${state.readingsTotal} 个节点",
+                        "读到 ${state.readingsFound}/${state.readingsTotal} 项",
                         style = MaterialTheme.typography.labelLarge,
                         modifier = Modifier.weight(1f),
                     )
-                    OutlinedButton(onClick = onRefresh) { Text("刷新") }
+                    FilledTonalButton(onClick = onRefresh) { Text("刷新") }
                 }
             }
         }
@@ -86,8 +87,8 @@ fun LabPanelScreen(
 
         item {
             Text(
-                "节点不存在是正常结果 —— MediaTek 在不同平台会更换 ID 与节点名," +
-                    "所以本应用靠节点是否存在来判断功能是否可用,而不是靠一张机型表。",
+                "读不到是正常结果，各机型可读的项不同。" +
+                    "所以本应用靠现场读取判断功能是否可用，而不是靠一张机型表。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

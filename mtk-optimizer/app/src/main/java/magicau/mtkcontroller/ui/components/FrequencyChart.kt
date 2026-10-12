@@ -1,5 +1,8 @@
 package magicau.mtkcontroller.ui.components
 
+import androidx.compose.ui.res.stringResource
+import magicau.mtkcontroller.R
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -107,7 +110,7 @@ fun FrequencyChart(
                 }
             }
         } else {
-            Text("正在采样…", style = labelStyle, color = labelColor, modifier = Modifier.padding(top = 4.dp))
+            Text(stringResource(R.string.freq_chart_sampling), style = labelStyle, color = labelColor, modifier = Modifier.padding(top = 4.dp))
         }
     }
 }

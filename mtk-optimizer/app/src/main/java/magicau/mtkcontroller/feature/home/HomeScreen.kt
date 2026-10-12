@@ -1,5 +1,11 @@
 package magicau.mtkcontroller.feature.home
 
+import magicau.mtkcontroller.ui.components.FailureNote
+import magicau.mtkcontroller.ui.components.LocalNavBarClearance
+import androidx.compose.ui.res.stringResource
+import magicau.mtkcontroller.R
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,7 +27,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -39,6 +45,13 @@ import magicau.mtkcontroller.domain.model.HomeCard
 import magicau.mtkcontroller.domain.model.HomeCardType
 import magicau.mtkcontroller.ui.components.FrequencyChart
 import magicau.mtkcontroller.ui.components.ReorderableColumn
+import magicau.mtkcontroller.ui.components.ToggleRow
+import magicau.mtkcontroller.ui.descriptionRes
+import magicau.mtkcontroller.ui.displayLabel
+import magicau.mtkcontroller.ui.displayNameRes
+import magicau.mtkcontroller.ui.titleRes
+import magicau.mtkcontroller.ui.theme.LocalShapeStyle
+import magicau.mtkcontroller.ui.components.FrequencyGauge
 
 @Composable
 fun HomeScreen(
@@ -53,22 +66,26 @@ fun HomeScreen(
     onTouchRate: (Int) -> Unit,
     onRotationSuggestion: (Boolean) -> Unit,
     onThermalBrightness: (Boolean) -> Unit,
+    onOpenTests: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var adding by remember { mutableStateOf(false) }
 
+    val scrollState = rememberScrollState()
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
             .padding(horizontal = 16.dp)
-            .padding(top = 8.dp, bottom = 110.dp),
+            .padding(top = 8.dp, bottom = LocalNavBarClearance.current),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text("MTK Controller", style = MaterialTheme.typography.headlineSmall)
             Text(
-                state.activeProfileName?.let { "当前方案:$it" } ?: "未套用方案",
+                state.activeProfileName
+                    ?.let { stringResource(R.string.home_current_profile, it) }
+                    ?: stringResource(R.string.profile_none),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -78,6 +95,13 @@ fun HomeScreen(
             items = state.cards,
             onMove = onMoveCard,
             modifier = Modifier.fillMaxWidth(),
+            // 传滚动状态：拖到屏幕边缘时页面要自己滚动，否则长列表里
+            // 把最后一张拖到第一张就得先放下、手动滚、再接着拖。
+            scrollState = scrollState,
+            // 卡片的类型就是它的稳定标识：同一张卡片顶多加一张，类型不重复。
+            key = { it.type },
+            // 阴影跟着卡片的圆角走，否则拖动时圆角卡片后面会露出方角阴影。
+            itemShape = LocalShapeStyle.current.card,
         ) { _, card, isDragging, dragHandle ->
             DashboardCard(
                 card = card,
@@ -85,6 +109,7 @@ fun HomeScreen(
                 isDragging = isDragging,
                 dragHandle = dragHandle,
                 onRemove = { onRemoveCard(card) },
+                onOpenTests = onOpenTests,
                 onApplyProfile = onApplyProfile,
                 onRelease = onRelease,
                 onTouchEnabled = onTouchEnabled,
@@ -95,22 +120,23 @@ fun HomeScreen(
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { adding = true }, modifier = Modifier.weight(1f)) {
+            FilledTonalButton(onClick = { adding = true }, modifier = Modifier.weight(1f)) {
                 Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                Text("  添加卡片")
+                // 间隔用 Spacer，不用前导空格 —— 空格在字符串资源里会被裁掉，
+                // 而"图标和文字离多远"本来就该由布局决定。
+                Spacer(Modifier.width(6.dp))
+                Text(stringResource(R.string.action_add_card))
             }
-            TextButton(onClick = onResetCards) { Text("恢复默认") }
+            TextButton(onClick = onResetCards) { Text(stringResource(R.string.home_reset_cards)) }
         }
 
         Text(
-            "长按卡片右上角的拖动手柄可调整顺序",
+            stringResource(R.string.home_reorder_hint),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
-        state.message?.let {
-            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-        }
+        state.message?.let { FailureNote(failure = it) }
     }
 
     if (adding) {
@@ -138,10 +164,11 @@ private fun DashboardCard(
     onTouchRate: (Int) -> Unit,
     onRotationSuggestion: (Boolean) -> Unit,
     onThermalBrightness: (Boolean) -> Unit,
+    onOpenTests: () -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(18.dp),
+        shape = LocalShapeStyle.current.card,
         colors = androidx.compose.material3.CardDefaults.cardColors(
             containerColor = if (isDragging) {
                 MaterialTheme.colorScheme.surfaceVariant
@@ -160,18 +187,22 @@ private fun DashboardCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(card.type.title, style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(card.type.titleRes), style = MaterialTheme.typography.titleMedium)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = {}, modifier = dragHandle) {
                         Icon(
                             Icons.Filled.List,
-                            contentDescription = "拖动排序",
+                            contentDescription = stringResource(R.string.action_drag_reorder),
                             modifier = Modifier.size(20.dp),
                             tint = MaterialTheme.colorScheme.primary,
                         )
                     }
                     IconButton(onClick = onRemove) {
-                        Icon(Icons.Filled.Close, contentDescription = "删除", Modifier.size(18.dp))
+                        Icon(
+                            Icons.Filled.Close,
+                            contentDescription = stringResource(R.string.action_delete),
+                            modifier = Modifier.size(18.dp),
+                        )
                     }
                 }
             }
@@ -191,6 +222,11 @@ private fun DashboardCard(
                     HomeCardType.CLUSTER_STATUS -> ClusterStatusCard(state)
                     HomeCardType.PRIVILEGE -> PrivilegeCard(state)
                     HomeCardType.GPU_STATUS -> GpuCard(state)
+                    HomeCardType.FREQ_GAUGE -> FreqGaugeCard(state)
+                    HomeCardType.TEST_CENTER -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(stringResource(R.string.home_tests_summary), style = MaterialTheme.typography.bodyMedium)
+                        FilledTonalButton(onClick = onOpenTests, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.home_open_tests)) }
+                    }
                 }
             }
         }
@@ -211,8 +247,8 @@ private fun QuickSettingsCard(
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         ToggleRow(
-            title = "触控优化",
-            subtitle = "提高触控采样率并降低响应延迟",
+            title = stringResource(R.string.home_touch_title),
+            subtitle = stringResource(R.string.home_touch_sub),
             checked = tweaks.touchEnabled,
             enabled = enabled,
             onCheckedChange = onTouchEnabled,
@@ -235,16 +271,16 @@ private fun QuickSettingsCard(
         }
 
         ToggleRow(
-            title = "旋转建议",
-            subtitle = "检测到屏幕转向时,在导航栏显示旋转按钮",
+            title = stringResource(R.string.home_rotation_title),
+            subtitle = stringResource(R.string.home_rotation_sub),
             checked = tweaks.rotationSuggestion,
             enabled = enabled,
             onCheckedChange = onRotationSuggestion,
         )
 
         ToggleRow(
-            title = "高温降亮度恢复",
-            subtitle = "设备过热被系统压低亮度时自动恢复",
+            title = stringResource(R.string.home_brightness_title),
+            subtitle = stringResource(R.string.home_brightness_sub),
             checked = tweaks.thermalBrightness,
             enabled = enabled,
             onCheckedChange = onThermalBrightness,
@@ -252,7 +288,7 @@ private fun QuickSettingsCard(
 
         if (!enabled) {
             Text(
-                "需要先授权 Shizuku 才能使用",
+                stringResource(R.string.home_need_shizuku),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
             )
@@ -261,35 +297,10 @@ private fun QuickSettingsCard(
 }
 
 @Composable
-private fun ToggleRow(
-    title: String,
-    subtitle: String,
-    checked: Boolean,
-    enabled: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge)
-            Text(
-                subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
-    }
-}
-
-@Composable
 private fun CpuChartCard(state: HomeUiState) {
     if (state.series.isEmpty()) {
         Text(
-            "未检测到 CPU 簇,无法绘制频率曲线。",
+            stringResource(R.string.home_chart_no_clusters),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -306,34 +317,42 @@ private fun ActiveProfileCard(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
-            text = state.activeProfileName ?: "未套用方案",
+            text = state.activeProfileName ?: stringResource(R.string.profile_none),
             style = MaterialTheme.typography.bodyLarge,
         )
 
         if (state.profiles.isEmpty()) {
             Text(
-                "还没有保存的方案。到 CPU 页调好上下限后点「保存为方案」。",
+                stringResource(R.string.home_no_profiles),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
             state.profiles.take(4).forEach { profile ->
                 val active = profile.name == state.activeProfileName
-                OutlinedButton(
+                FilledTonalButton(
                     onClick = { onApplyProfile(profile.id) },
                     enabled = !state.busy && !active,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text(if (active) "${profile.name}(生效中)" else "套用「${profile.name}」")
+                    // 两条分开成两条资源，不要"一条里塞三元表达式" ——
+                    // 译文里"生效中"和"套用"的句式不同，塞一起就翻不出来了。
+                    Text(
+                        stringResource(
+                            if (active) R.string.home_profile_active
+                            else R.string.home_profile_apply,
+                            profile.name,
+                        ),
+                    )
                 }
             }
         }
 
-        OutlinedButton(
+        FilledTonalButton(
             onClick = onRelease,
             enabled = !state.busy,
             modifier = Modifier.fillMaxWidth(),
-        ) { Text("释放调频") }
+        ) { Text(stringResource(R.string.home_release_freq)) }
     }
 }
 
@@ -341,7 +360,7 @@ private fun ActiveProfileCard(
 private fun ClusterStatusCard(state: HomeUiState) {
     if (state.clusters.isEmpty()) {
         Text(
-            "未检测到 CPU 簇。",
+            stringResource(R.string.app_no_clusters),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -353,7 +372,7 @@ private fun ClusterStatusCard(state: HomeUiState) {
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Text(cluster.label, style = MaterialTheme.typography.bodyMedium)
+                Text(cluster.displayLabel(), style = MaterialTheme.typography.bodyMedium)
                 Text(
                     text = cluster.currentFreqKhz?.let { "${it / 1000} MHz" } ?: "—",
                     style = MaterialTheme.typography.bodyMedium,
@@ -376,10 +395,10 @@ private fun PrivilegeCard(state: HomeUiState) {
         }
         Text(
             text = when {
-                !privilege.binderAlive -> "Shizuku 未运行 —— 到「设置 → 诊断」查看引导。"
-                !privilege.permissionGranted -> "尚未授权 Shizuku。"
-                privilege.mode.canWriteSysfs -> "已获得 root 权限,调速器可修改。"
-                else -> "已获得 adb 权限。频率上下限可用;调速器需要 root。"
+                !privilege.binderAlive -> stringResource(R.string.home_priv_not_running)
+                !privilege.permissionGranted -> stringResource(R.string.home_priv_not_granted)
+                privilege.mode.canWriteSysfs -> stringResource(R.string.home_priv_root)
+                else -> stringResource(R.string.home_priv_adb)
             },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -390,9 +409,11 @@ private fun PrivilegeCard(state: HomeUiState) {
 @Composable
 private fun GpuCard(state: HomeUiState) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(state.gpu.channel.displayName, style = MaterialTheme.typography.bodyMedium)
+        Text(stringResource(state.gpu.channel.displayNameRes), style = MaterialTheme.typography.bodyMedium)
         Text(
-            text = state.gpu.currentFreqKhz?.let { "当前 ${it / 1000} MHz" } ?: "未读取到当前频率",
+            text = state.gpu.currentFreqKhz
+                ?.let { stringResource(R.string.home_gpu_current, it / 1000) }
+                ?: stringResource(R.string.home_gpu_unread),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -408,10 +429,10 @@ private fun AddCardDialog(
     val available = HomeCardType.entries.filterNot { it in existing }
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("添加卡片") },
+        title = { Text(stringResource(R.string.action_add_card)) },
         text = {
             if (available.isEmpty()) {
-                Text("所有卡片都已在首页上。")
+                Text(stringResource(R.string.home_all_cards_added))
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     available.forEach { type ->
@@ -420,9 +441,9 @@ private fun AddCardDialog(
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Column(modifier = Modifier.fillMaxWidth()) {
-                                Text(type.title, style = MaterialTheme.typography.bodyLarge)
+                                Text(stringResource(type.titleRes), style = MaterialTheme.typography.bodyLarge)
                                 Text(
-                                    type.description,
+                                    stringResource(type.descriptionRes),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -432,9 +453,56 @@ private fun AddCardDialog(
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("关闭") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_close)) } },
     )
 }
 
 @Suppress("unused")
 private val UnusedColor = Color.Unspecified
+
+/**
+ * 首页的频率仪表卡片。
+ *
+ * 与性能页那张用同一个 [FrequencyGauge]，只是这里每簇一张小图 ——
+ * 首页的用途是"扫一眼有没有异常"，不需要精确读数。
+ */
+@Composable
+private fun FreqGaugeCard(state: HomeUiState) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(stringResource(R.string.home_freq_title), style = MaterialTheme.typography.titleSmall)
+            if (state.clusters.isEmpty()) {
+                Text(
+                    stringResource(R.string.app_no_clusters),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                return@Column
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                state.clusters.forEach { cluster ->
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(
+                            cluster.displayLabel(),
+                            style = MaterialTheme.typography.labelSmall,
+                            maxLines = 1,
+                        )
+                        FrequencyGauge(
+                            currentKhz = cluster.currentFreqKhz,
+                            // 首页不做 caps 轮询（那是性能页的事），所以外环不画红 ——
+                            // 即"看不出额外限制"。要看真实限制请去性能页。
+                            maxLimitKhz = null,
+                            minLimitKhz = null,
+                            hardwareMaxKhz = cluster.maxFreqKhz.takeIf { it > 0 }
+                                ?: cluster.availableFreqs.lastOrNull() ?: 0L,
+                            compact = true,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}

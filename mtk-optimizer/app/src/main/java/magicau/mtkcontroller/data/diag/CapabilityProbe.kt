@@ -1,5 +1,8 @@
 package magicau.mtkcontroller.data.diag
 
+import androidx.annotation.StringRes
+import magicau.mtkcontroller.R
+import magicau.mtkcontroller.data.Message
 import magicau.mtkcontroller.data.cpu.CpuScanner
 import magicau.mtkcontroller.data.gpu.GpuScanner
 import magicau.mtkcontroller.data.powerhal.PowerHal
@@ -11,11 +14,11 @@ import magicau.mtkcontroller.domain.model.CpuCluster
 import magicau.mtkcontroller.domain.model.GpuInfo
 
 /** Grouping used by the diagnostics screen. */
-enum class CheckCategory(val title: String, val order: Int) {
-    PRIVILEGE("提权与权限", 0),
-    CPU("CPU 调频", 1),
-    GPU("GPU 调频", 2),
-    ENVIRONMENT("运行环境", 3),
+enum class CheckCategory(@StringRes val titleRes: Int, val order: Int) {
+    PRIVILEGE(R.string.diag_cat_privilege, 0),
+    CPU(R.string.diag_cat_cpu, 1),
+    GPU(R.string.diag_cat_gpu, 2),
+    ENVIRONMENT(R.string.diag_cat_environment, 3),
 }
 
 /**
@@ -37,7 +40,8 @@ data class CapabilityReport(
 ) {
     data class Check(
         val category: CheckCategory,
-        val label: String,
+        /** 条目标题。**只有它进资源**；[detail] 是探测结果的原始描述，按数据处理。 */
+        val label: Message,
         val ok: Boolean,
         val detail: String,
     ) {
@@ -78,7 +82,7 @@ class CapabilityProbe(
             // --- privilege -------------------------------------------------
             add(
                 CapabilityReport.Check(
-                    CheckCategory.PRIVILEGE, "Shizuku 服务",
+                    CheckCategory.PRIVILEGE, Message(R.string.diag_check_shizuku_service),
                     ok = privilege.binderAlive,
                     detail = if (privilege.binderAlive) {
                         "已连接 · 版本 ${privilege.shizukuVersion}"
@@ -89,7 +93,7 @@ class CapabilityProbe(
             )
             add(
                 CapabilityReport.Check(
-                    CheckCategory.PRIVILEGE, "授权状态",
+                    CheckCategory.PRIVILEGE, Message(R.string.diag_check_permission),
                     ok = privilege.permissionGranted,
                     detail = when (privilege.mode) {
                         PrivilegeMode.ROOT -> "已授权 · root (uid 0)"
@@ -101,7 +105,7 @@ class CapabilityProbe(
             )
             add(
                 CapabilityReport.Check(
-                    CheckCategory.PRIVILEGE, "提权进程 (UserService)",
+                    CheckCategory.PRIVILEGE, Message(R.string.diag_check_userservice),
                     ok = remoteBound,
                     detail = if (remoteBound) {
                         "已绑定" + (remoteUid?.let { " · 实际 uid $it" } ?: "")
@@ -114,10 +118,10 @@ class CapabilityProbe(
             // --- CPU -------------------------------------------------------
             add(
                 CapabilityReport.Check(
-                    CheckCategory.CPU, "PowerHAL (${PowerHal.SERVICE_NAME})",
+                    CheckCategory.CPU, Message(R.string.diag_check_powerhal, listOf(PowerHal.SERVICE_NAME)),
                     ok = powerHal,
                     detail = if (powerHal) {
-                        "可调用 —— 频率上下限可用"
+                        "服务可访问 —— 频率控制效果需应用后读回确认"
                     } else {
                         "未找到 —— 非 MTK 设备或权限不足"
                     },
@@ -125,7 +129,7 @@ class CapabilityProbe(
             )
             add(
                 CapabilityReport.Check(
-                    CheckCategory.CPU, "接口标识",
+                    CheckCategory.CPU, Message(R.string.diag_check_interface),
                     ok = descriptor == PowerHal.INTERFACE_TOKEN,
                     detail = when {
                         descriptor == null -> "未取到 —— 非 MTK 设备或权限不足"
@@ -136,7 +140,7 @@ class CapabilityProbe(
             )
             add(
                 CapabilityReport.Check(
-                    CheckCategory.CPU, "CPU 簇",
+                    CheckCategory.CPU, Message(R.string.diag_check_clusters),
                     ok = clusters.isNotEmpty(),
                     detail = if (clusters.isEmpty()) {
                         "未找到 policy 目录"
@@ -151,7 +155,7 @@ class CapabilityProbe(
             )
             add(
                 CapabilityReport.Check(
-                    CheckCategory.CPU, "调速器可写性",
+                    CheckCategory.CPU, Message(R.string.diag_check_governor),
                     ok = clusters.any { it.governorWritable },
                     detail = if (clusters.any { it.governorWritable }) {
                         "可写 —— 可切换 governor"
@@ -164,10 +168,11 @@ class CapabilityProbe(
             // --- GPU -------------------------------------------------------
             add(
                 CapabilityReport.Check(
-                    CheckCategory.GPU, "GPU 接口",
+                    CheckCategory.GPU, Message(R.string.diag_check_gpu),
                     ok = gpu.controllable,
                     detail = buildString {
-                        append(gpu.channel.displayName)
+                        // 诊断详情用协议标识，不译成文案 —— 这一栏是排错用的原始字段。
+                        append(gpu.channel.name)
                         if (gpu.availableFreqs.isNotEmpty()) append(" · ${gpu.availableFreqs.size} 个频点")
                         if (gpu.governor != null) append(" · governor=${gpu.governor}")
                     },
@@ -177,14 +182,14 @@ class CapabilityProbe(
             // --- environment ----------------------------------------------
             add(
                 CapabilityReport.Check(
-                    CheckCategory.ENVIRONMENT, "设备",
+                    CheckCategory.ENVIRONMENT, Message(R.string.diag_check_device),
                     ok = true,
                     detail = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL} · Android ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})",
                 )
             )
             add(
                 CapabilityReport.Check(
-                    CheckCategory.ENVIRONMENT, "SoC",
+                    CheckCategory.ENVIRONMENT, Message(R.string.diag_check_soc),
                     ok = true,
                     detail = listOfNotNull(
                         android.os.Build.SOC_MANUFACTURER.takeIf { it.isNotBlank() },

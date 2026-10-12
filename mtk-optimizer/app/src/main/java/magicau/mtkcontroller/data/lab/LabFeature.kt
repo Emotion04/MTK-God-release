@@ -1,5 +1,16 @@
 package magicau.mtkcontroller.data.lab
 
+import magicau.mtkcontroller.data.thermal.THERMAL_POLICY_RESOURCE
+
+
+/**
+ * 「温控策略索引」这一项的 key。
+ *
+ * 放在这里而不是界面里：它是 [LabFeature] 的一个身份，界面和 ViewModel 都要按它
+ * 找出这一项。曾经两边各写一遍字符串常量，改一处漏一处不会有任何编译错误。
+ */
+const val THERMAL_POLICY_KEY = "thermal_policy"
+
 /** Where a canary feature is filed in the lab. */
 enum class LabCategory(val title: String, val order: Int) {
     CPU("CPU", 0),
@@ -27,6 +38,18 @@ enum class LabRisk(val label: String) {
 }
 
 enum class LabControl { READONLY, TOGGLE, SLIDER, CHOICE }
+
+/**
+ * 逐核功能的核编号约定。控制器、ViewModel 和界面都要用同一份，放一处。
+ *
+ * [COUNT] 是硬编码的 8：本机 `present` 是 `0-7`，而这一族资源 ID 也是按 cpu0..cpu7
+ * 编排的。不按键位动态探测 —— 多出来的核发下去只会是无效写入。
+ */
+object LabCores {
+    const val COUNT = 8
+    fun key(core: Int) = "cpu$core"
+    val keys: List<String> get() = (0 until COUNT).map(::key)
+}
 
 /**
  * One canary feature, described as data.
@@ -58,15 +81,51 @@ data class LabFeature(
     val unit: String = "",
     val risk: LabRisk = LabRisk.MEDIUM,
     val perCluster: Boolean = false,
+
+    /**
+     * 逐**核**（cpu0…cpu7）而不是逐簇。见 [baseId] 的偏移说明。
+     *
+     * 与 [perCluster] 互斥。没有合并成一个"分组维度"字段，是因为两者的
+     * **编号约定不一样**：簇是 `base + 0x100 * 簇序号`（0 起），
+     * 而 `_CPU_n` 这一族是 `base + 0x100 * (核序号 + 1)`（0x0080C000 那一格是
+     * "整簇"而不是 cpu0）。用同一个公式会把 cpu0 写成整簇开关。
+     */
+    val perCore: Boolean = false,
     val valueChoices: List<Pair<String, Int>> = emptyList(),
+
+    /**
+     * 运行时才解析得出的选项，优先于 [valueChoices]。
+     *
+     * 给"选项来自设备本身"的功能用 —— 温控策略索引要看
+     * `/vendor/etc/thermal/` 里真有哪几个 `thermal_policy_NN.conf`。
+     * 写死一个范围等于把猜测当事实：设备没有的号也会出现在界面上。
+     */
+    val dynamicChoices: (suspend () -> List<LabChoice>)? = null,
+
+    /**
+     * 运行时读数，显示在卡片上。返回 null = 读不到，界面显示"读不到"。
+     *
+     * 给"有效果但看不到"的功能用 —— 温控策略索引读的是当前皮肤阈值，
+     * 那是唯一能无 root 看出"现在生效哪一组策略"的通道。
+     */
+    val readout: (suspend () -> String?)? = null,
     val danger: String? = null,
     val selfClearing: Boolean = true,
+
+    /**
+     * 要自动扫过去的值，非空就在界面上多一个「自动扫一遍」。
+     *
+     * 给"取值语义没有公开文档、只能靠试"的功能用（温控策略索引就是：
+     * 配置文件被加密，读不出每个索引是什么）。手动一个个拖既慢又容易漏，
+     * 还难保证每档之间的请求已经释放。
+     */
+    val sweepValues: List<Int>? = null,
 )
 
 /**
  * Everything the lab can try, with the evidence level recorded in the description.
  *
- * Ids come from MediaTek's own resource tables (see `docs/protocol.md`), but ids
+ * Ids come from MediaTek's own resource tables (see `docs/cpu/protocol.md`), but ids
  * **drift between BSP revisions** — so nothing here is trusted blindly. A feature
  * whose node is missing is reported as unsupported on this device, and one whose
  * write does not move its node is reported as having no effect.
@@ -248,17 +307,66 @@ object LabCatalog {
             danger = "设得过低会让前台应用缺核。",
         ),
 
+        LabFeature(
+            key = "core_online",
+            label = "逐核上下线",
+            description = "**逐个核心**开关(cpu0…cpu7)。开=允许上线,关=下线该核。\n\n" +
+                "与上面的「每簇最少/最多在线核心」不是一回事:那两个是**数量**约束、" +
+                "只在同一个内核真的做热插拔时才有意义;这里是**指定哪一个核**。\n\n" +
+                "偏移约定未在本机验证过(`_CPU_n` 这一族的第一格是「整簇」而非 cpu0," +
+                "所以 cpu0 从 +0x100 起)。读回看 `affected_cpus` —— 核下线后它会从列表里消失。",
+            category = LabCategory.CPU,
+            control = LabControl.TOGGLE,
+            baseId = 0x00810000, // PERF_RES_CPUCORE_ONLINE_CPU_n
+            // 读回用每簇的 affected_cpus(0444 可读):核一旦下线,它就从对应簇的列表里消失。
+            // 不读 /proc/perfmgr —— 那个在 SELinux 下整片拒绝,读不出东西。
+            node = "/sys/devices/system/cpu/cpufreq/%s/affected_cpus",
+            range = 0..1,
+            perCore = true,
+            risk = LabRisk.MEDIUM,
+            danger = "下线前台需要的核会造成卡顿。",
+        ),
+        LabFeature(
+            key = "core_pause",
+            label = "逐核暂停调度",
+            description = "逐个核心暂停**调度**(不是下线):核还在,但不给它排任务。\n\n" +
+                "资源表对这一族的评语是「对调优 App 没用,收益用户看不见」。摆在这里是为了 " +
+                "对照验证 —— 如果它能生效而「逐核上下线」不能,说明这台机器只有调度层可以被拨动。",
+            category = LabCategory.CPU,
+            control = LabControl.TOGGLE,
+            baseId = 0x0080C000, // PERF_RES_CPUCORE_FORCE_PAUSE_CPU_n
+            node = "/sys/devices/system/cpu/cpufreq/%s/affected_cpus",
+            range = 0..1,
+            perCore = true,
+            risk = LabRisk.MEDIUM,
+            danger = "暂停的核不再参与调度,前台任务可能缺核。",
+        ),
+
         // --- high risk ----------------------------------------------------
+        //
+        // **这一项与 CPU 页「高级设置 → 温控档位」是同一个 PowerHAL 资源的两条写路径。**
+        // 那里跟随「应用」、写进方案；这里即时下发、可长期保持、可自动扫档，两边互不知情。
+        // 用户完全可能同时被两边持有句柄，而释放时只放自己那一把。
+        //
+        // 保留它是因为自动扫档（连续试每一档看读数）是别处没有的能力；
+        // 但只要它还在这儿，上面这个冲突就一直在。收敛方案见
+        // `docs/dev/todo.md`，不要在别处再加第三条写路径。
         LabFeature(
             key = "thermal_policy",
             label = "温控策略索引",
-            description = "加载 /vendor/etc/.tp/ 下的策略文件。**取值语义没有公开文档** —— " +
-                "它们活在加密的厂商策略文件里,官方也没公布。请自己试并观察。",
+            description = "加载 /vendor/etc/thermal/ 下的策略文件。这个 ROM 有 13 份，" +
+                "编号就是文件名里那个数。每一档的温度/频率参数已能解开，" +
+                "含义见「高级设置 → 温控档位」的档位说明。",
             category = LabCategory.THERMAL,
-            control = LabControl.SLIDER,
-            baseId = 0x03000000, // PERF_RES_THERMAL_POLICY
+            control = LabControl.CHOICE,
+            // 资源号只在 data/thermal/ThermalPolicyController.kt 定义一处，别处引用它 ——
+            // 三份各自写 0x03000000 的时候，改一处漏两处是必然的。
+            baseId = THERMAL_POLICY_RESOURCE,
             node = "$PERFMGR/thermal_policy",
-            range = 0..19,
+            // 选项运行时从 /vendor/etc/thermal/ 列出来 —— 这个 ROM 有 13 份，
+            // 编号沿用文件名。以前写死 0..19 是把猜测当事实。
+            dynamicChoices = { ThermalPolicyCatalog.choices() },
+            readout = { ThermalPolicyCatalog.skinThresholdText() },
             risk = LabRisk.HIGH,
             selfClearing = false,
             danger = "改变整机温控行为,某些策略会让设备明显更热。不持久化,退出即恢复。",
@@ -267,7 +375,9 @@ object LabCatalog {
             key = "perf_mode",
             label = "性能模式(全核满频)",
             description = "把所有簇的下限顶到最高频并全核在线。**它会摧毁你设置的任何频率范围** —— " +
-                "和 CPU 页的范围控制互斥。",
+                "和 CPU 页的范围控制互斥。\n\n" +
+                "**它只是把下限顶满，不是解除限制。** 上限仍然由温控那条温度阶梯决定 —— " +
+                "实测在效时 `policy7` 照样被压在 2.1–2.6 GHz，并没有到硬件满频。",
             category = LabCategory.CPU,
             control = LabControl.TOGGLE,
             baseId = 0x00414000, // PERF_RES_CPUFREQ_PERF_MODE
@@ -325,3 +435,4 @@ object LabCatalog {
         0x03424000 to "POWERHAL_ONESHOT_RESET —— 全局重置",
     )
 }
+
