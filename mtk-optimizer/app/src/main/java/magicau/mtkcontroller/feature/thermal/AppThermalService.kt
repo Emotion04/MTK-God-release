@@ -51,8 +51,22 @@ class AppThermalService : Service() {
         private const val NOTIFICATION_ID = 1010
         private const val TAG = "AppThermal"
 
-        /** 轮询间隔。1 秒足够跟上手速，也不至于把 dumpsys 打满。 */
-        private const val POLL_MS = 1_000L
+        /**
+         * 轮询间隔。
+         *
+         * **不是越快越好。** 每一轮都要跑一次 `dumpsys activity activities`
+         * （见 [ForegroundApp.current]），那是整棵活动栈的转储，输出上限 40 KB。
+         * 1 秒一次等于一小时 3600 次，而它是个前台服务 —— 用户在别的 App 里时
+         * 也照跑。实测那一份 dump 要几十毫秒的 CPU，累积起来是可观的耗电。
+         *
+         * 2 秒对"切前台应用就换温控档位"这个用途没有可感差异：游戏从点图标到
+         * 真正开始渲染要好几年秒，档位晚一两秒生效没人能察觉。而轮询变稀一半，
+         * 耗电也少一半。
+         *
+         * 想再降一档，正确的做法是**加屏幕状态门控**而不是继续拉长间隔：
+         * 熄屏时前台应用不可能变，那时可以直接睡到亮屏。
+         */
+        private const val POLL_MS = 2_000L
 
         const val ACTION_START = "magicau.mtkcontroller.action.APP_THERMAL_START"
         const val ACTION_STOP = "magicau.mtkcontroller.action.APP_THERMAL_STOP"

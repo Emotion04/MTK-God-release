@@ -6,8 +6,11 @@ import magicau.mtkcontroller.data.diag.ProbeProcess
  * 当前前台应用的包名，通过 dumpsys 解析得到。
  *
  * 不走反射 `IActivityTaskManager`：那是 `@hide` API，签名随 ROM 变，而本项目的
- * 事务码已经因为 AIDL 声明顺序在 ROM 之间漂移吃过亏（见 handoff.md P8）。
- * `dumpsys activity activities` 在 uid 2000 下可读，读不到就明确报读不到。
+ * 事务码已经因为 AIDL 声明顺序在 ROM 之间漂移吃过亏。`dumpsys activity activities`
+ * 在 uid 2000 下可读，读不到就明确报读不到。
+ *
+ * **这一份 dump 不便宜**：整棵活动栈的转储，输出上限 40 KB，几十毫秒的 CPU。
+ * 调用方要控制频率 —— 按应用温控每 2 秒一次，见 `AppThermalService` 的说明。
  *
  * 只读，不持有任何句柄、不改变任何系统状态。
  */
