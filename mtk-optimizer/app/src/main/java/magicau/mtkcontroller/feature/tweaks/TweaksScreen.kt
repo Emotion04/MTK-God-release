@@ -53,7 +53,10 @@ fun TweaksScreen(
     group: String = "display",
     modifier: Modifier = Modifier,
 ) {
-    LaunchedEffect(Unit) { onEnterGame?.invoke() }
+    // key 是 Unit，这个效果只会跑一次，所以它攥着的回调永远是第一次组合那一份。
+    // 经 rememberUpdatedState 取，至少保证呼叫的是当前这一份。
+    val enterGameNow by rememberUpdatedState(onEnterGame)
+    LaunchedEffect(Unit) { enterGameNow?.invoke() }
     var selectedApp by rememberSaveable { mutableStateOf("") }
     var appPicker by rememberSaveable { mutableStateOf(false) }
     if (appPicker) AlertDialog(onDismissRequest = { appPicker = false }, title = { Text(stringResource(R.string.tweaks_pick_app)) },

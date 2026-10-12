@@ -44,6 +44,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -529,11 +530,17 @@ private fun CapsPanel(state: CpuUiState, onReadCaps: suspend () -> Unit, active:
     val lifecycleOwner = LocalLifecycleOwner.current
     // active 为假时不起轮询：相邻标签页现在会预组合，不门控的话
     // 两页会同时每秒读几次内核。
+    // 回调经 rememberUpdatedState 取：下面这个循环**永不停**， LaunchedEffect 的 key
+    // 只有 lifecycleOwner 和 active，重组不重启它。协程里攥着第一次组合那个 lambda 的话，
+    // 它会以两秒一次的频率一直呼叫旧的那份，而外面早就换了新的 —— 这种错没有任何症状，
+    // 只是读数不更新。调用方目前给的是 vm::readCaps（绑定在稳定 ViewModel 上的方法引用），
+    // 所以还没出事；换成读普通 val 的 lambda 就会静默失效。
+    val readCapsNow by rememberUpdatedState(onReadCaps)
     LaunchedEffect(lifecycleOwner, active) {
         if (!active) return@LaunchedEffect
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (true) {
-                onReadCaps()
+                readCapsNow()
                 delay(2000)
             }
         }
