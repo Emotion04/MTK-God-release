@@ -1,0 +1,1089 @@
+2026-09-16 18:52:21 MTK God 0.3.12 ROM=PD2430D_A_16.1.12.0.W10
+2026-09-16 18:52:21 权限=PrivilegeState(mode=ADB, permissionGranted=true, binderAlive=true, uid=2000, shizukuVersion=13, message=null)
+2026-09-16 18:52:21 相机对照：所有簇；不使用滑条、不写频率、不加负载。planned_phase 仅为时间分段，以相机服务输出核对真实状态。
+2026-09-16 18:53:21 uid=2000(shell) gid=2000(shell) groups=2000(shell),1004(input),1007(log),1011(adb),1015(sdcard_rw),1028(sdcard_r),1078(ext_data_rw),1079(ext_obb_rw),3001(net_bt_admin),3002(net_bt),3003(inet),3006(net_bw_stats),3009(readproc),3011(uhid),3012(readtracefs) context=u:r:shell:s0
+2026-09-16 18:52:21
+/system/bin/timeout
+SAMPLE elapsed=0 planned_phase=0 (not proof of camera state)
+2026-09-16 18:52:21
+POLICY /sys/devices/system/cpu/cpufreq/policy0
+scaling_min_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq: Permission denied
+scaling_max_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq: Permission denied
+scaling_cur_freq
+1400000
+POLICY /sys/devices/system/cpu/cpufreq/policy4
+scaling_min_freq
+550000
+scaling_max_freq
+2400000
+scaling_cur_freq
+2400000
+POLICY /sys/devices/system/cpu/cpufreq/policy7
+scaling_min_freq
+600000
+scaling_max_freq
+2300000
+scaling_cur_freq
+900000
+cpu  39576363 4915490 43921483 176256784 611238 11285224 1511798 0 0 0
+cpu0 4589418 637905 7452568 16627749 101557 4226283 425050 0 0 0
+cpu1 5308267 711484 7955265 17834891 92518 1809470 276759 0 0 0
+cpu2 5366419 843880 7761315 17984204 94057 1723322 268618 0 0 0
+cpu3 5213025 783342 7624697 18411171 91097 1684965 262885 0 0 0
+cpu4 5120209 588658 3966843 24924807 77701 575981 90595 0 0 0
+cpu5 4635126 569734 3661883 25888376 61714 512466 78845 0 0 0
+cpu6 4565492 457069 3491162 26274768 39308 503996 68110 0 0 0
+cpu7 4778404 323415 2007745 28310815 53284 248736 40934 0 0 0
+SERVICE_BEGIN power
+2026-09-16 18:52:21
+sh: /system/bin/printf: Argument list too long
+
+SERVICE_END exit=0 output capped at 12000 bytes
+2026-09-16 18:52:21
+SERVICE_BEGIN thermalservice
+2026-09-16 18:52:21
+IsStatusOverride: false
+ThermalEventListeners:
+	callbacks: 4
+	killed: false
+	broadcasts count: -1
+ThermalStatusListeners:
+	callbacks: 21
+	killed: false
+	broadcasts count: -1
+Thermal Status: 0
+State changed time: 2026-09-16 18:28:23:009
+Cached temperatures:
+	Temperature{mValue=69.817, mType=0, mName=CPU, mStatus=0}
+	Temperature{mValue=69.817, mType=1, mName=GPU, mStatus=0}
+	Temperature{mValue=70.566, mType=9, mName=NPU, mStatus=0}
+	Temperature{mValue=70.566, mType=13, mName=SOC, mStatus=0}
+	Temperature{mValue=70.566, mType=10, mName=TPU, mStatus=0}
+	Temperature{mValue=38.232, mType=3, mName=SKIN, mStatus=0}
+	Temperature{mValue=42.0, mType=2, mName=BATTERY, mStatus=0}
+	Temperature{mValue=53.501, mType=5, mName=POWER_AMPLIFIER, mStatus=0}
+HAL Ready: true
+HAL connection:
+	ThermalHAL AIDL 3  connected: yes
+Current temperatures from HAL:
+	Temperature{mValue=56.167, mType=0, mName=CPU, mStatus=0}
+	Temperature{mValue=56.167, mType=1, mName=GPU, mStatus=0}
+	Temperature{mValue=37.2, mType=2, mName=BATTERY, mStatus=0}
+	Temperature{mValue=38.238, mType=3, mName=SKIN, mStatus=0}
+	Temperature{mValue=44.944, mType=5, mName=POWER_AMPLIFIER, mStatus=0}
+	Temperature{mValue=56.167, mType=9, mName=NPU, mStatus=0}
+	Temperature{mValue=56.167, mType=10, mName=TPU, mStatus=0}
+	Temperature{mValue=56.167, mType=13, mName=SOC, mStatus=0}
+Current cooling devices from HAL:
+	CoolingDevice{mValue=0, mType=3, mName=devfreq-13000000.mali}
+	CoolingDevice{mValue=0, mType=6, mName=lcd-backlight}
+	CoolingDevice{mValue=0, mType=6, mName=wifi-cooler}
+	CoolingDevice{mValue=0, mType=6, mName=flashlight_cooler}
+Temperature static thresholds from HAL:
+	TemperatureThreshold{mType=0, mName=CPU, mHotThrottlingThresholds=[NaN, NaN, NaN, 95.0, 90.0, 100.0, 117.0], mColdThrottlingThresholds=[NaN, NaN, NaN, NaN, NaN, NaN, NaN]}
+	TemperatureThreshold{mType=1, mName=GPU, mHotThrottlingThresholds=[NaN, NaN, NaN, 95.0, 90.0, 100.0, 117.0], mColdThrottlingThresholds=[NaN, NaN, NaN, NaN, NaN, NaN, NaN]}
+	TemperatureThreshold{mType=2, mName=BATTERY, mHotThrottlingThresholds=[NaN, NaN, NaN, 50.0, 55.0, 59.0, 60.0], mColdThrottlingThresholds=[NaN, NaN, NaN, NaN, NaN, NaN, NaN]}
+	TemperatureThreshold{mType=3, mName=SKIN, mHotThrottlingThresholds=[NaN, 39.0, 41.0, 44.0, 47.0, 60.0, 80.0], mColdThrottlingThresholds=[NaN, NaN, NaN, NaN, NaN, NaN, NaN]}
+	TemperatureThreshold{mType=5, mName=POWER_AMPLIFIER, mHotThrottlingThresholds=[NaN, NaN, NaN, 68.0, 90.0, 100.0, 110.0], mColdThrottlingThresholds=[NaN, NaN, NaN, NaN, NaN, NaN, NaN]}
+	TemperatureThreshold{mType=9, mName=NPU, mHotThrottlingThresholds=[NaN, NaN, NaN, 95.0, 90.0, 100.0, 117.0], mColdThrottlingThresholds=[NaN, NaN, NaN, NaN, NaN, NaN, NaN]}
+	TemperatureThreshold{mType=10, mName=TPU, mHotThrottlingThresholds=[NaN, NaN, NaN, 85.0, 90.0, 100.0, 117.0], mColdThrottlingThresholds=[NaN, NaN, NaN, NaN, NaN, NaN, NaN]}
+	TemperatureThreshold{mType=13, mName=SOC, mHotThrottlingThresholds=[NaN, NaN, NaN, 85.0, 90.0, 100.0, 117.0], mColdThrottlingThresholds=[NaN, NaN, NaN, NaN, NaN, NaN, NaN]}
+Temperature headroom thresholds:
+[NaN, 0.8333333, 0.9, 1.0, 1.1, 1.5333333, 2.2]
+
+SERVICE_END exit=0 output capped at 12000 bytes
+2026-09-16 18:52:21
+SERVICE_BEGIN media.camera
+2026-09-16 18:52:21
+sh: /system/bin/printf: Argument list too long
+
+SERVICE_END exit=0 output capped at 12000 bytes
+2026-09-16 18:52:21
+SERVICE_BEGIN power_hal_mgr_service
+2026-09-16 18:52:21
+
+
+SERVICE_END exit=0 output capped at 12000 bytes
+2026-09-16 18:52:21
+SAMPLE elapsed=2 planned_phase=0 (not proof of camera state)
+2026-09-16 18:52:23
+POLICY /sys/devices/system/cpu/cpufreq/policy0
+scaling_min_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq: Permission denied
+scaling_max_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq: Permission denied
+scaling_cur_freq
+300000
+POLICY /sys/devices/system/cpu/cpufreq/policy4
+scaling_min_freq
+550000
+scaling_max_freq
+2400000
+scaling_cur_freq
+2000000
+POLICY /sys/devices/system/cpu/cpufreq/policy7
+scaling_min_freq
+600000
+scaling_max_freq
+2300000
+scaling_cur_freq
+600000
+cpu  39576507 4915495 43921752 176258171 611240 11285280 1511811 0 0 0
+cpu0 4589451 637906 7452628 16627865 101557 4226300 425053 0 0 0
+cpu1 5308299 711484 7955319 17835018 92518 1809481 276761 0 0 0
+cpu2 5366448 843881 7761367 17984340 94057 1723333 268620 0 0 0
+cpu3 5213051 783343 7624753 18411309 91097 1684975 262887 0 0 0
+cpu4 5120217 588658 3966859 24925015 77701 575984 90596 0 0 0
+cpu5 4635131 569735 3661897 25888592 61714 512468 78845 0 0 0
+cpu6 4565497 457070 3491173 26274986 39308 503998 68110 0 0 0
+cpu7 4778410 323415 2007751 28311041 53284 248737 40934 0 0 0
+SAMPLE elapsed=4 planned_phase=0 (not proof of camera state)
+2026-09-16 18:52:25
+POLICY /sys/devices/system/cpu/cpufreq/policy0
+scaling_min_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq: Permission denied
+scaling_max_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq: Permission denied
+scaling_cur_freq
+300000
+POLICY /sys/devices/system/cpu/cpufreq/policy4
+scaling_min_freq
+550000
+scaling_max_freq
+2400000
+scaling_cur_freq
+2200000
+POLICY /sys/devices/system/cpu/cpufreq/policy7
+scaling_min_freq
+600000
+scaling_max_freq
+2300000
+scaling_cur_freq
+600000
+cpu  39576626 4915496 43921975 176259433 611243 11285331 1511820 0 0 0
+cpu0 4589483 637907 7452678 16627969 101558 4226317 425056 0 0 0
+cpu1 5308326 711484 7955374 17835134 92518 1809490 276763 0 0 0
+cpu2 5366464 843881 7761415 17984464 94058 1723342 268622 0 0 0
+cpu3 5213069 783343 7624797 18411441 91097 1684984 262889 0 0 0
+cpu4 5120224 588658 3966868 24925206 77701 575986 90597 0 0 0
+cpu5 4635139 569735 3661905 25888786 61715 512471 78846 0 0 0
+cpu6 4565505 457070 3491180 26275181 39309 504000 68110 0 0 0
+cpu7 4778413 323415 2007754 28311249 53284 248738 40934 0 0 0
+SAMPLE elapsed=6 planned_phase=0 (not proof of camera state)
+2026-09-16 18:52:27
+POLICY /sys/devices/system/cpu/cpufreq/policy0
+scaling_min_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq: Permission denied
+scaling_max_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq: Permission denied
+scaling_cur_freq
+300000
+POLICY /sys/devices/system/cpu/cpufreq/policy4
+scaling_min_freq
+550000
+scaling_max_freq
+2400000
+scaling_cur_freq
+550000
+POLICY /sys/devices/system/cpu/cpufreq/policy7
+scaling_min_freq
+600000
+scaling_max_freq
+2300000
+scaling_cur_freq
+600000
+cpu  39576715 4915505 43922148 176260774 611245 11285381 1511829 0 0 0
+cpu0 4589505 637908 7452718 16628090 101558 4226333 425058 0 0 0
+cpu1 5308344 711488 7955409 17835267 92519 1809499 276765 0 0 0
+cpu2 5366480 843882 7761450 17984609 94058 1723350 268623 0 0 0
+cpu3 5213087 783344 7624831 18411584 91097 1684993 262890 0 0 0
+cpu4 5120230 588660 3966879 24925396 77701 575988 90598 0 0 0
+cpu5 4635143 569735 3661913 25888986 61716 512473 78846 0 0 0
+cpu6 4565510 457070 3491187 26275380 39309 504002 68111 0 0 0
+cpu7 4778413 323415 2007759 28311458 53284 248739 40934 0 0 0
+SAMPLE elapsed=9 planned_phase=0 (not proof of camera state)
+2026-09-16 18:52:30
+POLICY /sys/devices/system/cpu/cpufreq/policy0
+scaling_min_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq: Permission denied
+scaling_max_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq: Permission denied
+scaling_cur_freq
+300000
+POLICY /sys/devices/system/cpu/cpufreq/policy4
+scaling_min_freq
+550000
+scaling_max_freq
+2400000
+scaling_cur_freq
+550000
+POLICY /sys/devices/system/cpu/cpufreq/policy7
+scaling_min_freq
+600000
+scaling_max_freq
+2300000
+scaling_cur_freq
+600000
+cpu  39576777 4915507 43922298 176262179 611247 11285422 1511837 0 0 0
+cpu0 4589519 637908 7452749 16628235 101558 4226346 425060 0 0 0
+cpu1 5308352 711488 7955443 17835420 92519 1809508 276766 0 0 0
+cpu2 5366496 843882 7761483 17984757 94058 1723358 268625 0 0 0
+cpu3 5213099 783344 7624860 18411738 91097 1685000 262892 0 0 0
+cpu4 5120235 588660 3966886 24925593 77701 575990 90598 0 0 0
+cpu5 4635146 569735 3661919 25889188 61717 512474 78847 0 0 0
+cpu6 4565512 457071 3491191 26275583 39309 504004 68111 0 0 0
+cpu7 4778416 323416 2007765 28311661 53284 248739 40934 0 0 0
+SAMPLE elapsed=11 planned_phase=0 (not proof of camera state)
+2026-09-16 18:52:32
+POLICY /sys/devices/system/cpu/cpufreq/policy0
+scaling_min_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq: Permission denied
+scaling_max_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq: Permission denied
+scaling_cur_freq
+1800000
+POLICY /sys/devices/system/cpu/cpufreq/policy4
+scaling_min_freq
+2000000
+scaling_max_freq
+2400000
+scaling_cur_freq
+2400000
+POLICY /sys/devices/system/cpu/cpufreq/policy7
+scaling_min_freq
+2000000
+scaling_max_freq
+2300000
+scaling_cur_freq
+2300000
+cpu  39577016 4915546 43922594 176263281 611249 11285484 1511842 0 0 0
+cpu0 4589538 637911 7452808 16628339 101558 4226373 425062 0 0 0
+cpu1 5308376 711495 7955495 17835546 92520 1809516 276767 0 0 0
+cpu2 5366515 843885 7761529 17984891 94058 1723367 268626 0 0 0
+cpu3 5213116 783344 7624910 18411874 91098 1685008 262892 0 0 0
+cpu4 5120275 588663 3966909 24925746 77701 575993 90599 0 0 0
+cpu5 4635179 569739 3661943 25889343 61717 512477 78847 0 0 0
+cpu6 4565553 457076 3491213 26275734 39309 504006 68111 0 0 0
+cpu7 4778459 323429 2007784 28311804 53284 248741 40935 0 0 0
+SAMPLE elapsed=13 planned_phase=0 (not proof of camera state)
+2026-09-16 18:52:34
+POLICY /sys/devices/system/cpu/cpufreq/policy0
+scaling_min_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq: Permission denied
+scaling_max_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq: Permission denied
+scaling_cur_freq
+1400000
+POLICY /sys/devices/system/cpu/cpufreq/policy4
+scaling_min_freq
+2000000
+scaling_max_freq
+2400000
+scaling_cur_freq
+2400000
+POLICY /sys/devices/system/cpu/cpufreq/policy7
+scaling_min_freq
+2000000
+scaling_max_freq
+2300000
+scaling_cur_freq
+2300000
+cpu  39577321 4915590 43922955 176264122 611260 11285554 1511849 0 0 0
+cpu0 4589563 637912 7452855 16628432 101559 4226403 425063 0 0 0
+cpu1 5308403 711498 7955560 17835640 92523 1809526 276768 0 0 0
+cpu2 5366549 843890 7761583 17984985 94061 1723376 268627 0 0 0
+cpu3 5213146 783350 7624967 18411970 91099 1685017 262893 0 0 0
+cpu4 5120311 588671 3966941 24925874 77702 575997 90599 0 0 0
+cpu5 4635211 569743 3661992 25889462 61719 512479 78848 0 0 0
+cpu6 4565600 457085 3491242 26275858 39310 504009 68112 0 0 0
+cpu7 4778534 323439 2007811 28311897 53285 248744 40935 0 0 0
+SAMPLE elapsed=15 planned_phase=0 (not proof of camera state)
+2026-09-16 18:52:36
+POLICY /sys/devices/system/cpu/cpufreq/policy0
+scaling_min_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq: Permission denied
+scaling_max_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq: Permission denied
+scaling_cur_freq
+2000000
+POLICY /sys/devices/system/cpu/cpufreq/policy4
+scaling_min_freq
+2850000
+scaling_max_freq
+2850000
+scaling_cur_freq
+2850000
+POLICY /sys/devices/system/cpu/cpufreq/policy7
+scaling_min_freq
+3400000
+scaling_max_freq
+3400000
+scaling_cur_freq
+3400000
+cpu  39577746 4915669 43923712 176264897 611269 11285641 1511860 0 0 0
+cpu0 4589594 637917 7452953 16628521 101561 4226443 425066 0 0 0
+cpu1 5308442 711505 7955670 17835730 92524 1809537 276770 0 0 0
+cpu2 5366596 843897 7761692 17985070 94063 1723388 268628 0 0 0
+cpu3 5213180 783360 7625082 18412062 91101 1685028 262895 0 0 0
+cpu4 5120369 588679 3967030 24925986 77703 576000 90601 0 0 0
+cpu5 4635267 569749 3662084 25889572 61719 512483 78849 0 0 0
+cpu6 4565674 457111 3491308 26275962 39310 504012 68113 0 0 0
+cpu7 4778621 323447 2007889 28311991 53286 248747 40936 0 0 0
+SAMPLE elapsed=18 planned_phase=0 (not proof of camera state)
+2026-09-16 18:52:39
+POLICY /sys/devices/system/cpu/cpufreq/policy0
+scaling_min_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq: Permission denied
+scaling_max_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq: Permission denied
+scaling_cur_freq
+800000
+POLICY /sys/devices/system/cpu/cpufreq/policy4
+scaling_min_freq
+550000
+scaling_max_freq
+2850000
+scaling_cur_freq
+550000
+POLICY /sys/devices/system/cpu/cpufreq/policy7
+scaling_min_freq
+600000
+scaling_max_freq
+3250000
+scaling_cur_freq
+1700000
+cpu  39578101 4915731 43924229 176265575 611274 11285718 1511866 0 0 0
+cpu0 4589631 637919 7453027 16628578 101561 4226479 425067 0 0 0
+cpu1 5308478 711506 7955752 17835812 92525 1809546 276771 0 0 0
+cpu2 5366632 843901 7761772 17985150 94064 1723397 268629 0 0 0
+cpu3 5213214 783364 7625159 18412143 91101 1685036 262895 0 0 0
+cpu4 5120437 588686 3967084 24926072 77703 576004 90601 0 0 0
+cpu5 4635312 569760 3662144 25889667 61719 512486 78849 0 0 0
+cpu6 4565725 457120 3491354 26276065 39311 504016 68113 0 0 0
+cpu7 4778669 323472 2007934 28312084 53287 248750 40937 0 0 0
+SAMPLE elapsed=20 planned_phase=1 (not proof of camera state)
+2026-09-16 18:52:41
+POLICY /sys/devices/system/cpu/cpufreq/policy0
+scaling_min_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq: Permission denied
+scaling_max_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq: Permission denied
+scaling_cur_freq
+2000000
+POLICY /sys/devices/system/cpu/cpufreq/policy4
+scaling_min_freq
+2850000
+scaling_max_freq
+2850000
+scaling_cur_freq
+2850000
+POLICY /sys/devices/system/cpu/cpufreq/policy7
+scaling_min_freq
+600000
+scaling_max_freq
+3250000
+scaling_cur_freq
+3250000
+cpu  39578537 4915799 43924821 176265972 611297 11285810 1511876 0 0 0
+cpu0 4589669 637927 7453087 16628625 101563 4226523 425069 0 0 0
+cpu1 5308534 711519 7955814 17835865 92528 1809557 276772 0 0 0
+cpu2 5366680 843911 7761848 17985200 94066 1723408 268630 0 0 0
+cpu3 5213251 783372 7625244 18412198 91103 1685046 262896 0 0 0
+cpu4 5120511 588695 3967147 24926121 77706 576009 90603 0 0 0
+cpu5 4635384 569773 3662202 25889718 61722 512490 78851 0 0 0
+cpu6 4565789 457124 3491425 26276123 39312 504020 68115 0 0 0
+cpu7 4778717 323474 2008048 28312118 53293 248753 40938 0 0 0
+SERVICE_BEGIN power
+2026-09-16 18:52:41
+sh: /system/bin/printf: Argument list too long
+
+SERVICE_END exit=0 output capped at 12000 bytes
+2026-09-16 18:52:41
+SERVICE_BEGIN thermalservice
+2026-09-16 18:52:41
+IsStatusOverride: false
+ThermalEventListeners:
+	callbacks: 4
+	killed: false
+	broadcasts count: -1
+ThermalStatusListeners:
+	callbacks: 20
+	killed: false
+	broadcasts count: -1
+Thermal Status: 0
+State changed time: 2026-09-16 18:28:23:009
+Cached temperatures:
+	Temperature{mValue=69.817, mType=0, mName=CPU, mStatus=0}
+	Temperature{mValue=69.817, mType=1, mName=GPU, mStatus=0}
+	Temperature{mValue=70.566, mType=9, mName=NPU, mStatus=0}
+	Temperature{mValue=70.566, mType=13, mName=SOC, mStatus=0}
+	Temperature{mValue=70.566, mType=10, mName=TPU, mStatus=0}
+	Temperature{mValue=38.287, mType=3, mName=SKIN, mStatus=0}
+	Temperature{mValue=42.0, mType=2, mName=BATTERY, mStatus=0}
+	Temperature{mValue=53.501, mType=5, mName=POWER_AMPLIFIER, mStatus=0}
+HAL Ready: true
+HAL connection:
+	ThermalHAL AIDL 3  connected: yes
+Current temperatures from HAL:
+	Temperature{mValue=88.044, mType=0, mName=CPU, mStatus=0}
+	Temperature{mValue=88.044, mType=1, mName=GPU, mStatus=0}
+	Temperature{mValue=37.2, mType=2, mName=BATTERY, mStatus=0}
+	Temperature{mValue=38.459, mType=3, mName=SKIN, mStatus=0}
+	Temperature{mValue=49.762, mType=5, mName=POWER_AMPLIFIER, mStatus=0}
+	Temperature{mValue=88.044, mType=9, mName=NPU, mStatus=0}
+	Temperature{mValue=88.044, mType=10, mName=TPU, mStatus=3}
+	Temperature{mValue=87.785, mType=13, mName=SOC, mStatus=3}
+Current cooling devices from HAL:
+	CoolingDevice{mValue=0, mType=3, mName=devfreq-13000000.mali}
+	CoolingDevice{mValue=0, mType=6, mName=lcd-backlight}
+	CoolingDevice{mValue=0, mType=6, mName=wifi-cooler}
+	CoolingDevice{mValue=0, mType=6, mName=flashlight_cooler}
+Temperature static thresholds from HAL:
+	TemperatureThreshold{mType=0, mName=CPU, mHotThrottlingThresholds=[NaN, NaN, NaN, 95.0, 90.0, 100.0, 117.0], mColdThrottlingThresholds=[NaN, NaN, NaN, NaN, NaN, NaN, NaN]}
+	TemperatureThreshold{mType=1, mName=GPU, mHotThrottlingThresholds=[NaN, NaN, NaN, 95.0, 90.0, 100.0, 117.0], mColdThrottlingThresholds=[NaN, NaN, NaN, NaN, NaN, NaN, NaN]}
+	TemperatureThreshold{mType=2, mName=BATTERY, mHotThrottlingThresholds=[NaN, NaN, NaN, 50.0, 55.0, 59.0, 60.0], mColdThrottlingThresholds=[NaN, NaN, NaN, NaN, NaN, NaN, NaN]}
+	TemperatureThreshold{mType=3, mName=SKIN, mHotThrottlingThresholds=[NaN, 40.0, 42.0, 45.0, 48.0, 60.0, 80.0], mColdThrottlingThresholds=[NaN, NaN, NaN, NaN, NaN, NaN, NaN]}
+	TemperatureThreshold{mType=5, mName=POWER_AMPLIFIER, mHotThrottlingThresholds=[NaN, NaN, NaN, 68.0, 90.0, 100.0, 110.0], mColdThrottlingThresholds=[NaN, NaN, NaN, NaN, NaN, NaN, NaN]}
+	TemperatureThreshold{mType=9, mName=NPU, mHotThrottlingThresholds=[NaN, NaN, NaN, 95.0, 90.0, 100.0, 117.0], mColdThrottlingThresholds=[NaN, NaN, NaN, NaN, NaN, NaN, NaN]}
+	TemperatureThreshold{mType=10, mName=TPU, mHotThrottlingThresholds=[NaN, NaN, NaN, 85.0, 90.0, 100.0, 117.0], mColdThrottlingThresholds=[NaN, NaN, NaN, NaN, NaN, NaN, NaN]}
+	TemperatureThreshold{mType=13, mName=SOC, mHotThrottlingThresholds=[NaN, NaN, NaN, 85.0, 90.0, 100.0, 117.0], mColdThrottlingThresholds=[NaN, NaN, NaN, NaN, NaN, NaN, NaN]}
+Temperature headroom thresholds:
+[NaN, 0.8333333, 0.9, 1.0, 1.1, 1.5333333, 2.2]
+
+SERVICE_END exit=0 output capped at 12000 bytes
+2026-09-16 18:52:41
+SERVICE_BEGIN media.camera
+2026-09-16 18:52:41
+sh: /system/bin/printf: Argument list too long
+
+SERVICE_END exit=0 output capped at 12000 bytes
+2026-09-16 18:52:41
+SERVICE_BEGIN power_hal_mgr_service
+2026-09-16 18:52:41
+
+
+SERVICE_END exit=0 output capped at 12000 bytes
+2026-09-16 18:52:41
+SAMPLE elapsed=22 planned_phase=1 (not proof of camera state)
+2026-09-16 18:52:43
+POLICY /sys/devices/system/cpu/cpufreq/policy0
+scaling_min_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq: Permission denied
+scaling_max_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq: Permission denied
+scaling_cur_freq
+1200000
+POLICY /sys/devices/system/cpu/cpufreq/policy4
+scaling_min_freq
+2850000
+scaling_max_freq
+2850000
+scaling_cur_freq
+2850000
+POLICY /sys/devices/system/cpu/cpufreq/policy7
+scaling_min_freq
+600000
+scaling_max_freq
+3250000
+scaling_cur_freq
+600000
+cpu  39578941 4915809 43925297 176266810 611303 11285903 1511883 0 0 0
+cpu0 4589710 637927 7453154 16628690 101564 4226568 425070 0 0 0
+cpu1 5308577 711519 7955891 17835953 92529 1809569 276773 0 0 0
+cpu2 5366729 843912 7761922 17985290 94067 1723419 268631 0 0 0
+cpu3 5213285 783373 7625322 18412290 91104 1685058 262897 0 0 0
+cpu4 5120576 588697 3967194 24926242 77707 576012 90603 0 0 0
+cpu5 4635439 569775 3662245 25889851 61723 512493 78851 0 0 0
+cpu6 4565849 457127 3491467 26276251 39313 504023 68115 0 0 0
+cpu7 4778773 323476 2008099 28312238 53293 248758 40938 0 0 0
+SAMPLE elapsed=25 planned_phase=1 (not proof of camera state)
+2026-09-16 18:52:46
+POLICY /sys/devices/system/cpu/cpufreq/policy0
+scaling_min_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq: Permission denied
+scaling_max_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq: Permission denied
+scaling_cur_freq
+2000000
+POLICY /sys/devices/system/cpu/cpufreq/policy4
+scaling_min_freq
+550000
+scaling_max_freq
+2850000
+scaling_cur_freq
+2850000
+POLICY /sys/devices/system/cpu/cpufreq/policy7
+scaling_min_freq
+600000
+scaling_max_freq
+3250000
+scaling_cur_freq
+3250000
+cpu  39579375 4915841 43925887 176267406 611316 11285994 1511892 0 0 0
+cpu0 4589751 637928 7453236 16628736 101564 4226614 425072 0 0 0
+cpu1 5308627 711521 7955979 17836012 92531 1809581 276774 0 0 0
+cpu2 5366779 843913 7762009 17985353 94069 1723430 268632 0 0 0
+cpu3 5213326 783375 7625419 18412353 91105 1685069 262899 0 0 0
+cpu4 5120649 588701 3967257 24926319 77709 576015 90604 0 0 0
+cpu5 4635516 569783 3662299 25889934 61725 512496 78852 0 0 0
+cpu6 4565914 457138 3491525 26276337 39315 504026 68116 0 0 0
+cpu7 4778810 323479 2008161 28312358 53294 248760 40939 0 0 0
+SAMPLE elapsed=27 planned_phase=1 (not proof of camera state)
+2026-09-16 18:52:48
+POLICY /sys/devices/system/cpu/cpufreq/policy0
+scaling_min_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq: Permission denied
+scaling_max_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq: Permission denied
+scaling_cur_freq
+2000000
+POLICY /sys/devices/system/cpu/cpufreq/policy4
+scaling_min_freq
+550000
+scaling_max_freq
+2850000
+scaling_cur_freq
+2850000
+POLICY /sys/devices/system/cpu/cpufreq/policy7
+scaling_min_freq
+600000
+scaling_max_freq
+3250000
+scaling_cur_freq
+2500000
+cpu  39579977 4915902 43926815 176267604 611328 11286085 1511901 0 0 0
+cpu0 4589811 637937 7453322 16628762 101565 4226664 425074 0 0 0
+cpu1 5308701 711529 7956091 17836040 92532 1809590 276775 0 0 0
+cpu2 5366844 843922 7762128 17985383 94070 1723439 268633 0 0 0
+cpu3 5213393 783384 7625537 18412380 91106 1685078 262900 0 0 0
+cpu4 5120753 588709 3967356 24926341 77711 576018 90606 0 0 0
+cpu5 4635613 569789 3662406 25889958 61727 512499 78853 0 0 0
+cpu6 4566007 457146 3491629 26276366 39318 504029 68117 0 0 0
+cpu7 4778851 323482 2008343 28312372 53295 248763 40940 0 0 0
+SAMPLE elapsed=29 planned_phase=1 (not proof of camera state)
+2026-09-16 18:52:50
+POLICY /sys/devices/system/cpu/cpufreq/policy0
+scaling_min_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq: Permission denied
+scaling_max_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq: Permission denied
+scaling_cur_freq
+2000000
+POLICY /sys/devices/system/cpu/cpufreq/policy4
+scaling_min_freq
+550000
+scaling_max_freq
+2850000
+scaling_cur_freq
+2850000
+POLICY /sys/devices/system/cpu/cpufreq/policy7
+scaling_min_freq
+600000
+scaling_max_freq
+3250000
+scaling_cur_freq
+3250000
+cpu  39580560 4915960 43927441 176267943 611337 11286164 1511908 0 0 0
+cpu0 4589870 637943 7453392 16628798 101566 4226704 425075 0 0 0
+cpu1 5308767 711536 7956176 17836086 92533 1809598 276776 0 0 0
+cpu2 5366902 843929 7762216 17985427 94071 1723448 268634 0 0 0
+cpu3 5213460 783387 7625620 18412424 91106 1685087 262900 0 0 0
+cpu4 5120840 588724 3967425 24926376 77713 576022 90606 0 0 0
+cpu5 4635706 569800 3662474 25889995 61729 512503 78854 0 0 0
+cpu6 4566085 457150 3491706 26276417 39320 504033 68118 0 0 0
+cpu7 4778926 323488 2008428 28312415 53296 248766 40941 0 0 0
+SAMPLE elapsed=32 planned_phase=1 (not proof of camera state)
+2026-09-16 18:52:53
+POLICY /sys/devices/system/cpu/cpufreq/policy0
+scaling_min_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq: Permission denied
+scaling_max_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq: Permission denied
+scaling_cur_freq
+1900000
+POLICY /sys/devices/system/cpu/cpufreq/policy4
+scaling_min_freq
+550000
+scaling_max_freq
+2850000
+scaling_cur_freq
+2850000
+POLICY /sys/devices/system/cpu/cpufreq/policy7
+scaling_min_freq
+600000
+scaling_max_freq
+3250000
+scaling_cur_freq
+1900000
+cpu  39581162 4916014 43928053 176268252 611340 11286244 1511915 0 0 0
+cpu0 4589924 637946 7453457 16628833 101566 4226745 425076 0 0 0
+cpu1 5308832 711546 7956265 17836123 92533 1809606 276777 0 0 0
+cpu2 5366970 843934 7762308 17985464 94071 1723456 268635 0 0 0
+cpu3 5213518 783397 7625709 18412467 91107 1685095 262901 0 0 0
+cpu4 5120937 588730 3967499 24926407 77713 576025 90607 0 0 0
+cpu5 4635793 569809 3662549 25890027 61730 512506 78855 0 0 0
+cpu6 4566174 457155 3491772 26276460 39320 504036 68119 0 0 0
+cpu7 4779010 323495 2008490 28312466 53297 248770 40942 0 0 0
+SAMPLE elapsed=34 planned_phase=1 (not proof of camera state)
+2026-09-16 18:52:55
+POLICY /sys/devices/system/cpu/cpufreq/policy0
+scaling_min_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq: Permission denied
+scaling_max_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq: Permission denied
+scaling_cur_freq
+1600000
+POLICY /sys/devices/system/cpu/cpufreq/policy4
+scaling_min_freq
+2850000
+scaling_max_freq
+2850000
+scaling_cur_freq
+2850000
+POLICY /sys/devices/system/cpu/cpufreq/policy7
+scaling_min_freq
+600000
+scaling_max_freq
+3250000
+scaling_cur_freq
+600000
+cpu  39581514 4916032 43928421 176269056 611347 11286319 1511921 0 0 0
+cpu0 4589964 637947 7453518 16628890 101567 4226783 425077 0 0 0
+cpu1 5308880 711546 7956323 17836201 92534 1809616 276778 0 0 0
+cpu2 5367013 843934 7762374 17985548 94072 1723465 268636 0 0 0
+cpu3 5213561 783401 7625768 18412548 91108 1685103 262902 0 0 0
+cpu4 5120994 588735 3967532 24926518 77715 576028 90607 0 0 0
+cpu5 4635844 569813 3662583 25890142 61731 512508 78855 0 0 0
+cpu6 4566219 457157 3491809 26276580 39321 504039 68119 0 0 0
+cpu7 4779034 323496 2008511 28312625 53297 248772 40942 0 0 0
+SAMPLE elapsed=36 planned_phase=1 (not proof of camera state)
+2026-09-16 18:52:57
+POLICY /sys/devices/system/cpu/cpufreq/policy0
+scaling_min_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq: Permission denied
+scaling_max_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq: Permission denied
+scaling_cur_freq
+1400000
+POLICY /sys/devices/system/cpu/cpufreq/policy4
+scaling_min_freq
+2850000
+scaling_max_freq
+2850000
+scaling_cur_freq
+2200000
+POLICY /sys/devices/system/cpu/cpufreq/policy7
+scaling_min_freq
+600000
+scaling_max_freq
+3250000
+scaling_cur_freq
+700000
+cpu  39581896 4916042 43928813 176269807 611349 11286400 1511926 0 0 0
+cpu0 4590004 637947 7453577 16628945 101567 4226824 425078 0 0 0
+cpu1 5308933 711546 7956389 17836273 92534 1809626 276779 0 0 0
+cpu2 5367049 843934 7762434 17985629 94073 1723475 268637 0 0 0
+cpu3 5213602 783402 7625843 18412626 91108 1685113 262903 0 0 0
+cpu4 5121059 588738 3967570 24926617 77715 576031 90608 0 0 0
+cpu5 4635897 569815 3662620 25890255 61732 512511 78856 0 0 0
+cpu6 4566277 457160 3491846 26276686 39321 504041 68119 0 0 0
+cpu7 4779072 323497 2008533 28312774 53297 248775 40942 0 0 0
+SAMPLE elapsed=38 planned_phase=1 (not proof of camera state)
+2026-09-16 18:52:59
+POLICY /sys/devices/system/cpu/cpufreq/policy0
+scaling_min_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq: Permission denied
+scaling_max_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq: Permission denied
+scaling_cur_freq
+2000000
+POLICY /sys/devices/system/cpu/cpufreq/policy4
+scaling_min_freq
+700000
+scaling_max_freq
+2850000
+scaling_cur_freq
+1100000
+POLICY /sys/devices/system/cpu/cpufreq/policy7
+scaling_min_freq
+600000
+scaling_max_freq
+3250000
+scaling_cur_freq
+900000
+cpu  39582392 4916063 43929293 176270412 611354 11286491 1511934 0 0 0
+cpu0 4590044 637948 7453640 16629001 101568 4226867 425080 0 0 0
+cpu1 5308979 711549 7956470 17836340 92535 1809636 276780 0 0 0
+cpu2 5367096 843936 7762509 17985700 94073 1723485 268638 0 0 0
+cpu3 5213651 783403 7625918 18412694 91109 1685123 262904 0 0 0
+cpu4 5121156 588741 3967617 24926680 77716 576036 90609 0 0 0
+cpu5 4635974 569820 3662672 25890331 61733 512516 78857 0 0 0
+cpu6 4566354 457163 3491893 26276770 39322 504046 68120 0 0 0
+cpu7 4779134 323499 2008570 28312893 53297 248778 40943 0 0 0
+SAMPLE elapsed=40 planned_phase=2 (not proof of camera state)
+2026-09-16 18:53:01
+POLICY /sys/devices/system/cpu/cpufreq/policy0
+scaling_min_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq: Permission denied
+scaling_max_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq: Permission denied
+scaling_cur_freq
+2000000
+POLICY /sys/devices/system/cpu/cpufreq/policy4
+scaling_min_freq
+2500000
+scaling_max_freq
+2850000
+scaling_cur_freq
+2500000
+POLICY /sys/devices/system/cpu/cpufreq/policy7
+scaling_min_freq
+2400000
+scaling_max_freq
+3250000
+scaling_cur_freq
+2400000
+cpu  39582783 4916095 43929739 176271086 611366 11286567 1511941 0 0 0
+cpu0 4590078 637950 7453701 16629062 101568 4226905 425081 0 0 0
+cpu1 5309015 711552 7956539 17836419 92535 1809646 276781 0 0 0
+cpu2 5367137 843937 7762573 17985785 94074 1723493 268639 0 0 0
+cpu3 5213683 783404 7625986 18412781 91109 1685131 262905 0 0 0
+cpu4 5121227 588744 3967663 24926766 77718 576039 90610 0 0 0
+cpu5 4636039 569825 3662713 25890423 61734 512519 78857 0 0 0
+cpu6 4566410 457168 3491944 26276863 39323 504049 68121 0 0 0
+cpu7 4779192 323512 2008615 28312983 53300 248781 40944 0 0 0
+SERVICE_BEGIN power
+2026-09-16 18:53:01
+sh: /system/bin/printf: Argument list too long
+
+SERVICE_END exit=0 output capped at 12000 bytes
+2026-09-16 18:53:01
+SERVICE_BEGIN thermalservice
+2026-09-16 18:53:01
+IsStatusOverride: false
+ThermalEventListeners:
+	callbacks: 4
+	killed: false
+	broadcasts count: -1
+ThermalStatusListeners:
+	callbacks: 20
+	killed: false
+	broadcasts count: -1
+Thermal Status: 1
+State changed time: 2026-09-16 18:52:54:732
+Cached temperatures:
+	Temperature{mValue=69.817, mType=0, mName=CPU, mStatus=0}
+	Temperature{mValue=69.817, mType=1, mName=GPU, mStatus=0}
+	Temperature{mValue=70.566, mType=9, mName=NPU, mStatus=0}
+	Temperature{mValue=70.566, mType=13, mName=SOC, mStatus=0}
+	Temperature{mValue=70.566, mType=10, mName=TPU, mStatus=0}
+	Temperature{mValue=40.988, mType=3, mName=SKIN, mStatus=1}
+	Temperature{mValue=42.0, mType=2, mName=BATTERY, mStatus=0}
+	Temperature{mValue=53.501, mType=5, mName=POWER_AMPLIFIER, mStatus=0}
+HAL Ready: true
+HAL connection:
+	ThermalHAL AIDL 3  connected: yes
+Current temperatures from HAL:
+	Temperature{mValue=82.111, mType=0, mName=CPU, mStatus=0}
+	Temperature{mValue=82.111, mType=1, mName=GPU, mStatus=0}
+	Temperature{mValue=37.1, mType=2, mName=BATTERY, mStatus=0}
+	Temperature{mValue=40.994, mType=3, mName=SKIN, mStatus=1}
+	Temperature{mValue=55.466, mType=5, mName=POWER_AMPLIFIER, mStatus=0}
+	Temperature{mValue=82.111, mType=9, mName=NPU, mStatus=0}
+	Temperature{mValue=82.111, mType=10, mName=TPU, mStatus=0}
+	Temperature{mValue=82.111, mType=13, mName=SOC, mStatus=0}
+Current cooling devices from HAL:
+	CoolingDevice{mValue=0, mType=3, mName=devfreq-13000000.mali}
+	CoolingDevice{mValue=0, mType=6, mName=lcd-backlight}
+	CoolingDevice{mValue=0, mType=6, mName=wifi-cooler}
+	CoolingDevice{mValue=0, mType=6, mName=flashlight_cooler}
+Temperature static thresholds from HAL:
+	TemperatureThreshold{mType=0, mName=CPU, mHotThrottlingThresholds=[NaN, NaN, NaN, 95.0, 90.0, 100.0, 117.0], mColdThrottlingThresholds=[NaN, NaN, NaN, NaN, NaN, NaN, NaN]}
+	TemperatureThreshold{mType=1, mName=GPU, mHotThrottlingThresholds=[NaN, NaN, NaN, 95.0, 90.0, 100.0, 117.0], mColdThrottlingThresholds=[NaN, NaN, NaN, NaN, NaN, NaN, NaN]}
+	TemperatureThreshold{mType=2, mName=BATTERY, mHotThrottlingThresholds=[NaN, NaN, NaN, 50.0, 55.0, 59.0, 60.0], mColdThrottlingThresholds=[NaN, NaN, NaN, NaN, NaN, NaN, NaN]}
+	TemperatureThreshold{mType=3, mName=SKIN, mHotThrottlingThresholds=[NaN, 40.0, 42.0, 45.0, 48.0, 60.0, 80.0], mColdThrottlingThresholds=[NaN, NaN, NaN, NaN, NaN, NaN, NaN]}
+	TemperatureThreshold{mType=5, mName=POWER_AMPLIFIER, mHotThrottlingThresholds=[NaN, NaN, NaN, 68.0, 90.0, 100.0, 110.0], mColdThrottlingThresholds=[NaN, NaN, NaN, NaN, NaN, NaN, NaN]}
+	TemperatureThreshold{mType=9, mName=NPU, mHotThrottlingThresholds=[NaN, NaN, NaN, 95.0, 90.0, 100.0, 117.0], mColdThrottlingThresholds=[NaN, NaN, NaN, NaN, NaN, NaN, NaN]}
+	TemperatureThreshold{mType=10, mName=TPU, mHotThrottlingThresholds=[NaN, NaN, NaN, 85.0, 90.0, 100.0, 117.0], mColdThrottlingThresholds=[NaN, NaN, NaN, NaN, NaN, NaN, NaN]}
+	TemperatureThreshold{mType=13, mName=SOC, mHotThrottlingThresholds=[NaN, NaN, NaN, 85.0, 90.0, 100.0, 117.0], mColdThrottlingThresholds=[NaN, NaN, NaN, NaN, NaN, NaN, NaN]}
+Temperature headroom thresholds:
+[NaN, 0.8333333, 0.9, 1.0, 1.1, 1.5333333, 2.2]
+
+SERVICE_END exit=0 output capped at 12000 bytes
+2026-09-16 18:53:01
+SERVICE_BEGIN media.camera
+2026-09-16 18:53:01
+sh: /system/bin/printf: Argument list too long
+
+SERVICE_END exit=0 output capped at 12000 bytes
+2026-09-16 18:53:01
+SERVICE_BEGIN power_hal_mgr_service
+2026-09-16 18:53:01
+
+
+SERVICE_END exit=0 output capped at 12000 bytes
+2026-09-16 18:53:02
+SAMPLE elapsed=43 planned_phase=2 (not proof of camera state)
+2026-09-16 18:53:04
+POLICY /sys/devices/system/cpu/cpufreq/policy0
+scaling_min_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq: Permission denied
+scaling_max_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq: Permission denied
+scaling_cur_freq
+2000000
+POLICY /sys/devices/system/cpu/cpufreq/policy4
+scaling_min_freq
+550000
+scaling_max_freq
+2850000
+scaling_cur_freq
+2850000
+POLICY /sys/devices/system/cpu/cpufreq/policy7
+scaling_min_freq
+600000
+scaling_max_freq
+3250000
+scaling_cur_freq
+1100000
+cpu  39583389 4916140 43930374 176271531 611369 11286655 1511948 0 0 0
+cpu0 4590130 637952 7453773 16629111 101568 4226951 425082 0 0 0
+cpu1 5309081 711553 7956633 17836478 92535 1809655 276782 0 0 0
+cpu2 5367206 843945 7762654 17985844 94074 1723502 268640 0 0 0
+cpu3 5213759 783409 7626073 18412833 91110 1685140 262906 0 0 0
+cpu4 5121305 588750 3967747 24926824 77719 576043 90610 0 0 0
+cpu5 4636124 569837 3662789 25890477 61735 512522 78858 0 0 0
+cpu6 4566480 457172 3492031 26276926 39323 504053 68122 0 0 0
+cpu7 4779302 323519 2008672 28313036 53300 248785 40944 0 0 0
+SAMPLE elapsed=45 planned_phase=2 (not proof of camera state)
+2026-09-16 18:53:06
+POLICY /sys/devices/system/cpu/cpufreq/policy0
+scaling_min_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq: Permission denied
+scaling_max_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq: Permission denied
+scaling_cur_freq
+2000000
+POLICY /sys/devices/system/cpu/cpufreq/policy4
+scaling_min_freq
+2850000
+scaling_max_freq
+2850000
+scaling_cur_freq
+2850000
+POLICY /sys/devices/system/cpu/cpufreq/policy7
+scaling_min_freq
+2400000
+scaling_max_freq
+3250000
+scaling_cur_freq
+3250000
+cpu  39584073 4916198 43931048 176271874 611373 11286753 1511956 0 0 0
+cpu0 4590180 637955 7453863 16629147 101568 4227002 425084 0 0 0
+cpu1 5309155 711557 7956740 17836520 92536 1809665 276783 0 0 0
+cpu2 5367272 843952 7762758 17985881 94075 1723512 268641 0 0 0
+cpu3 5213830 783411 7626176 18412876 91110 1685150 262907 0 0 0
+cpu4 5121418 588771 3967803 24926864 77719 576047 90612 0 0 0
+cpu5 4636226 569850 3662859 25890523 61736 512527 78859 0 0 0
+cpu6 4566584 457178 3492091 26276980 39324 504058 68123 0 0 0
+cpu7 4779405 323521 2008754 28313079 53301 248789 40945 0 0 0
+SAMPLE elapsed=47 planned_phase=2 (not proof of camera state)
+2026-09-16 18:53:08
+POLICY /sys/devices/system/cpu/cpufreq/policy0
+scaling_min_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq: Permission denied
+scaling_max_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq: Permission denied
+scaling_cur_freq
+500000
+POLICY /sys/devices/system/cpu/cpufreq/policy4
+scaling_min_freq
+550000
+scaling_max_freq
+2400000
+scaling_cur_freq
+1500000
+POLICY /sys/devices/system/cpu/cpufreq/policy7
+scaling_min_freq
+600000
+scaling_max_freq
+2300000
+scaling_cur_freq
+1900000
+cpu  39584298 4916322 43931447 176272664 611389 11286822 1511968 0 0 0
+cpu0 4590205 637964 7453921 16629223 101570 4227028 425086 0 0 0
+cpu1 5309184 711569 7956807 17836596 92538 1809675 276785 0 0 0
+cpu2 5367301 843963 7762824 17985959 94077 1723522 268642 0 0 0
+cpu3 5213861 783420 7626238 18412954 91112 1685161 262909 0 0 0
+cpu4 5121450 588795 3967839 24926975 77722 576051 90613 0 0 0
+cpu5 4636250 569882 3662911 25890626 61739 512529 78860 0 0 0
+cpu6 4566616 457181 3492124 26277116 39326 504061 68124 0 0 0
+cpu7 4779427 323545 2008780 28313212 53302 248792 40946 0 0 0
+SAMPLE elapsed=49 planned_phase=2 (not proof of camera state)
+2026-09-16 18:53:10
+POLICY /sys/devices/system/cpu/cpufreq/policy0
+scaling_min_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq: Permission denied
+scaling_max_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq: Permission denied
+scaling_cur_freq
+1400000
+POLICY /sys/devices/system/cpu/cpufreq/policy4
+scaling_min_freq
+700000
+scaling_max_freq
+2400000
+scaling_cur_freq
+2400000
+POLICY /sys/devices/system/cpu/cpufreq/policy7
+scaling_min_freq
+600000
+scaling_max_freq
+2300000
+scaling_cur_freq
+600000
+cpu  39584496 4916367 43931759 176273667 611397 11286886 1511976 0 0 0
+cpu0 4590228 637971 7453977 16629314 101571 4227051 425088 0 0 0
+cpu1 5309214 711571 7956872 17836696 92539 1809685 276786 0 0 0
+cpu2 5367329 843965 7762877 17986062 94077 1723531 268644 0 0 0
+cpu3 5213886 783420 7626294 18413061 91113 1685171 262910 0 0 0
+cpu4 5121480 588798 3967859 24927124 77723 576054 90613 0 0 0
+cpu5 4636268 569884 3662935 25890783 61740 512532 78861 0 0 0
+cpu6 4566641 457181 3492147 26277273 39327 504064 68124 0 0 0
+cpu7 4779446 323575 2008796 28313350 53304 248795 40946 0 0 0
+SAMPLE elapsed=51 planned_phase=2 (not proof of camera state)
+2026-09-16 18:53:12
+POLICY /sys/devices/system/cpu/cpufreq/policy0
+scaling_min_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq: Permission denied
+scaling_max_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq: Permission denied
+scaling_cur_freq
+1100000
+POLICY /sys/devices/system/cpu/cpufreq/policy4
+scaling_min_freq
+550000
+scaling_max_freq
+2400000
+scaling_cur_freq
+2400000
+POLICY /sys/devices/system/cpu/cpufreq/policy7
+scaling_min_freq
+600000
+scaling_max_freq
+2100000
+scaling_cur_freq
+600000
+cpu  39584650 4916372 43931996 176274847 611399 11286942 1511985 0 0 0
+cpu0 4590258 637972 7454029 16629414 101571 4227069 425090 0 0 0
+cpu1 5309237 711571 7956924 17836807 92539 1809695 276788 0 0 0
+cpu2 5367356 843966 7762924 17986178 94078 1723541 268645 0 0 0
+cpu3 5213912 783420 7626341 18413181 91113 1685180 262912 0 0 0
+cpu4 5121493 588799 3967875 24927300 77723 576057 90614 0 0 0
+cpu5 4636280 569884 3662944 25890966 61741 512535 78861 0 0 0
+cpu6 4566655 457181 3492156 26277455 39327 504066 68125 0 0 0
+cpu7 4779457 323575 2008800 28313543 53304 248796 40946 0 0 0
+SAMPLE elapsed=54 planned_phase=2 (not proof of camera state)
+2026-09-16 18:53:15
+POLICY /sys/devices/system/cpu/cpufreq/policy0
+scaling_min_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq: Permission denied
+scaling_max_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq: Permission denied
+scaling_cur_freq
+300000
+POLICY /sys/devices/system/cpu/cpufreq/policy4
+scaling_min_freq
+550000
+scaling_max_freq
+2400000
+scaling_cur_freq
+2300000
+POLICY /sys/devices/system/cpu/cpufreq/policy7
+scaling_min_freq
+600000
+scaling_max_freq
+2100000
+scaling_cur_freq
+600000
+cpu  39584789 4916380 43932254 176276029 611402 11287001 1511995 0 0 0
+cpu0 4590283 637973 7454085 16629510 101572 4227091 425093 0 0 0
+cpu1 5309266 711571 7956977 17836913 92539 1809705 276790 0 0 0
+cpu2 5367385 843968 7762972 17986289 94078 1723551 268647 0 0 0
+cpu3 5213935 783421 7626392 18413297 91113 1685189 262914 0 0 0
+cpu4 5121507 588801 3967895 24927469 77724 576060 90614 0 0 0
+cpu5 4636287 569887 3662958 25891153 61741 512538 78862 0 0 0
+cpu6 4566665 457181 3492172 26277640 39327 504068 68125 0 0 0
+cpu7 4779458 323575 2008800 28313754 53304 248796 40946 0 0 0
+SAMPLE elapsed=56 planned_phase=2 (not proof of camera state)
+2026-09-16 18:53:17
+POLICY /sys/devices/system/cpu/cpufreq/policy0
+scaling_min_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq: Permission denied
+scaling_max_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq: Permission denied
+scaling_cur_freq
+800000
+POLICY /sys/devices/system/cpu/cpufreq/policy4
+scaling_min_freq
+550000
+scaling_max_freq
+2400000
+scaling_cur_freq
+1900000
+POLICY /sys/devices/system/cpu/cpufreq/policy7
+scaling_min_freq
+600000
+scaling_max_freq
+2100000
+scaling_cur_freq
+600000
+cpu  39584927 4916384 43932520 176277145 611454 11287056 1512008 0 0 0
+cpu0 4590308 637974 7454136 16629606 101583 4227107 425096 0 0 0
+cpu1 5309291 711572 7957015 17837037 92544 1809714 276792 0 0 0
+cpu2 5367404 843968 7763009 17986424 94081 1723558 268649 0 0 0
+cpu3 5213950 783421 7626461 18413395 91114 1685200 262915 0 0 0
+cpu4 5121532 588801 3967920 24927601 77742 576064 90616 0 0 0
+cpu5 4636309 569889 3662981 25891295 61756 512542 78863 0 0 0
+cpu6 4566671 457181 3492191 26277823 39327 504070 68126 0 0 0
+cpu7 4779459 323575 2008803 28313960 53304 248797 40946 0 0 0
+SAMPLE elapsed=58 planned_phase=2 (not proof of camera state)
+2026-09-16 18:53:19
+POLICY /sys/devices/system/cpu/cpufreq/policy0
+scaling_min_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq: Permission denied
+scaling_max_freq
+cat: /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq: Permission denied
+scaling_cur_freq
+300000
+POLICY /sys/devices/system/cpu/cpufreq/policy4
+scaling_min_freq
+550000
+scaling_max_freq
+2400000
+scaling_cur_freq
+2400000
+POLICY /sys/devices/system/cpu/cpufreq/policy7
+scaling_min_freq
+600000
+scaling_max_freq
+2100000
+scaling_cur_freq
+600000
+cpu  39585016 4916394 43932684 176278498 611455 11287096 1512017 0 0 0
+cpu0 4590325 637975 7454171 16629740 101583 4227120 425099 0 0 0
+cpu1 5309305 711573 7957049 17837175 92545 1809723 276794 0 0 0
+cpu2 5367425 843968 7763040 17986569 94081 1723565 268651 0 0 0
+cpu3 5213968 783422 7626494 18413541 91114 1685207 262917 0 0 0
+cpu4 5121540 588807 3967936 24927784 77742 576066 90616 0 0 0
+cpu5 4636313 569889 3662987 25891496 61757 512543 78863 0 0 0
+cpu6 4566676 457181 3492200 26278021 39327 504071 68126 0 0 0
+cpu7 4779461 323575 2008805 28314170 53304 248797 40946 0 0 0
+CAMERA_PROBE_COMPLETE
+2026-09-16 18:53:21
+CAMERA_PROBE_EXIT=0
+
+[exit] 0
+2026-09-16 18:53:21 相机采集返回；请核对 CAMERA_PROBE_COMPLETE 和 CAMERA_PROBE_EXIT=0。缺失则为不完整报告。

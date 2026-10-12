@@ -1,65 +1,56 @@
 # MTK God
 
-An Android app that sets **CPU and GPU frequency limits on MediaTek SoCs without root**,
-through [Shizuku](https://shizuku.rikka.app/). It talks to MediaTek's PowerHAL manager
-directly, the same service the vendor's own power tuning goes through.
+一个 Android 应用，**无需 root** 即可设置 MediaTek SoC 上的 **CPU 与 GPU 频率限制**，通过 [Shizuku](https://shizuku.rikka.app/) 实现。它直接与 MediaTek 的 PowerHAL manager 通信，也就是厂商自身的功耗调优所走的同一个服务。
 
-Aimed at devices running a MediaTek Dimensity SoC; the cluster layout, frequency tables and
-available governors are all discovered at runtime rather than assumed.
+面向运行 MediaTek Dimensity SoC 的设备；簇布局、频率表和可用 governor 全部在运行时发现，而非预先假定。
 
-## Status
+## 文档与当前状态
 
-**Read [docs/handoff.md](docs/handoff.md) before doing anything with this.** It is
-split into verified facts, the complete list of open problems, and clearly-labelled
-speculation, in that order.
+开发文档从 [docs/README.md](docs/README.md) 按任务进入。设备行为与功能能力以对应主题的 `facts.md` 为准；带日期的实验只证明其记录条件下的结果，归档材料不构成当前待办。
 
-Short version: the app installs and runs, the protocol work is done, and
-single-frequency limiting has been observed working — but frequency control
-**stops responding after several applies**, a cluster can be left **pinned with no
-in-app recovery**, and a floor/ceiling **range has never been demonstrated to take
-effect on hardware**. Those are the problems worth attention.
-
-## Documentation
+## 文档
 
 | | |
 |---|---|
-| [docs/protocol.md](docs/protocol.md) | MediaTek PowerHAL: ids, transactions, value semantics — with primary sources |
-| [docs/pitfalls.md](docs/pitfalls.md) | Mistakes already made here, and the rule each one produced |
-| [docs/architecture.md](docs/architecture.md) | Layers, the `CpuControl` invariants, device adaptation, testing |
-| [docs/ui.md](docs/ui.md) | Screens, navigation, the segment bar's gestures, design language |
-| [docs/powerhal-resources.md](docs/powerhal-resources.md) | The full resource namespace, 172 entries, with source links |
-| [docs/handoff.md](docs/handoff.md) | Current state, open problems, what to do next |
-| [docs/device-vivo-v2430a.md](docs/device-vivo-v2430a.md) | What the development device exposes — and what it does not |
+| [docs/README.md](docs/README.md) | 文档总入口与按任务索引 |
+| [docs/cpu/facts.md](docs/cpu/facts.md) | CPU 当前能力、限制和兼容范围 |
+| [docs/thermal/facts.md](docs/thermal/facts.md) | 温控当前行为和已知边界 |
+| [docs/device/facts.md](docs/device/facts.md) | 开发设备、权限和可观测能力 |
+| [docs/dev/architecture.md](docs/dev/architecture.md) | 分层、`CpuControl` 不变式、设备适配、测试 |
+| [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) | Agent 文档写入、实验、版本和归档规范 |
 
-## Building
+**文档一律用中文撰写**；代码、命令、路径、标识符和 URL 保持原样不翻译。给 AI agent 看的仓库约定在 [AGENTS.md](AGENTS.md)。
+
+## 构建
+
+需要 JDK 17+ 和 Android SDK（`compileSdk 37`）。
 
 ```bash
 cd mtk-optimizer
-./gradlew assembleDebug
-# app/build/outputs/apk/debug/app-debug.apk
+./gradlew assembleDebug     # app/build/outputs/apk/debug/app-debug.apk   —— 日常开发
+./gradlew assembleRelease   # app/build/outputs/apk/release/app-release.apk —— 交付用
 ```
 
-Requires JDK 17 and the Android SDK (`compileSdk 37`). The app is signed with the debug
-keystore by default; any signature works for local use — Android requires a signature to
-install at all.
+**交付给用户的是 release 包**：它开了混淆和资源压缩，签名从
+`mtk-optimizer/signing/keystore.properties` 读；那个目录被 gitignore，
+新克隆的仓库里没有，此时 `assembleRelease` 会因未签名而失败（这是有意的，
+比静默退回 debug 签名好）。
 
-## Requirements on device
+**签名密钥不能换。** 换了签名的 APK 装不到已装的包上——用户得先卸载，
+本地方案、设置和报告一起丢。密钥请离线备份，也不要提交进版本库。
 
-- Android 13+ (`minSdk 33`)
-- [Shizuku](https://shizuku.rikka.app/) running and this app authorised
-- A MediaTek SoC — on anything else the app detects the absence of PowerHAL and says so
-  rather than failing silently
+## 设备上的要求
 
-## Helping it support your device
+- Android 13+（`minSdk 33`）
+- [Shizuku](https://shizuku.rikka.app/) 正在运行，且本应用已获授权
+- 一颗 MediaTek SoC —— 在其他平台上，应用会检测到 PowerHAL 不存在并明确说明，而不是静默失败
 
-*Settings → 运行日志 → 复制报告* produces a plain-text snapshot: SoC and build identifiers,
-the cpufreq policies in enumeration order, frequency counts, governor writability, PowerHAL
-reachability, the full capability probe, and the run log.
+## 帮助它支持你的设备
 
-That text is usually enough to work out how a device behaves without owning it. The goal is
-that most devices need no per-device work — the app probes rather than consulting a device
-list, and the report is the fallback.
+*设置 → 运行日志 → 复制报告* 会生成一份纯文本快照：SoC 与 build 标识符、按枚举顺序排列的 cpufreq policy、频率数量、governor 可写性、PowerHAL 可达性、完整的能力探测结果，以及运行日志。
 
-## License
+这段文本通常足以在未持有设备的情况下推断出该设备的行为。目标是让大多数设备无需任何逐设备的适配工作——应用靠探测而非查询设备列表，报告是兜底手段。
 
-Not yet chosen.
+## 许可证
+
+尚未选定。

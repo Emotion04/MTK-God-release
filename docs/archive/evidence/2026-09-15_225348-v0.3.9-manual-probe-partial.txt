@@ -1,0 +1,85 @@
+2026-09-15 22:53:48 MTK God 0.3.9 ROM=PD2430D_A_16.1.12.0.W10
+2026-09-15 22:53:48 权限=PrivilegeState(mode=ADB, permissionGranted=true, binderAlive=true, uid=2000, shizukuVersion=13, message=null)
+2026-09-15 22:53:48 模式=只读观察 30 秒 policy=policy7 请求=2500000-3400000 kHz 原设置=[ClusterSetting(policy=policy0, minFreqKhz=1900000, maxFreqKhz=1900000, governor=null), ClusterSetting(policy=policy4, minFreqKhz=2800000, maxFreqKhz=2800000, governor=null), ClusterSetting(policy=policy7, minFreqKhz=3250000, maxFreqKhz=3250000, governor=null)] thermal=2 powerSave=false
+2026-09-15 22:53:49 开始 elapsed=0ms policy0 ?-?MHz cur=1900MHz, policy4 2800-2800MHz cur=2800MHz, policy7 3250-3250MHz cur=3250MHz thermal=2 powerSave=false
+2026-09-15 22:53:50 观察 1/30 elapsed=1032ms policy0 ?-?MHz cur=1900MHz, policy4 2800-2800MHz cur=2800MHz, policy7 3250-3250MHz cur=3250MHz thermal=2 powerSave=false
+2026-09-15 22:53:51 观察 2/30 elapsed=2057ms policy0 ?-?MHz cur=1900MHz, policy4 2800-2800MHz cur=2800MHz, policy7 3250-3250MHz cur=3250MHz thermal=2 powerSave=false
+2026-09-15 22:53:52 观察 3/30 elapsed=3076ms policy0 ?-?MHz cur=1900MHz, policy4 2800-2800MHz cur=2800MHz, policy7 3250-3250MHz cur=3250MHz thermal=2 powerSave=false
+2026-09-15 22:53:54 观察 4/30 elapsed=4097ms policy0 ?-?MHz cur=2000MHz, policy4 2850-2850MHz cur=2850MHz, policy7 3400-3400MHz cur=3400MHz thermal=1 powerSave=false
+2026-09-15 22:53:55 观察 5/30 elapsed=6052ms policy0 ?-?MHz cur=2000MHz, policy4 2850-2850MHz cur=2850MHz, policy7 3400-3400MHz cur=3400MHz thermal=1 powerSave=false
+2026-09-15 22:53:56 观察 6/30 elapsed=7140ms policy0 ?-?MHz cur=1900MHz, policy4 2800-2800MHz cur=2800MHz, policy7 3250-3250MHz cur=3250MHz thermal=1 powerSave=false
+2026-09-15 22:53:57 观察 7/30 elapsed=8181ms policy0 ?-?MHz cur=1900MHz, policy4 2800-2800MHz cur=2800MHz, policy7 3250-3250MHz cur=3250MHz thermal=1 powerSave=false
+2026-09-15 22:53:58 观察 8/30 elapsed=9263ms policy0 ?-?MHz cur=1900MHz, policy4 2800-2800MHz cur=2800MHz, policy7 3250-3250MHz cur=3250MHz thermal=1 powerSave=false
+2026-09-15 22:53:58 已停止（请核对上方恢复记录）
+
+
+
+
+---
+
+2026-09-15 22:54:25 MTK God 0.3.9 ROM=PD2430D_A_16.1.12.0.W10
+2026-09-15 22:54:25 权限=PrivilegeState(mode=ADB, permissionGranted=true, binderAlive=true, uid=2000, shizukuVersion=13, message=null)
+2026-09-15 22:54:25 模式=三资源范围 8 秒 policy=policy7 请求=2500000-3400000 kHz 原设置=[ClusterSetting(policy=policy0, minFreqKhz=1900000, maxFreqKhz=1900000, governor=null), ClusterSetting(policy=policy4, minFreqKhz=2800000, maxFreqKhz=2800000, governor=null), ClusterSetting(policy=policy7, minFreqKhz=3250000, maxFreqKhz=3250000, governor=null)] thermal=2 powerSave=false
+2026-09-15 22:54:25 开始 elapsed=0ms policy0 ?-?MHz cur=1900MHz, policy4 2800-2800MHz cur=2800MHz, policy7 3250-3250MHz cur=3250MHz thermal=2 powerSave=false
+2026-09-15 22:54:26 释放原请求后 elapsed=1056ms policy0 ?-?MHz cur=300MHz, policy4 550-2200MHz cur=550MHz, policy7 600-2000MHz cur=600MHz thermal=2 powerSave=false
+2026-09-15 22:54:26 测试资源=[(0x00400200, 2500000), (0x00404200, 3400000), (0x0040C200, 3400000)] duration=8000ms thermal=2 powerSave=false
+2026-09-15 22:54:26 测试句柄=544981 thermal=2 powerSave=false
+2026-09-15 22:54:27 测试 1/8（到期后样本不算持续约束） elapsed=2151ms policy0 ?-?MHz cur=1600MHz, policy4 2200-2200MHz cur=2200MHz, policy7 2000-2000MHz cur=2000MHz thermal=2 powerSave=false
+2026-09-15 22:54:29 测试 2/8（到期后样本不算持续约束） elapsed=3179ms policy0 ?-?MHz cur=2000MHz, policy4 2850-2850MHz cur=2850MHz, policy7 3400-3400MHz cur=3400MHz thermal=2 powerSave=false
+2026-09-15 22:54:30 测试 3/8（到期后样本不算持续约束） elapsed=4879ms policy0 ?-?MHz cur=2000MHz, policy4 2850-2850MHz cur=2850MHz, policy7 3400-3400MHz cur=3400MHz thermal=2 powerSave=false
+2026-09-15 22:54:31 测试 4/8（到期后样本不算持续约束） elapsed=5946ms policy0 ?-?MHz cur=1600MHz, policy4 550-2850MHz cur=800MHz, policy7 2500-3250MHz cur=2500MHz thermal=2 powerSave=false
+2026-09-15 22:54:32 测试 5/8（到期后样本不算持续约束） elapsed=7000ms policy0 ?-?MHz cur=2000MHz, policy4 2850-2850MHz cur=2850MHz, policy7 3250-3250MHz cur=3250MHz thermal=2 powerSave=false
+2026-09-15 22:54:33 测试 6/8（到期后样本不算持续约束） elapsed=8105ms policy0 ?-?MHz cur=1600MHz, policy4 2200-2200MHz cur=2200MHz, policy7 2000-2000MHz cur=2000MHz thermal=2 powerSave=false
+2026-09-15 22:54:34 测试释放=true 已释放 thermal=2 powerSave=false
+2026-09-15 22:54:35 测试释放后 elapsed=9853ms policy0 ?-?MHz cur=900MHz, policy4 550-2200MHz cur=2200MHz, policy7 600-2000MHz cur=600MHz thermal=2 powerSave=false
+2026-09-15 22:54:38 恢复原请求=true 请求已发送，部分簇无法验证 · policy0 ?-?MHz cur=1900MHz 请求=1900-1900MHz 上下限读回不完整; policy4 2800-2800MHz cur=2800MHz 请求=2800-2800MHz 本次读回符合; policy7 3250-3250MHz cur=3250MHz 请求=3250-3250MHz 本次读回符合 thermal=2 powerSave=false
+2026-09-15 22:54:38 已停止（请核对上方恢复记录）
+
+
+−−−
+
+2026-09-15 22:55:00 MTK God 0.3.9 ROM=PD2430D_A_16.1.12.0.W10
+2026-09-15 22:55:00 权限=PrivilegeState(mode=ADB, permissionGranted=true, binderAlive=true, uid=2000, shizukuVersion=13, message=null)
+2026-09-15 22:55:00 模式=四资源范围 8 秒 policy=policy7 请求=2500000-3400000 kHz 原设置=[ClusterSetting(policy=policy0, minFreqKhz=1900000, maxFreqKhz=1900000, governor=null), ClusterSetting(policy=policy4, minFreqKhz=2800000, maxFreqKhz=2800000, governor=null), ClusterSetting(policy=policy7, minFreqKhz=3250000, maxFreqKhz=3250000, governor=null)] thermal=2 powerSave=false
+2026-09-15 22:55:00 开始 elapsed=0ms policy0 ?-?MHz cur=1900MHz, policy4 2800-2800MHz cur=2800MHz, policy7 3250-3250MHz cur=3250MHz thermal=2 powerSave=false
+2026-09-15 22:55:01 释放原请求后 elapsed=1058ms policy0 ?-?MHz cur=800MHz, policy4 550-2200MHz cur=550MHz, policy7 600-2000MHz cur=600MHz thermal=2 powerSave=false
+2026-09-15 22:55:01 测试资源=[(0x00400200, 2500000), (0x00404200, 3400000), (0x00408200, 2500000), (0x0040C200, 3400000)] duration=8000ms thermal=2 powerSave=false
+2026-09-15 22:55:01 测试句柄=545112 thermal=2 powerSave=false
+2026-09-15 22:55:02 测试 1/8（到期后样本不算持续约束） elapsed=2132ms policy0 ?-?MHz cur=1300MHz, policy4 550-2200MHz cur=550MHz, policy7 2500-2500MHz cur=2500MHz thermal=2 powerSave=false
+2026-09-15 22:55:04 测试 2/8（到期后样本不算持续约束） elapsed=3167ms policy0 ?-?MHz cur=2000MHz, policy4 2850-2850MHz cur=2850MHz, policy7 3400-3400MHz cur=3400MHz thermal=2 powerSave=false
+2026-09-15 22:55:05 测试 3/8（到期后样本不算持续约束） elapsed=4284ms policy0 ?-?MHz cur=2000MHz, policy4 2850-2850MHz cur=2850MHz, policy7 3400-3400MHz cur=3400MHz thermal=2 powerSave=false
+2026-09-15 22:55:06 测试 4/8（到期后样本不算持续约束） elapsed=5348ms policy0 ?-?MHz cur=2000MHz, policy4 2850-2850MHz cur=2850MHz, policy7 3400-3400MHz cur=3400MHz thermal=2 powerSave=false
+2026-09-15 22:55:07 测试 5/8（到期后样本不算持续约束） elapsed=6409ms policy0 ?-?MHz cur=1700MHz, policy4 550-2850MHz cur=1400MHz, policy7 2500-3250MHz cur=2500MHz thermal=2 powerSave=false
+2026-09-15 22:55:08 测试 6/8（到期后样本不算持续约束） elapsed=7457ms policy0 ?-?MHz cur=1200MHz, policy4 2850-2850MHz cur=2850MHz, policy7 2500-3250MHz cur=2700MHz thermal=2 powerSave=false
+2026-09-15 22:55:09 测试 7/8（到期后样本不算持续约束） elapsed=8520ms policy0 ?-?MHz cur=1500MHz, policy4 2850-2850MHz cur=2850MHz, policy7 2500-3250MHz cur=2500MHz thermal=2 powerSave=false
+2026-09-15 22:55:11 测试 8/8（到期后样本不算持续约束） elapsed=10369ms policy0 ?-?MHz cur=2000MHz, policy4 2500-2500MHz cur=2500MHz, policy7 2400-2400MHz cur=2400MHz thermal=2 powerSave=false
+2026-09-15 22:55:11 测试释放=true 已释放 thermal=2 powerSave=false
+2026-09-15 22:55:12 测试释放后 elapsed=11514ms policy0 ?-?MHz cur=1200MHz, policy4 550-2200MHz cur=2200MHz, policy7 600-2000MHz cur=600MHz thermal=2 powerSave=false
+2026-09-15 22:55:15 恢复原请求=true 请求已发送，部分簇无法验证 · policy0 ?-?MHz cur=1900MHz 请求=1900-1900MHz 上下限读回不完整; policy4 2800-2800MHz cur=2800MHz 请求=2800-2800MHz 本次读回符合; policy7 3250-3250MHz cur=3250MHz 请求=3250-3250MHz 本次读回符合 thermal=2 powerSave=false
+2026-09-15 22:55:15 探测完成；结果不能直接确定限制来源
+
+
+---
+
+2026-09-15 22:55:25 MTK God 0.3.9 ROM=PD2430D_A_16.1.12.0.W10
+2026-09-15 22:55:25 权限=PrivilegeState(mode=ADB, permissionGranted=true, binderAlive=true, uid=2000, shizukuVersion=13, message=null)
+2026-09-15 22:55:25 模式=上端点单值 8 秒 policy=policy7 请求=2500000-3400000 kHz 原设置=[ClusterSetting(policy=policy0, minFreqKhz=1900000, maxFreqKhz=1900000, governor=null), ClusterSetting(policy=policy4, minFreqKhz=2800000, maxFreqKhz=2800000, governor=null), ClusterSetting(policy=policy7, minFreqKhz=3250000, maxFreqKhz=3250000, governor=null)] thermal=2 powerSave=false
+2026-09-15 22:55:25 开始 elapsed=0ms policy0 ?-?MHz cur=1900MHz, policy4 2800-2800MHz cur=2800MHz, policy7 3250-3250MHz cur=3250MHz thermal=2 powerSave=false
+2026-09-15 22:55:26 释放原请求后 elapsed=1060ms policy0 ?-?MHz cur=500MHz, policy4 550-2200MHz cur=550MHz, policy7 600-2000MHz cur=600MHz thermal=2 powerSave=false
+2026-09-15 22:55:26 测试资源=[(0x00400200, 3400000), (0x00404200, 3400000), (0x00408200, 3400000), (0x0040C200, 3400000)] duration=8000ms thermal=2 powerSave=false
+2026-09-15 22:55:26 测试句柄=545237 thermal=2 powerSave=false
+2026-09-15 22:55:27 测试 1/8（到期后样本不算持续约束） elapsed=2130ms policy0 ?-?MHz cur=700MHz, policy4 550-2200MHz cur=800MHz, policy7 3400-3400MHz cur=3400MHz thermal=2 powerSave=false
+2026-09-15 22:55:28 测试 2/8（到期后样本不算持续约束） elapsed=3175ms policy0 ?-?MHz cur=1600MHz, policy4 2200-2200MHz cur=2200MHz, policy7 3400-3400MHz cur=3400MHz thermal=2 powerSave=false
+2026-09-15 22:55:29 测试 3/8（到期后样本不算持续约束） elapsed=4199ms policy0 ?-?MHz cur=2000MHz, policy4 2850-2850MHz cur=2850MHz, policy7 3400-3400MHz cur=3400MHz thermal=2 powerSave=false
+2026-09-15 22:55:30 测试 4/8（到期后样本不算持续约束） elapsed=5263ms policy0 ?-?MHz cur=2000MHz, policy4 2850-2850MHz cur=2850MHz, policy7 3400-3400MHz cur=3400MHz thermal=2 powerSave=false
+2026-09-15 22:55:31 测试 5/8（到期后样本不算持续约束） elapsed=6312ms policy0 ?-?MHz cur=1200MHz, policy4 2850-2850MHz cur=2850MHz, policy7 3400-3400MHz cur=3400MHz thermal=2 powerSave=false
+2026-09-15 22:55:32 测试 6/8（到期后样本不算持续约束） elapsed=7357ms policy0 ?-?MHz cur=1700MHz, policy4 2850-2850MHz cur=2850MHz, policy7 3400-3400MHz cur=3400MHz thermal=2 powerSave=false
+2026-09-15 22:55:33 测试 7/8（到期后样本不算持续约束） elapsed=8415ms policy0 ?-?MHz cur=1800MHz, policy4 2850-2850MHz cur=2850MHz, policy7 3400-3400MHz cur=3400MHz thermal=2 powerSave=false
+2026-09-15 22:55:34 测试 8/8（到期后样本不算持续约束） elapsed=9468ms policy0 ?-?MHz cur=2000MHz, policy4 2000-2000MHz cur=2000MHz, policy7 2000-2000MHz cur=2000MHz thermal=2 powerSave=false
+2026-09-15 22:55:34 测试释放=true 已释放 thermal=2 powerSave=false
+2026-09-15 22:55:35 测试释放后 elapsed=10696ms policy0 ?-?MHz cur=1500MHz, policy4 2100-2100MHz cur=2100MHz, policy7 1900-1900MHz cur=1900MHz thermal=2 powerSave=false
+2026-09-15 22:55:39 恢复原请求=true 请求已发送，部分簇无法验证 · policy0 ?-?MHz cur=1900MHz 请求=1900-1900MHz 上下限读回不完整; policy4 2800-2800MHz cur=2800MHz 请求=2800-2800MHz 本次读回符合; policy7 3250-3250MHz cur=3250MHz 请求=3250-3250MHz 本次读回符合 thermal=2 powerSave=false
+2026-09-15 22:55:39 探测完成；结果不能直接确定限制来源
+
+
+

@@ -12,13 +12,17 @@
 #
 # Everything under reference/ is either someone else's file or derived from
 # someone else's binary. Only the README is tracked: it explains the folder and
-# the rule. See docs/handoff.md.
+# the rule. See docs/README.md.
 /reference/*
 !/reference/README.md
 
 # Android build artifacts (mtk-optimizer sub-project handles its own)
 *.iml
 .gradle
+/.gradle-user/
+/.local-baselines/
+/.android-sdk/
+/.android-user/
 .kotlin
 build/
 captures/
@@ -35,6 +39,12 @@ Thumbs.db
 
 # Claude Code
 .claude/
+# Skill 安装锁：本地工具状态，不是项目内容。
+skills-lock.json
+
+# Python 字节码缓存：检查器的运行产物，不是项目内容。
+__pycache__/
+*.pyc
 
 # NOTE: every rule above that names a directory is anchored with a leading
 # slash for a reason. A bare `src/` also matches `mtk-optimizer/app/src/`, which
@@ -49,3 +59,15 @@ Thumbs.db
 *.onedrive.*
 *.dropbox.*
 desktop.ini
+
+# ---------------------------------------------------------------------------
+# Signing — never commit these.
+#
+# mtk-optimizer/signing/ holds the release keystore and the property file that carries its
+# passwords in clear text. Losing the .jks means losing the ability to ship an
+# update users can install over an existing one: a different signature forces
+# an uninstall, which wipes their profiles, settings and saved reports. So the
+# file itself must be backed up offline, and it must never enter git history
+# where a password leak cannot be undone.
+# ---------------------------------------------------------------------------
+/mtk-optimizer/signing/

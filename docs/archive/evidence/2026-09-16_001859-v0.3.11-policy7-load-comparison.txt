@@ -1,0 +1,139 @@
+2026-09-16 00:18:59 MTK God 0.3.11 ROM=PD2430D_A_16.1.12.0.W10
+2026-09-16 00:18:59 权限=PrivilegeState(mode=ADB, permissionGranted=true, binderAlive=true, uid=2000, shizukuVersion=13, message=null)
+2026-09-16 00:18:59 阶段 1/6：只读观察 30 秒
+2026-09-16 00:18:59 模式=只读观察 30 秒 policy=policy7 请求=2500000-3100000 kHz 原设置=[] thermal=1 powerSave=false
+2026-09-16 00:19:00 开始 elapsed=76ms policy0 ?-?MHz cur=1800MHz, policy4 550-2400MHz cur=2400MHz, policy7 600-2300MHz cur=600MHz busy=[cpu=? cpu0=? cpu1=? cpu2=? cpu3=? cpu4=? cpu5=? cpu6=? cpu7=?]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:01 观察 1/30 elapsed=1162ms policy0 ?-?MHz cur=300MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2300MHz cur=600MHz busy=[cpu=30% cpu0=53% cpu1=48% cpu2=50% cpu3=48% cpu4=19% cpu5=12% cpu6=14% cpu7=2%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:02 观察 2/30 elapsed=2250ms policy0 ?-?MHz cur=300MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2300MHz cur=600MHz busy=[cpu=31% cpu0=60% cpu1=51% cpu2=53% cpu3=49% cpu4=20% cpu5=13% cpu6=11% cpu7=6%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:03 观察 3/30 elapsed=3329ms policy0 ?-?MHz cur=500MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2300MHz cur=600MHz busy=[cpu=34% cpu0=59% cpu1=54% cpu2=57% cpu3=52% cpu4=22% cpu5=15% cpu6=12% cpu7=7%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:04 观察 4/30 elapsed=4389ms policy0 ?-?MHz cur=400MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2300MHz cur=600MHz busy=[cpu=31% cpu0=45% cpu1=32% cpu2=34% cpu3=72% cpu4=27% cpu5=15% cpu6=19% cpu7=9%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:05 观察 5/30 elapsed=5469ms policy0 ?-?MHz cur=1600MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2300MHz cur=600MHz busy=[cpu=24% cpu0=36% cpu1=28% cpu2=27% cpu3=63% cpu4=19% cpu5=11% cpu6=11% cpu7=5%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:06 观察 6/30 elapsed=6530ms policy0 ?-?MHz cur=300MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2300MHz cur=600MHz busy=[cpu=27% cpu0=55% cpu1=48% cpu2=48% cpu3=22% cpu4=10% cpu5=15% cpu6=15% cpu7=5%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:07 观察 7/30 elapsed=7608ms policy0 ?-?MHz cur=400MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2300MHz cur=600MHz busy=[cpu=26% cpu0=52% cpu1=42% cpu2=41% cpu3=33% cpu4=16% cpu5=14% cpu6=9% cpu7=4%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:08 观察 8/30 elapsed=8673ms policy0 ?-?MHz cur=400MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2300MHz cur=600MHz busy=[cpu=27% cpu0=57% cpu1=47% cpu2=41% cpu3=42% cpu4=15% cpu5=9% cpu6=12% cpu7=1%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:09 观察 9/30 elapsed=9750ms policy0 ?-?MHz cur=300MHz, policy4 550-2400MHz cur=800MHz, policy7 600-2300MHz cur=600MHz busy=[cpu=25% cpu0=51% cpu1=39% cpu2=41% cpu3=37% cpu4=18% cpu5=13% cpu6=10% cpu7=3%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:10 观察 10/30 elapsed=10823ms policy0 ?-?MHz cur=300MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2300MHz cur=600MHz busy=[cpu=25% cpu0=50% cpu1=43% cpu2=43% cpu3=36% cpu4=8% cpu5=9% cpu6=8% cpu7=2%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:11 观察 11/30 elapsed=11887ms policy0 ?-?MHz cur=300MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2300MHz cur=600MHz busy=[cpu=26% cpu0=52% cpu1=45% cpu2=44% cpu3=41% cpu4=13% cpu5=9% cpu6=12% cpu7=3%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:12 观察 12/30 elapsed=12952ms policy0 ?-?MHz cur=600MHz, policy4 550-2400MHz cur=800MHz, policy7 600-2300MHz cur=600MHz busy=[cpu=28% cpu0=55% cpu1=47% cpu2=42% cpu3=41% cpu4=13% cpu5=12% cpu6=13% cpu7=9%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:13 观察 13/30 elapsed=14009ms policy0 ?-?MHz cur=300MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2300MHz cur=600MHz busy=[cpu=25% cpu0=48% cpu1=43% cpu2=41% cpu3=41% cpu4=11% cpu5=13% cpu6=9% cpu7=2%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:15 观察 14/30 elapsed=15073ms policy0 ?-?MHz cur=1500MHz, policy4 550-2400MHz cur=600MHz, policy7 600-2300MHz cur=600MHz busy=[cpu=28% cpu0=52% cpu1=48% cpu2=46% cpu3=44% cpu4=17% cpu5=9% cpu6=9% cpu7=4%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:16 观察 15/30 elapsed=16133ms policy0 ?-?MHz cur=600MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2300MHz cur=600MHz busy=[cpu=24% cpu0=51% cpu1=43% cpu2=36% cpu3=41% cpu4=14% cpu5=8% cpu6=6% cpu7=1%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:17 观察 16/30 elapsed=17203ms policy0 ?-?MHz cur=300MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2300MHz cur=600MHz busy=[cpu=29% cpu0=53% cpu1=50% cpu2=46% cpu3=46% cpu4=20% cpu5=9% cpu6=12% cpu7=3%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:18 观察 17/30 elapsed=18271ms policy0 ?-?MHz cur=300MHz, policy4 550-2400MHz cur=1300MHz, policy7 600-2300MHz cur=600MHz busy=[cpu=27% cpu0=51% cpu1=44% cpu2=44% cpu3=39% cpu4=14% cpu5=17% cpu6=9% cpu7=6%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:19 观察 18/30 elapsed=19334ms policy0 ?-?MHz cur=700MHz, policy4 700-2400MHz cur=700MHz, policy7 600-2300MHz cur=600MHz busy=[cpu=32% cpu0=52% cpu1=47% cpu2=47% cpu3=44% cpu4=19% cpu5=14% cpu6=18% cpu7=15%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:20 观察 19/30 elapsed=20414ms policy0 ?-?MHz cur=400MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2300MHz cur=600MHz busy=[cpu=33% cpu0=49% cpu1=42% cpu2=42% cpu3=42% cpu4=20% cpu5=21% cpu6=17% cpu7=35%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:21 观察 20/30 elapsed=21482ms policy0 ?-?MHz cur=600MHz, policy4 700-2400MHz cur=700MHz, policy7 600-2300MHz cur=600MHz busy=[cpu=41% cpu0=58% cpu1=51% cpu2=47% cpu3=48% cpu4=27% cpu5=29% cpu6=26% cpu7=46%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:22 观察 21/30 elapsed=22532ms policy0 ?-?MHz cur=300MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2300MHz cur=2300MHz busy=[cpu=28% cpu0=47% cpu1=38% cpu2=43% cpu3=40% cpu4=17% cpu5=8% cpu6=11% cpu7=23%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:23 观察 22/30 elapsed=23609ms policy0 ?-?MHz cur=300MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2300MHz cur=600MHz busy=[cpu=27% cpu0=50% cpu1=38% cpu2=44% cpu3=37% cpu4=11% cpu5=10% cpu6=9% cpu7=20%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:24 观察 23/30 elapsed=24688ms policy0 ?-?MHz cur=300MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2300MHz cur=600MHz busy=[cpu=28% cpu0=50% cpu1=43% cpu2=46% cpu3=43% cpu4=19% cpu5=11% cpu6=12% cpu7=3%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:25 观察 24/30 elapsed=25752ms policy0 ?-?MHz cur=500MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2300MHz cur=600MHz busy=[cpu=27% cpu0=52% cpu1=48% cpu2=47% cpu3=44% cpu4=16% cpu5=8% cpu6=8% cpu7=3%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:26 观察 25/30 elapsed=26828ms policy0 ?-?MHz cur=400MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2300MHz cur=600MHz busy=[cpu=27% cpu0=55% cpu1=44% cpu2=40% cpu3=43% cpu4=8% cpu5=15% cpu6=15% cpu7=4%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:27 观察 26/30 elapsed=27894ms policy0 ?-?MHz cur=300MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2300MHz cur=600MHz busy=[cpu=28% cpu0=50% cpu1=46% cpu2=43% cpu3=44% cpu4=12% cpu5=12% cpu6=8% cpu7=8%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:28 观察 27/30 elapsed=28948ms policy0 ?-?MHz cur=400MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2300MHz cur=600MHz busy=[cpu=29% cpu0=58% cpu1=43% cpu2=43% cpu3=41% cpu4=31% cpu5=13% cpu6=13% cpu7=3%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:29 观察 28/30 elapsed=30014ms policy0 ?-?MHz cur=300MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2300MHz cur=600MHz busy=[cpu=28% cpu0=53% cpu1=45% cpu2=45% cpu3=40% cpu4=16% cpu5=12% cpu6=12% cpu7=4%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:31 观察 29/30 elapsed=31094ms policy0 ?-?MHz cur=300MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2300MHz cur=600MHz busy=[cpu=26% cpu0=67% cpu1=23% cpu2=23% cpu3=55% cpu4=20% cpu5=12% cpu6=10% cpu7=3%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:32 观察 30/30 elapsed=32149ms policy0 ?-?MHz cur=1800MHz, policy4 2400-2400MHz cur=2400MHz, policy7 2300-2300MHz cur=2300MHz busy=[cpu=30% cpu0=50% cpu1=23% cpu2=21% cpu3=42% cpu4=29% cpu5=21% cpu6=24% cpu7=25%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:32 只读观察结束，未改变请求
+2026-09-16 00:19:32 阶段 2/6：三资源范围 8 秒
+2026-09-16 00:19:32 模式=三资源范围 8 秒 policy=policy7 请求=2500000-3100000 kHz 原设置=[] thermal=1 powerSave=false
+2026-09-16 00:19:32 开始 elapsed=47ms policy0 ?-?MHz cur=1800MHz, policy4 2400-2400MHz cur=2400MHz, policy7 2300-2300MHz cur=2300MHz busy=[cpu=? cpu0=? cpu1=? cpu2=? cpu3=? cpu4=? cpu5=? cpu6=? cpu7=?]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:33 释放原请求后 elapsed=1114ms policy0 ?-?MHz cur=1700MHz, policy4 2400-2400MHz cur=2400MHz, policy7 2200-2200MHz cur=2200MHz busy=[cpu=20% cpu0=22% cpu1=21% cpu2=16% cpu3=15% cpu4=28% cpu5=22% cpu6=18% cpu7=18%]（分次读取） thermal=0 powerSave=false
+2026-09-16 00:19:33 测试资源=[(0x00400200, 2500000), (0x00404200, 3100000), (0x0040C200, 3100000)] duration=8000ms thermal=0 powerSave=false
+2026-09-16 00:19:33 测试句柄=556499 thermal=0 powerSave=false
+2026-09-16 00:19:34 测试 1/8 acquire返回后=1001ms 请求名义时长内，仍需结合实际采样耗时 elapsed=2200ms policy0 ?-?MHz cur=500MHz, policy4 550-2400MHz cur=800MHz, policy7 2200-2200MHz cur=2200MHz busy=[cpu=31% cpu0=45% cpu1=41% cpu2=40% cpu3=36% cpu4=25% cpu5=25% cpu6=22% cpu7=14%]（分次读取） thermal=0 powerSave=false
+2026-09-16 00:19:35 测试 2/8 acquire返回后=2052ms 请求名义时长内，仍需结合实际采样耗时 elapsed=3251ms policy0 ?-?MHz cur=600MHz, policy4 550-2400MHz cur=2400MHz, policy7 2200-2200MHz cur=2200MHz busy=[cpu=34% cpu0=50% cpu1=48% cpu2=45% cpu3=45% cpu4=20% cpu5=31% cpu6=38% cpu7=4%]（分次读取） thermal=0 powerSave=false
+2026-09-16 00:19:36 测试 3/8 acquire返回后=3103ms 请求名义时长内，仍需结合实际采样耗时 elapsed=4328ms policy0 ?-?MHz cur=1300MHz, policy4 550-2400MHz cur=550MHz, policy7 2300-2300MHz cur=2300MHz busy=[cpu=34% cpu0=63% cpu1=53% cpu2=54% cpu3=51% cpu4=30% cpu5=11% cpu6=15% cpu7=5%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:37 测试 4/8 acquire返回后=4180ms 请求名义时长内，仍需结合实际采样耗时 elapsed=5416ms policy0 ?-?MHz cur=400MHz, policy4 550-2400MHz cur=550MHz, policy7 2300-2300MHz cur=2300MHz busy=[cpu=31% cpu0=61% cpu1=52% cpu2=51% cpu3=46% cpu4=18% cpu5=13% cpu6=18% cpu7=1%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:38 测试 5/8 acquire返回后=5268ms 请求名义时长内，仍需结合实际采样耗时 elapsed=6488ms policy0 ?-?MHz cur=300MHz, policy4 550-2400MHz cur=550MHz, policy7 2300-2300MHz cur=2300MHz busy=[cpu=32% cpu0=60% cpu1=56% cpu2=50% cpu3=52% cpu4=18% cpu5=10% cpu6=14% cpu7=2%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:39 测试 6/8 acquire返回后=6340ms 请求名义时长内，仍需结合实际采样耗时 elapsed=7572ms policy0 ?-?MHz cur=300MHz, policy4 550-2400MHz cur=550MHz, policy7 2300-2300MHz cur=2300MHz busy=[cpu=33% cpu0=57% cpu1=52% cpu2=50% cpu3=50% cpu4=25% cpu5=16% cpu6=17% cpu7=7%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:40 测试 7/8 acquire返回后=7424ms 请求名义时长内，仍需结合实际采样耗时 elapsed=8626ms policy0 ?-?MHz cur=1800MHz, policy4 550-2400MHz cur=1500MHz, policy7 2300-2300MHz cur=2300MHz busy=[cpu=37% cpu0=54% cpu1=54% cpu2=51% cpu3=47% cpu4=46% cpu5=18% cpu6=21% cpu7=6%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:41 测试 8/8 acquire返回后=8477ms 已越过请求时长，不用于约束判定 elapsed=9682ms policy0 ?-?MHz cur=1800MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2300MHz cur=600MHz busy=[cpu=32% cpu0=52% cpu1=56% cpu2=41% cpu3=39% cpu4=25% cpu5=19% cpu6=21% cpu7=4%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:41 测试释放=true 已释放 thermal=1 powerSave=false
+2026-09-16 00:19:42 测试释放后 elapsed=10800ms policy0 ?-?MHz cur=900MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2300MHz cur=600MHz busy=[cpu=31% cpu0=62% cpu1=54% cpu2=50% cpu3=52% cpu4=16% cpu5=10% cpu6=13% cpu7=3%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:42 原请求为空，保持释放 thermal=1 powerSave=false
+2026-09-16 00:19:42 探测完成；结果不能直接确定限制来源
+2026-09-16 00:19:42 阶段 3/6：三资源范围 + 计算负载
+2026-09-16 00:19:42 模式=三资源范围 + 计算负载 policy=policy7 请求=2500000-3100000 kHz 原设置=[] thermal=1 powerSave=false
+2026-09-16 00:19:42 开始 elapsed=52ms policy0 ?-?MHz cur=1800MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2300MHz cur=600MHz busy=[cpu=? cpu0=? cpu1=? cpu2=? cpu3=? cpu4=? cpu5=? cpu6=? cpu7=?]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:44 释放原请求后 elapsed=1141ms policy0 ?-?MHz cur=500MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2300MHz cur=600MHz busy=[cpu=27% cpu0=51% cpu1=46% cpu2=44% cpu3=42% cpu4=11% cpu5=9% cpu6=7% cpu7=6%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:44 计算负载开始：最多 8 个线程，不绑定核心；20 秒自动截止，阶段结束提前停止 thermal=1 powerSave=false
+2026-09-16 00:19:46 普通负载预热后，尚未写入测试请求 elapsed=4104ms policy0 ?-?MHz cur=1800MHz, policy4 550-2400MHz cur=2400MHz, policy7 600-2300MHz cur=2300MHz busy=[cpu=99% cpu0=100% cpu1=99% cpu2=100% cpu3=99% cpu4=99% cpu5=100% cpu6=99% cpu7=99%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:46 测试资源=[(0x00400200, 2500000), (0x00404200, 3100000), (0x0040C200, 3100000)] duration=8000ms thermal=1 powerSave=false
+2026-09-16 00:19:47 测试句柄=556500 thermal=1 powerSave=false
+2026-09-16 00:19:48 测试 1/8 acquire返回后=1002ms 请求名义时长内，仍需结合实际采样耗时 elapsed=5779ms policy0 ?-?MHz cur=1800MHz, policy4 550-2400MHz cur=2400MHz, policy7 2300-2300MHz cur=2300MHz busy=[cpu=100% cpu0=100% cpu1=100% cpu2=100% cpu3=100% cpu4=100% cpu5=100% cpu6=100% cpu7=100%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:50 测试 2/8 acquire返回后=2622ms 请求名义时长内，仍需结合实际采样耗时 elapsed=7592ms policy0 ?-?MHz cur=1800MHz, policy4 550-2400MHz cur=2400MHz, policy7 2300-2300MHz cur=2300MHz busy=[cpu=99% cpu0=100% cpu1=100% cpu2=100% cpu3=100% cpu4=100% cpu5=99% cpu6=100% cpu7=100%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:52 测试 3/8 acquire返回后=4449ms 请求名义时长内，仍需结合实际采样耗时 elapsed=10103ms policy0 ?-?MHz cur=1800MHz, policy4 550-2400MHz cur=2400MHz, policy7 2300-2300MHz cur=2300MHz busy=[cpu=100% cpu0=100% cpu1=100% cpu2=100% cpu3=100% cpu4=100% cpu5=100% cpu6=100% cpu7=100%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:54 测试 4/8 acquire返回后=6946ms 请求名义时长内，仍需结合实际采样耗时 elapsed=11326ms policy0 ?-?MHz cur=1800MHz, policy4 550-2400MHz cur=2400MHz, policy7 2300-2300MHz cur=2300MHz busy=[cpu=100% cpu0=100% cpu1=100% cpu2=100% cpu3=100% cpu4=100% cpu5=100% cpu6=100% cpu7=100%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:55 测试 5/8 acquire返回后=8170ms 已越过请求时长，不用于约束判定 elapsed=12608ms policy0 ?-?MHz cur=1800MHz, policy4 550-2400MHz cur=2400MHz, policy7 600-2300MHz cur=2300MHz busy=[cpu=100% cpu0=100% cpu1=100% cpu2=100% cpu3=100% cpu4=100% cpu5=100% cpu6=100% cpu7=100%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:56 测试 6/8 acquire返回后=9453ms 已越过请求时长，不用于约束判定 elapsed=13701ms policy0 ?-?MHz cur=1800MHz, policy4 550-2400MHz cur=2400MHz, policy7 600-2300MHz cur=2300MHz busy=[cpu=100% cpu0=100% cpu1=100% cpu2=100% cpu3=100% cpu4=100% cpu5=100% cpu6=100% cpu7=100%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:57 测试 7/8 acquire返回后=10545ms 已越过请求时长，不用于约束判定 elapsed=14944ms policy0 ?-?MHz cur=1800MHz, policy4 550-2400MHz cur=2400MHz, policy7 600-2300MHz cur=2300MHz busy=[cpu=100% cpu0=100% cpu1=100% cpu2=100% cpu3=100% cpu4=100% cpu5=100% cpu6=100% cpu7=100%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:59 测试 8/8 acquire返回后=11787ms 已越过请求时长，不用于约束判定 elapsed=16436ms policy0 ?-?MHz cur=1800MHz, policy4 550-2400MHz cur=2400MHz, policy7 600-2300MHz cur=2300MHz busy=[cpu=100% cpu0=100% cpu1=100% cpu2=100% cpu3=100% cpu4=100% cpu5=100% cpu6=100% cpu7=100%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:19:59 计算负载已停止 thermal=1 powerSave=false
+2026-09-16 00:19:59 测试释放=true 已释放 thermal=1 powerSave=false
+2026-09-16 00:20:00 测试释放后 elapsed=17538ms policy0 ?-?MHz cur=1100MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2300MHz cur=600MHz busy=[cpu=37% cpu0=62% cpu1=57% cpu2=50% cpu3=53% cpu4=23% cpu5=18% cpu6=21% cpu7=18%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:20:00 原请求为空，保持释放 thermal=1 powerSave=false
+2026-09-16 00:20:00 探测完成；结果不能直接确定限制来源
+2026-09-16 00:20:00 间隔静置开始，15 秒后继续；此阶段没有计算负载
+2026-09-16 00:20:15 阶段 4/6：四资源范围 + 计算负载
+2026-09-16 00:20:15 模式=四资源范围 + 计算负载 policy=policy7 请求=2500000-3100000 kHz 原设置=[] thermal=1 powerSave=false
+2026-09-16 00:20:15 开始 elapsed=61ms policy0 ?-?MHz cur=400MHz, policy4 550-2400MHz cur=900MHz, policy7 600-2300MHz cur=600MHz busy=[cpu=? cpu0=? cpu1=? cpu2=? cpu3=? cpu4=? cpu5=? cpu6=? cpu7=?]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:20:16 释放原请求后 elapsed=1137ms policy0 ?-?MHz cur=400MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2300MHz cur=600MHz busy=[cpu=27% cpu0=53% cpu1=48% cpu2=42% cpu3=47% cpu4=13% cpu5=12% cpu6=10% cpu7=2%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:20:16 计算负载开始：最多 8 个线程，不绑定核心；20 秒自动截止，阶段结束提前停止 thermal=1 powerSave=false
+2026-09-16 00:20:19 普通负载预热后，尚未写入测试请求 elapsed=3690ms policy0 ?-?MHz cur=1800MHz, policy4 550-2400MHz cur=2400MHz, policy7 600-2300MHz cur=2300MHz busy=[cpu=99% cpu0=100% cpu1=99% cpu2=100% cpu3=100% cpu4=99% cpu5=99% cpu6=99% cpu7=99%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:20:19 测试资源=[(0x00400200, 2500000), (0x00404200, 3100000), (0x00408200, 2500000), (0x0040C200, 3100000)] duration=8000ms thermal=1 powerSave=false
+2026-09-16 00:20:19 测试句柄=556501 thermal=1 powerSave=false
+2026-09-16 00:20:21 测试 1/8 acquire返回后=1001ms 请求名义时长内，仍需结合实际采样耗时 elapsed=5581ms policy0 ?-?MHz cur=1800MHz, policy4 550-2400MHz cur=2400MHz, policy7 2500-2500MHz cur=2500MHz busy=[cpu=100% cpu0=100% cpu1=100% cpu2=100% cpu3=100% cpu4=100% cpu5=100% cpu6=100% cpu7=100%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:20:22 测试 2/8 acquire返回后=2840ms 请求名义时长内，仍需结合实际采样耗时 elapsed=7091ms policy0 ?-?MHz cur=1800MHz, policy4 550-2400MHz cur=2400MHz, policy7 2500-2500MHz cur=2500MHz busy=[cpu=100% cpu0=100% cpu1=100% cpu2=100% cpu3=100% cpu4=100% cpu5=100% cpu6=100% cpu7=100%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:20:24 测试 3/8 acquire返回后=4350ms 请求名义时长内，仍需结合实际采样耗时 elapsed=9072ms policy0 ?-?MHz cur=1800MHz, policy4 550-2400MHz cur=2400MHz, policy7 2500-2500MHz cur=2500MHz busy=[cpu=100% cpu0=100% cpu1=100% cpu2=100% cpu3=100% cpu4=100% cpu5=100% cpu6=100% cpu7=100%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:20:26 测试 4/8 acquire返回后=6330ms 请求名义时长内，仍需结合实际采样耗时 elapsed=11235ms policy0 ?-?MHz cur=1800MHz, policy4 550-2400MHz cur=2400MHz, policy7 2500-2500MHz cur=2500MHz busy=[cpu=100% cpu0=100% cpu1=100% cpu2=100% cpu3=100% cpu4=100% cpu5=100% cpu6=100% cpu7=100%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:20:27 测试 5/8 acquire返回后=8494ms 已越过请求时长，不用于约束判定 elapsed=12285ms policy0 ?-?MHz cur=1800MHz, policy4 550-2400MHz cur=2400MHz, policy7 600-2300MHz cur=2300MHz busy=[cpu=100% cpu0=100% cpu1=100% cpu2=100% cpu3=100% cpu4=100% cpu5=100% cpu6=100% cpu7=100%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:20:29 测试 6/8 acquire返回后=9544ms 已越过请求时长，不用于约束判定 elapsed=14386ms policy0 ?-?MHz cur=1800MHz, policy4 550-2400MHz cur=2400MHz, policy7 600-2300MHz cur=2300MHz busy=[cpu=99% cpu0=100% cpu1=100% cpu2=100% cpu3=100% cpu4=100% cpu5=100% cpu6=100% cpu7=100%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:20:31 测试 7/8 acquire返回后=11645ms 已越过请求时长，不用于约束判定 elapsed=15845ms policy0 ?-?MHz cur=1800MHz, policy4 550-2400MHz cur=2400MHz, policy7 600-2300MHz cur=2300MHz busy=[cpu=100% cpu0=100% cpu1=100% cpu2=100% cpu3=100% cpu4=100% cpu5=100% cpu6=100% cpu7=100%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:20:32 测试 8/8 acquire返回后=13104ms 已越过请求时长，不用于约束判定 elapsed=17115ms policy0 ?-?MHz cur=1800MHz, policy4 550-2400MHz cur=2400MHz, policy7 600-2300MHz cur=2300MHz busy=[cpu=99% cpu0=100% cpu1=100% cpu2=100% cpu3=100% cpu4=100% cpu5=100% cpu6=100% cpu7=100%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:20:32 计算负载已停止 thermal=1 powerSave=false
+2026-09-16 00:20:32 测试释放=true 已释放 thermal=1 powerSave=false
+2026-09-16 00:20:33 测试释放后 elapsed=18187ms policy0 ?-?MHz cur=800MHz, policy4 550-2400MHz cur=2300MHz, policy7 600-2300MHz cur=2300MHz busy=[cpu=37% cpu0=55% cpu1=49% cpu2=51% cpu3=48% cpu4=41% cpu5=18% cpu6=16% cpu7=23%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:20:33 原请求为空，保持释放 thermal=1 powerSave=false
+2026-09-16 00:20:33 探测完成；结果不能直接确定限制来源
+2026-09-16 00:20:33 间隔静置开始，15 秒后继续；此阶段没有计算负载
+2026-09-16 00:20:48 阶段 5/6：上端点单值 + 计算负载
+2026-09-16 00:20:48 模式=上端点单值 + 计算负载 policy=policy7 请求=2500000-3100000 kHz 原设置=[] thermal=1 powerSave=false
+2026-09-16 00:20:48 开始 elapsed=55ms policy0 ?-?MHz cur=1200MHz, policy4 550-2400MHz cur=2400MHz, policy7 600-2100MHz cur=600MHz busy=[cpu=? cpu0=? cpu1=? cpu2=? cpu3=? cpu4=? cpu5=? cpu6=? cpu7=?]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:20:49 释放原请求后 elapsed=1156ms policy0 ?-?MHz cur=400MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2100MHz cur=600MHz busy=[cpu=25% cpu0=51% cpu1=44% cpu2=40% cpu3=44% cpu4=7% cpu5=9% cpu6=7% cpu7=3%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:20:49 计算负载开始：最多 8 个线程，不绑定核心；20 秒自动截止，阶段结束提前停止 thermal=1 powerSave=false
+2026-09-16 00:20:52 普通负载预热后，尚未写入测试请求 elapsed=3399ms policy0 ?-?MHz cur=1600MHz, policy4 550-2400MHz cur=2400MHz, policy7 600-2100MHz cur=2100MHz busy=[cpu=99% cpu0=99% cpu1=100% cpu2=99% cpu3=100% cpu4=99% cpu5=99% cpu6=99% cpu7=99%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:20:52 测试资源=[(0x00400200, 3100000), (0x00404200, 3100000), (0x00408200, 3100000), (0x0040C200, 3100000)] duration=8000ms thermal=1 powerSave=false
+2026-09-16 00:20:52 测试句柄=556502 thermal=1 powerSave=false
+2026-09-16 00:20:53 测试 1/8 acquire返回后=1001ms 请求名义时长内，仍需结合实际采样耗时 elapsed=5006ms policy0 ?-?MHz cur=1600MHz, policy4 550-2400MHz cur=2400MHz, policy7 3100-3100MHz cur=3100MHz busy=[cpu=100% cpu0=100% cpu1=100% cpu2=100% cpu3=100% cpu4=100% cpu5=100% cpu6=100% cpu7=100%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:20:55 测试 2/8 acquire返回后=2560ms 请求名义时长内，仍需结合实际采样耗时 elapsed=6898ms policy0 ?-?MHz cur=1600MHz, policy4 550-2400MHz cur=2400MHz, policy7 3100-3100MHz cur=3100MHz busy=[cpu=100% cpu0=100% cpu1=100% cpu2=100% cpu3=100% cpu4=100% cpu5=100% cpu6=100% cpu7=100%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:20:57 测试 3/8 acquire返回后=4453ms 请求名义时长内，仍需结合实际采样耗时 elapsed=8388ms policy0 ?-?MHz cur=1600MHz, policy4 550-2400MHz cur=2400MHz, policy7 3100-3100MHz cur=3100MHz busy=[cpu=99% cpu0=100% cpu1=100% cpu2=100% cpu3=100% cpu4=100% cpu5=100% cpu6=100% cpu7=100%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:20:58 测试 4/8 acquire返回后=5944ms 请求名义时长内，仍需结合实际采样耗时 elapsed=9840ms policy0 ?-?MHz cur=1600MHz, policy4 550-2400MHz cur=2400MHz, policy7 3100-3100MHz cur=3100MHz busy=[cpu=100% cpu0=100% cpu1=100% cpu2=100% cpu3=100% cpu4=100% cpu5=100% cpu6=100% cpu7=100%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:20:59 测试 5/8 acquire返回后=7395ms 请求名义时长内，仍需结合实际采样耗时 elapsed=11236ms policy0 ?-?MHz cur=1600MHz, policy4 550-2400MHz cur=2400MHz, policy7 3100-3100MHz cur=3100MHz busy=[cpu=100% cpu0=100% cpu1=100% cpu2=100% cpu3=100% cpu4=100% cpu5=100% cpu6=100% cpu7=100%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:21:01 测试 6/8 acquire返回后=8791ms 已越过请求时长，不用于约束判定 elapsed=13140ms policy0 ?-?MHz cur=1600MHz, policy4 550-2400MHz cur=2400MHz, policy7 600-2100MHz cur=2100MHz busy=[cpu=100% cpu0=100% cpu1=100% cpu2=100% cpu3=100% cpu4=100% cpu5=100% cpu6=100% cpu7=100%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:21:03 测试 7/8 acquire返回后=10696ms 已越过请求时长，不用于约束判定 elapsed=15024ms policy0 ?-?MHz cur=1600MHz, policy4 550-2400MHz cur=2400MHz, policy7 600-2100MHz cur=2100MHz busy=[cpu=100% cpu0=100% cpu1=100% cpu2=100% cpu3=100% cpu4=100% cpu5=100% cpu6=100% cpu7=100%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:21:04 测试 8/8 acquire返回后=12580ms 已越过请求时长，不用于约束判定 elapsed=16106ms policy0 ?-?MHz cur=1600MHz, policy4 550-2400MHz cur=2400MHz, policy7 600-2100MHz cur=2100MHz busy=[cpu=100% cpu0=100% cpu1=100% cpu2=100% cpu3=100% cpu4=100% cpu5=100% cpu6=100% cpu7=100%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:21:04 计算负载已停止 thermal=1 powerSave=false
+2026-09-16 00:21:04 测试释放=true 已释放 thermal=1 powerSave=false
+2026-09-16 00:21:05 测试释放后 elapsed=17204ms policy0 ?-?MHz cur=800MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2100MHz cur=600MHz busy=[cpu=25% cpu0=50% cpu1=42% cpu2=41% cpu3=39% cpu4=10% cpu5=9% cpu6=9% cpu7=4%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:21:05 原请求为空，保持释放 thermal=1 powerSave=false
+2026-09-16 00:21:05 探测完成；结果不能直接确定限制来源
+2026-09-16 00:21:05 间隔静置开始，15 秒后继续；此阶段没有计算负载
+2026-09-16 00:21:20 阶段 6/6：三资源范围 8 秒
+2026-09-16 00:21:20 模式=三资源范围 8 秒 policy=policy7 请求=2500000-3100000 kHz 原设置=[] thermal=1 powerSave=false
+2026-09-16 00:21:20 开始 elapsed=59ms policy0 ?-?MHz cur=500MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2100MHz cur=600MHz busy=[cpu=? cpu0=? cpu1=? cpu2=? cpu3=? cpu4=? cpu5=? cpu6=? cpu7=?]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:21:22 释放原请求后 elapsed=1149ms policy0 ?-?MHz cur=500MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2100MHz cur=600MHz busy=[cpu=26% cpu0=53% cpu1=46% cpu2=43% cpu3=42% cpu4=14% cpu5=9% cpu6=8% cpu7=3%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:21:22 测试资源=[(0x00400200, 2500000), (0x00404200, 3100000), (0x0040C200, 3100000)] duration=8000ms thermal=1 powerSave=false
+2026-09-16 00:21:22 测试句柄=556503 thermal=1 powerSave=false
+2026-09-16 00:21:23 测试 1/8 acquire返回后=1003ms 请求名义时长内，仍需结合实际采样耗时 elapsed=2280ms policy0 ?-?MHz cur=400MHz, policy4 550-2400MHz cur=550MHz, policy7 2100-2100MHz cur=2100MHz busy=[cpu=25% cpu0=48% cpu1=43% cpu2=43% cpu3=36% cpu4=11% cpu5=7% cpu6=11% cpu7=0%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:21:24 测试 2/8 acquire返回后=2090ms 请求名义时长内，仍需结合实际采样耗时 elapsed=3346ms policy0 ?-?MHz cur=300MHz, policy4 550-2400MHz cur=550MHz, policy7 2100-2100MHz cur=2100MHz busy=[cpu=26% cpu0=52% cpu1=45% cpu2=43% cpu3=42% cpu4=12% cpu5=10% cpu6=9% cpu7=2%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:21:25 测试 3/8 acquire返回后=3157ms 请求名义时长内，仍需结合实际采样耗时 elapsed=4415ms policy0 ?-?MHz cur=400MHz, policy4 550-2400MHz cur=1000MHz, policy7 2100-2100MHz cur=2100MHz busy=[cpu=26% cpu0=51% cpu1=44% cpu2=41% cpu3=45% cpu4=15% cpu5=8% cpu6=12% cpu7=1%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:21:26 测试 4/8 acquire返回后=4226ms 请求名义时长内，仍需结合实际采样耗时 elapsed=5489ms policy0 ?-?MHz cur=400MHz, policy4 550-2400MHz cur=550MHz, policy7 2100-2100MHz cur=2100MHz busy=[cpu=27% cpu0=55% cpu1=45% cpu2=43% cpu3=40% cpu4=17% cpu5=11% cpu6=10% cpu7=2%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:21:27 测试 5/8 acquire返回后=5300ms 请求名义时长内，仍需结合实际采样耗时 elapsed=6554ms policy0 ?-?MHz cur=300MHz, policy4 550-2400MHz cur=550MHz, policy7 2100-2100MHz cur=2100MHz busy=[cpu=26% cpu0=53% cpu1=44% cpu2=43% cpu3=38% cpu4=18% cpu5=8% cpu6=7% cpu7=0%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:21:28 测试 6/8 acquire返回后=6366ms 请求名义时长内，仍需结合实际采样耗时 elapsed=7621ms policy0 ?-?MHz cur=400MHz, policy4 550-2400MHz cur=550MHz, policy7 2100-2100MHz cur=2100MHz busy=[cpu=28% cpu0=57% cpu1=47% cpu2=43% cpu3=47% cpu4=16% cpu5=9% cpu6=8% cpu7=2%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:21:29 测试 7/8 acquire返回后=7434ms 请求名义时长内，仍需结合实际采样耗时 elapsed=8700ms policy0 ?-?MHz cur=400MHz, policy4 550-2400MHz cur=550MHz, policy7 2100-2100MHz cur=2100MHz busy=[cpu=25% cpu0=51% cpu1=40% cpu2=40% cpu3=41% cpu4=16% cpu5=9% cpu6=9% cpu7=2%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:21:30 测试 8/8 acquire返回后=8512ms 已越过请求时长，不用于约束判定 elapsed=9771ms policy0 ?-?MHz cur=300MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2100MHz cur=600MHz busy=[cpu=28% cpu0=54% cpu1=44% cpu2=43% cpu3=40% cpu4=14% cpu5=17% cpu6=12% cpu7=1%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:21:30 测试释放=true 已释放 thermal=1 powerSave=false
+2026-09-16 00:21:31 测试释放后 elapsed=10889ms policy0 ?-?MHz cur=600MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2100MHz cur=600MHz busy=[cpu=25% cpu0=51% cpu1=41% cpu2=42% cpu3=42% cpu4=12% cpu5=10% cpu6=9% cpu7=3%]（分次读取） thermal=1 powerSave=false
+2026-09-16 00:21:31 原请求为空，保持释放 thermal=1 powerSave=false
+2026-09-16 00:21:31 探测完成；结果不能直接确定限制来源
+2026-09-16 00:21:31 本次记录结束

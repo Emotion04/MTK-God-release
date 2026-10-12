@@ -1,0 +1,307 @@
+# MTK God 诊断报告
+# 生成时间: 2026-09-14 17:59:10
+# 把整份内容发回即可用于适配本机型
+
+============================================================
+== 设备
+============================================================
+manufacturer : vivo
+model        : V2430A
+device       : PD2430
+hardware     : mt6989
+soc_manu     : Mediatek
+soc_model    : MT6989
+board        : k6989v1_64
+android      : 16 (API 36)
+build_id     : PD2430D_A_16.1.12.0.W10
+
+============================================================
+== 应用
+============================================================
+version      : 0.3.6 (build 9)
+interface    : com.mediatek.powerhalmgr.IPowerHalMgr
+service      : power_hal_mgr_service
+
+============================================================
+== 接口标识
+============================================================
+expected     : com.mediatek.powerhalmgr.IPowerHalMgr
+reported     : (取不到)
+
+============================================================
+== 提权
+============================================================
+mode         : ADB
+uid          : 2000
+permission   : true
+binder_alive : true
+shizuku_ver  : 13
+user_service : bound=true uid=2000
+powerhal     : true
+
+============================================================
+== CPU 簇(命令索引由此顺序推导)
+============================================================
+index=0 policy=policy0 cpus=0,1,2,3 driver=mtk-cpufreq-hw governor=null governorWritable=false freqs=18档 range=300-2000MHz
+index=1 policy=policy4 cpus=4,5,6 driver=mtk-cpufreq-hw governor=null governorWritable=false freqs=25档 range=550-2850MHz
+index=2 policy=policy7 cpus=7 driver=mtk-cpufreq-hw governor=null governorWritable=false freqs=30档 range=600-3400MHz
+
+============================================================
+== GPU
+============================================================
+channel      : NONE
+freqs        : 0档
+governor     : null
+
+============================================================
+== 探测项
+============================================================
+[OK ] 提权与权限 / Shizuku 服务
+        已连接 · 版本 13
+[OK ] 提权与权限 / 授权状态
+        已授权 · adb/shell (uid 2000)
+[OK ] 提权与权限 / 提权进程 (UserService)
+        已绑定 · 实际 uid 2000
+[OK ] CPU 调频 / PowerHAL (power_hal_mgr_service)
+        可调用 —— 频率上下限可用
+[NG ] CPU 调频 / 接口标识
+        未取到 —— 非 MTK 设备或权限不足
+[OK ] CPU 调频 / CPU 簇
+        policy0  CPU 0-3  18 档  [mtk-cpufreq-hw]
+        policy4  CPU 4-6  25 档  [mtk-cpufreq-hw]
+        policy7  CPU 7-7  30 档  [mtk-cpufreq-hw]
+[NG ] CPU 调频 / 调速器可写性
+        不可写 —— sysfs 节点通常 root 私有
+[NG ] GPU 调频 / GPU 接口
+        未检测到 GPU 调频接口
+[OK ] 运行环境 / 设备
+        vivo V2430A · Android 16 (API 36)
+[OK ] 运行环境 / SoC
+        Mediatek · MT6989 · mt6989
+
+============================================================
+== 谁在限制
+============================================================
+-- 谁在限制
+policy0 上限被压低 = (不存在)
+    node: /sys/devices/system/cpu/cpufreq/policy0/cpuinfo_max_freq  vs  scaling_max_freq
+policy0 下限被抬高 = (不存在)
+    node: /sys/devices/system/cpu/cpufreq/policy0/cpuinfo_min_freq  vs  scaling_min_freq
+policy4 上限被压低 = 450MHz(硬件 2850 / 当前 2400)
+    node: /sys/devices/system/cpu/cpufreq/policy4/cpuinfo_max_freq  vs  scaling_max_freq
+policy4 下限被抬高 = +1850MHz(硬件 550 / 当前 2400)
+    node: /sys/devices/system/cpu/cpufreq/policy4/cpuinfo_min_freq  vs  scaling_min_freq
+policy7 上限被压低 = 1100MHz(硬件 3400 / 当前 2300)
+    node: /sys/devices/system/cpu/cpufreq/policy7/cpuinfo_max_freq  vs  scaling_max_freq
+policy7 下限被抬高 = +1700MHz(硬件 600 / 当前 2300)
+    node: /sys/devices/system/cpu/cpufreq/policy7/cpuinfo_min_freq  vs  scaling_min_freq
+省电模式 = 关
+    node: PowerManager.isPowerSaveMode
+热状态 = LIGHT · 轻微
+    node: PowerManager.currentThermalStatus
+电池 = 37% · 未充电
+    node: BatteryManager
+PPM 软上限 = (不存在)
+    node: /proc/ppm/policy/userlimit_cpu_freq
+-- 当前生效的限制
+policy0 下限 = (不存在)
+    node: /sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq
+policy0 上限 = (不存在)
+    node: /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq
+policy0 当前 = 1600 MHz
+    node: /sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq
+policy4 下限 = 2400 MHz
+    node: /sys/devices/system/cpu/cpufreq/policy4/scaling_min_freq
+policy4 上限 = 2400 MHz
+    node: /sys/devices/system/cpu/cpufreq/policy4/scaling_max_freq
+policy4 当前 = 2400 MHz
+    node: /sys/devices/system/cpu/cpufreq/policy4/scaling_cur_freq
+policy7 下限 = 2300 MHz
+    node: /sys/devices/system/cpu/cpufreq/policy7/scaling_min_freq
+policy7 上限 = 2300 MHz
+    node: /sys/devices/system/cpu/cpufreq/policy7/scaling_max_freq
+policy7 当前 = 2300 MHz
+    node: /sys/devices/system/cpu/cpufreq/policy7/scaling_cur_freq
+硬限制 (全局) = (不存在)
+    node: /proc/ppm/policy/hard_userlimit_cpu_freq
+-- 调度 (uclamp)
+top-app · 下限 = (不存在)
+    node: /dev/cpuctl/top-app/cpu.uclamp.min
+top-app · 上限 = (不存在)
+    node: /dev/cpuctl/top-app/cpu.uclamp.max
+foreground · 下限 = (不存在)
+    node: /dev/cpuctl/foreground/cpu.uclamp.min
+foreground · 上限 = (不存在)
+    node: /dev/cpuctl/foreground/cpu.uclamp.max
+background · 下限 = (不存在)
+    node: /dev/cpuctl/background/cpu.uclamp.min
+background · 上限 = (不存在)
+    node: /dev/cpuctl/background/cpu.uclamp.max
+-- 平台限制器
+系统总频率上限 = (不存在)
+    node: /proc/perfmgr/syslimiter/syslimiter_limit_freq
+Boost 控制 = (不存在)
+    node: /proc/perfmgr/boost_ctrl/cpu_ctrl/cpu_ctrl_enable
+FPSGO 帧率上限 = (不存在)
+    node: /sys/kernel/fpsgo/fbt/limit_cfreq
+FPSGO 帧率下限 = (不存在)
+    node: /sys/kernel/fpsgo/fbt/limit_rfreq
+-- 温控
+温控频率上限 = (不存在)
+    node: /proc/ppm/policy/thermal_limit
+当前热功耗 = (不存在)
+    node: /proc/ppm/policy/thermal_cur_power
+温控策略索引 = (不存在)
+    node: /proc/perfmgr/thermal_policy
+-- 触控加速
+触控加速状态 = (不存在)
+    node: /proc/perfmgr/tchbst/user/usrtch
+CCI 模式 = (不存在)
+    node: /proc/cpufreq/cpufreq_cci_mode
+
+============================================================
+== 运行日志(143 条)
+============================================================
+09:50:19.897  I  App  MTK God 0.3.6 (build 9) 启动
+09:50:19.925  I  AppLog  日志级别设为 详细
+09:50:19.933  I  CpuControl  载入状态: handler=91359, 已应用 3 组设置
+09:50:32.074  I  CpuControl  policy0 频率范围 800-1000MHz（软限制）
+09:50:32.075  I  CpuControl  policy4 频率范围 1100-1400MHz（软限制）
+09:50:32.075  I  CpuControl  policy7 频率范围 1300-1700MHz（软限制）
+09:50:32.129  I  PerfLock  [cpu] 已释放旧请求 handler=91359
+09:50:32.330  I  PerfLock  [cpu] 下发: 0x00400000=800000, 0x00404000=1000000, 0x00400100=1100000, 0x00404100=1400000, 0x00400200=1300000, 0x00404200=1700000 (duration=无限)
+09:50:32.346  I  PerfLock  [cpu] 已应用 handler=349504
+09:50:32.767  I  CpuControl  内核实际上下限(应用 t+400ms): policy4 1100-1400MHz, policy7 1300-1700MHz
+09:50:33.875  I  CpuControl  内核实际上下限(应用 t+1500ms): policy4 1100-1400MHz, policy7 1300-1700MHz
+09:50:35.394  I  CpuControl  内核实际上下限(应用 t+3000ms): policy4 1100-1400MHz, policy7 1300-1700MHz
+09:53:02.842  I  CpuControl  policy0 频率范围 1800-2000MHz（软限制）
+09:53:02.843  I  CpuControl  policy4 频率范围 2500-2850MHz（软限制）
+09:53:02.843  I  CpuControl  policy7 频率范围 3250-3400MHz（软限制）
+09:53:02.900  I  PerfLock  [cpu] 已释放旧请求 handler=349504
+09:53:03.101  I  PerfLock  [cpu] 下发: 0x00400000=1800000, 0x00404000=2000000, 0x00400100=2500000, 0x00404100=2850000, 0x00400200=3250000, 0x00404200=3400000 (duration=无限)
+09:53:03.113  I  PerfLock  [cpu] 已应用 handler=349843
+09:53:03.526  I  CpuControl  内核实际上下限(应用 t+400ms): policy4 2400-2400MHz, policy7 2300-2300MHz
+09:53:04.630  I  CpuControl  内核实际上下限(应用 t+1500ms): policy4 2400-2400MHz, policy7 2300-2300MHz
+09:53:06.134  I  CpuControl  内核实际上下限(应用 t+3000ms): policy4 2400-2400MHz, policy7 2300-2300MHz
+09:55:07.669  I  AppLog  日志级别设为 详细
+09:55:07.739  I  AppLog  日志级别设为 详细
+09:55:07.809  W  CpuReapply  未检测到 CPU 簇,轮询停止
+09:55:07.821  W  CpuReapply  未检测到 CPU 簇,轮询停止
+09:55:15.103  I  CpuControl  policy0 频率范围 1900-2000MHz（软限制）
+09:55:15.104  I  CpuControl  policy4 频率范围 2700-2850MHz（软限制）
+09:55:15.104  I  CpuControl  policy7 频率范围 3300-3400MHz（软限制）
+09:55:15.152  I  PerfLock  [cpu] 已释放旧请求 handler=349843
+09:55:15.354  I  PerfLock  [cpu] 下发: 0x00400000=1900000, 0x00404000=2000000, 0x00400100=2700000, 0x00404100=2850000, 0x00400200=3300000, 0x00404200=3400000 (duration=无限)
+09:55:15.380  I  PerfLock  [cpu] 已应用 handler=349947
+09:55:15.790  I  CpuControl  内核实际上下限(应用 t+400ms): policy4 2400-2400MHz, policy7 2300-2300MHz
+09:55:16.895  I  CpuControl  内核实际上下限(应用 t+1500ms): policy4 2400-2400MHz, policy7 2300-2300MHz
+09:55:18.400  I  CpuControl  内核实际上下限(应用 t+3000ms): policy4 2400-2400MHz, policy7 2300-2300MHz
+09:55:18.464  I  CpuReapply  开始轮询,间隔 2000ms,3 个簇
+09:55:18.466  I  CpuControl  policy0 频率范围 1900-2000MHz（软限制）
+09:55:18.466  I  CpuControl  policy4 频率范围 2700-2850MHz（软限制）
+09:55:18.466  I  CpuControl  policy7 频率范围 3300-3400MHz（软限制）
+09:55:18.478  I  PerfLock  [cpu] 已释放旧请求 handler=349947
+09:55:18.680  I  PerfLock  [cpu] 下发: 0x00400000=1900000, 0x00404000=2000000, 0x00400100=2700000, 0x00404100=2850000, 0x00400200=3300000, 0x00404200=3400000 (duration=无限)
+09:55:18.697  I  PerfLock  [cpu] 已应用 handler=349948
+09:55:19.104  I  CpuControl  内核实际上下限(应用 t+400ms): policy4 2400-2400MHz, policy7 2300-2300MHz
+09:55:20.223  I  CpuControl  内核实际上下限(应用 t+1500ms): policy4 2400-2400MHz, policy7 2300-2300MHz
+09:55:21.732  I  CpuControl  内核实际上下限(应用 t+3000ms): policy4 1500-1500MHz, policy7 1500-1500MHz
+09:55:23.745  I  CpuControl  policy0 频率范围 1900-2000MHz（软限制）
+09:55:23.745  I  CpuControl  policy4 频率范围 2700-2850MHz（软限制）
+09:55:23.746  I  CpuControl  policy7 频率范围 3300-3400MHz（软限制）
+09:55:23.756  I  PerfLock  [cpu] 已释放旧请求 handler=349948
+09:55:23.967  I  PerfLock  [cpu] 下发: 0x00400000=1900000, 0x00404000=2000000, 0x00400100=2700000, 0x00404100=2850000, 0x00400200=3300000, 0x00404200=3400000 (duration=无限)
+09:55:23.982  I  PerfLock  [cpu] 已应用 handler=350019
+09:55:24.399  I  CpuControl  内核实际上下限(应用 t+400ms): policy4 2400-2400MHz, policy7 2300-2300MHz
+09:55:25.514  I  CpuControl  内核实际上下限(应用 t+1500ms): policy4 2400-2400MHz, policy7 2300-2300MHz
+09:58:09.628  I  CpuControl  内核实际上下限(应用 t+3000ms): policy4 2400-2400MHz, policy7 2300-2300MHz
+09:58:11.631  I  CpuControl  policy0 频率范围 1900-2000MHz（软限制）
+09:58:11.631  I  CpuControl  policy4 频率范围 2700-2850MHz（软限制）
+09:58:11.631  I  CpuControl  policy7 频率范围 3300-3400MHz（软限制）
+09:58:11.638  I  PerfLock  [cpu] 已释放旧请求 handler=350019
+09:58:11.838  I  PerfLock  [cpu] 下发: 0x00400000=1900000, 0x00404000=2000000, 0x00400100=2700000, 0x00404100=2850000, 0x00400200=3300000, 0x00404200=3400000 (duration=无限)
+09:58:11.847  I  PerfLock  [cpu] 已应用 handler=350299
+09:58:12.251  I  CpuControl  内核实际上下限(应用 t+400ms): policy4 2400-2400MHz, policy7 2300-2300MHz
+09:58:13.356  I  CpuControl  内核实际上下限(应用 t+1500ms): policy4 2400-2400MHz, policy7 2300-2300MHz
+09:58:14.867  I  CpuControl  内核实际上下限(应用 t+3000ms): policy4 2400-2400MHz, policy7 2300-2300MHz
+09:58:17.852  I  CpuControl  policy0 频率范围 1900-2000MHz（软限制）
+09:58:17.854  I  CpuControl  policy4 频率范围 2700-2850MHz（软限制）
+09:58:17.854  I  CpuControl  policy7 频率范围 3300-3400MHz（软限制）
+09:58:17.931  I  PerfLock  [cpu] 已释放旧请求 handler=350299
+09:58:32.133  I  PerfLock  [cpu] 下发: 0x00400000=1900000, 0x00404000=2000000, 0x00400100=2700000, 0x00404100=2850000, 0x00400200=3300000, 0x00404200=3400000 (duration=无限)
+09:58:32.195  I  PerfLock  [cpu] 已应用 handler=350332
+09:58:32.603  I  CpuControl  内核实际上下限(应用 t+400ms): policy4 2400-2400MHz, policy7 2300-2300MHz
+09:58:33.707  I  CpuControl  内核实际上下限(应用 t+1500ms): policy4 2400-2400MHz, policy7 2300-2300MHz
+09:58:35.209  I  CpuControl  内核实际上下限(应用 t+3000ms): policy4 2400-2400MHz, policy7 2300-2300MHz
+09:58:37.214  I  CpuControl  policy0 频率范围 1900-2000MHz（软限制）
+09:58:37.215  I  CpuControl  policy4 频率范围 2700-2850MHz（软限制）
+09:58:37.215  I  CpuControl  policy7 频率范围 3300-3400MHz（软限制）
+09:58:37.225  I  PerfLock  [cpu] 已释放旧请求 handler=350332
+09:58:37.432  I  PerfLock  [cpu] 下发: 0x00400000=1900000, 0x00404000=2000000, 0x00400100=2700000, 0x00404100=2850000, 0x00400200=3300000, 0x00404200=3400000 (duration=无限)
+09:58:37.458  I  PerfLock  [cpu] 已应用 handler=350341
+09:58:37.867  I  CpuControl  内核实际上下限(应用 t+400ms): policy4 2400-2400MHz, policy7 2300-2300MHz
+09:58:38.981  I  CpuControl  内核实际上下限(应用 t+1500ms): policy4 2400-2400MHz, policy7 2300-2300MHz
+09:58:40.496  I  CpuControl  内核实际上下限(应用 t+3000ms): policy4 2400-2400MHz, policy7 2300-2300MHz
+09:58:43.094  I  CpuControl  policy0 频率范围 1900-2000MHz（软限制）
+09:58:43.095  I  CpuControl  policy4 频率范围 2700-2850MHz（软限制）
+09:58:43.104  I  CpuControl  policy7 频率范围 3300-3400MHz（软限制）
+09:58:43.121  I  PerfLock  [cpu] 已释放旧请求 handler=350341
+09:58:43.322  I  PerfLock  [cpu] 下发: 0x00400000=1900000, 0x00404000=2000000, 0x00400100=2700000, 0x00404100=2850000, 0x00400200=3300000, 0x00404200=3400000 (duration=无限)
+09:58:43.330  I  PerfLock  [cpu] 已应用 handler=350347
+09:58:43.735  I  CpuControl  内核实际上下限(应用 t+400ms): policy4 2400-2400MHz, policy7 2300-2300MHz
+09:58:44.839  I  CpuControl  内核实际上下限(应用 t+1500ms): policy4 2400-2400MHz, policy7 2300-2300MHz
+09:58:46.352  I  CpuControl  内核实际上下限(应用 t+3000ms): policy4 2400-2400MHz, policy7 2300-2300MHz
+09:58:49.665  I  CpuControl  policy0 频率范围 1900-2000MHz（软限制）
+09:58:49.665  I  CpuControl  policy4 频率范围 2700-2850MHz（软限制）
+09:58:49.665  I  CpuControl  policy7 频率范围 3300-3400MHz（软限制）
+09:58:49.744  I  PerfLock  [cpu] 已释放旧请求 handler=350347
+09:58:49.958  I  PerfLock  [cpu] 下发: 0x00400000=1900000, 0x00404000=2000000, 0x00400100=2700000, 0x00404100=2850000, 0x00400200=3300000, 0x00404200=3400000 (duration=无限)
+09:58:50.046  I  PerfLock  [cpu] 已应用 handler=350375
+09:58:50.474  I  CpuControl  内核实际上下限(应用 t+400ms): policy4 2400-2400MHz, policy7 2300-2300MHz
+09:58:51.577  I  CpuControl  内核实际上下限(应用 t+1500ms): policy4 2400-2400MHz, policy7 2300-2300MHz
+09:58:53.081  I  CpuControl  内核实际上下限(应用 t+3000ms): policy4 2400-2400MHz, policy7 2300-2300MHz
+09:58:53.989  I  CpuControl  policy0 频率范围 1600-2000MHz（软限制）
+09:58:53.989  I  CpuControl  policy4 频率范围 2400-2850MHz（软限制）
+09:58:53.989  I  CpuControl  policy7 频率范围 2800-3400MHz（软限制）
+09:58:54.019  I  PerfLock  [cpu] 已释放旧请求 handler=350375
+09:58:54.219  I  PerfLock  [cpu] 下发: 0x00400000=1600000, 0x00404000=2000000, 0x00400100=2400000, 0x00404100=2850000, 0x00400200=2800000, 0x00404200=3400000 (duration=无限)
+09:58:54.229  I  PerfLock  [cpu] 已应用 handler=350439
+09:58:54.639  I  CpuControl  内核实际上下限(应用 t+400ms): policy4 2400-2400MHz, policy7 2300-2300MHz
+09:58:55.084  I  CpuControl  policy0 频率范围 1600-2000MHz（软限制）
+09:58:55.084  I  CpuControl  policy4 频率范围 2400-2850MHz（软限制）
+09:58:55.085  I  CpuControl  policy7 频率范围 2800-3400MHz（软限制）
+09:58:55.095  I  PerfLock  [cpu] 已释放旧请求 handler=350439
+09:58:55.298  I  PerfLock  [cpu] 下发: 0x00400000=1600000, 0x00404000=2000000, 0x00400100=2400000, 0x00404100=2850000, 0x00400200=2800000, 0x00404200=3400000 (duration=无限)
+09:58:55.319  I  PerfLock  [cpu] 已应用 handler=350440
+09:58:55.726  I  CpuControl  内核实际上下限(应用 t+400ms): policy4 2400-2400MHz, policy7 2300-2300MHz
+09:58:55.744  I  CpuControl  内核实际上下限(应用 t+1500ms): policy4 2400-2400MHz, policy7 2300-2300MHz
+09:58:56.830  I  CpuControl  内核实际上下限(应用 t+1500ms): policy4 2400-2400MHz, policy7 2300-2300MHz
+09:58:57.248  I  CpuControl  内核实际上下限(应用 t+3000ms): policy4 2400-2400MHz, policy7 2300-2300MHz
+09:58:57.255  W  CpuReapply  轮询下发失败: 轮询异常: JobCancellationException: StandaloneCoroutine was cancelled
+09:58:57.306  I  CpuReapply  开始轮询,间隔 2000ms,3 个簇
+09:58:57.308  I  CpuControl  policy0 频率范围 1600-2000MHz（软限制）
+09:58:57.308  I  CpuControl  policy4 频率范围 2400-2850MHz（软限制）
+09:58:57.309  I  CpuControl  policy7 频率范围 2800-3400MHz（软限制）
+09:58:57.317  I  PerfLock  [cpu] 已释放旧请求 handler=350440
+09:58:57.519  I  PerfLock  [cpu] 下发: 0x00400000=1600000, 0x00404000=2000000, 0x00400100=2400000, 0x00404100=2850000, 0x00400200=2800000, 0x00404200=3400000 (duration=无限)
+09:58:57.536  I  PerfLock  [cpu] 已应用 handler=350441
+09:58:57.942  I  CpuControl  内核实际上下限(应用 t+400ms): policy4 2400-2400MHz, policy7 2300-2300MHz
+09:58:59.047  I  CpuControl  内核实际上下限(应用 t+1500ms): policy4 2400-2400MHz, policy7 2300-2300MHz
+09:59:00.552  I  CpuControl  内核实际上下限(应用 t+3000ms): policy4 2400-2400MHz, policy7 2300-2300MHz
+09:59:02.554  I  CpuControl  policy0 频率范围 1600-2000MHz（软限制）
+09:59:02.555  I  CpuControl  policy4 频率范围 2400-2850MHz（软限制）
+09:59:02.555  I  CpuControl  policy7 频率范围 2800-3400MHz（软限制）
+09:59:02.566  I  PerfLock  [cpu] 已释放旧请求 handler=350441
+09:59:02.766  I  PerfLock  [cpu] 下发: 0x00400000=1600000, 0x00404000=2000000, 0x00400100=2400000, 0x00404100=2850000, 0x00400200=2800000, 0x00404200=3400000 (duration=无限)
+09:59:02.782  I  PerfLock  [cpu] 已应用 handler=350470
+09:59:03.189  I  CpuControl  内核实际上下限(应用 t+400ms): policy4 2400-2400MHz, policy7 2300-2300MHz
+09:59:04.294  I  CpuControl  内核实际上下限(应用 t+1500ms): policy4 2400-2400MHz, policy7 2300-2300MHz
+09:59:05.798  I  CpuControl  内核实际上下限(应用 t+3000ms): policy4 2400-2400MHz, policy7 2300-2300MHz
+09:59:07.801  I  CpuControl  policy0 频率范围 1600-2000MHz（软限制）
+09:59:07.801  I  CpuControl  policy4 频率范围 2400-2850MHz（软限制）
+09:59:07.802  I  CpuControl  policy7 频率范围 2800-3400MHz（软限制）
+09:59:07.808  I  PerfLock  [cpu] 已释放旧请求 handler=350470
+09:59:08.016  I  PerfLock  [cpu] 下发: 0x00400000=1600000, 0x00404000=2000000, 0x00400100=2400000, 0x00404100=2850000, 0x00400200=2800000, 0x00404200=3400000 (duration=无限)
+09:59:08.023  I  PerfLock  [cpu] 已应用 handler=350483
+09:59:08.438  I  CpuControl  内核实际上下限(应用 t+400ms): policy4 2400-2400MHz, policy7 2300-2300MHz
+09:59:09.544  I  CpuControl  内核实际上下限(应用 t+1500ms): policy4 2400-2400MHz, policy7 2300-2300MHz

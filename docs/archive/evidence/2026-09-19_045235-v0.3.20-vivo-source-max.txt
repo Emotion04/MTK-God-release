@@ -1,0 +1,29 @@
+2026-09-19 04:52:35 MTK God 0.3.20 ROM=PD2430D_A_16.1.12.0.W10
+2026-09-19 04:52:35 权限=PrivilegeState(mode=ADB, permissionGranted=true, binderAlive=true, uid=2000, shizukuVersion=13, message=null)
+2026-09-19 04:52:35 阶段 1/1：Vivo ROM MAX=4095 候选（5 秒）
+2026-09-19 04:52:35 ROM CPUFreqPolicy.BOOST_CPU_MAX_FREQ 候选；三簇 MAX=4095、5 秒、不加负载；用于判断能否解除其他请求的上限 thermal=0 powerSave=false
+2026-09-19 04:52:35 Vivo 写前 0 readMs=30 policy0 ?-?MHz cur=700MHz, policy4 550-2400MHz cur=800MHz, policy7 600-2300MHz cur=2300MHz thermal=0 powerSave=false
+2026-09-19 04:52:35 battery level=45 scale=100 temperatureTenthsC=360 plugged=0
+2026-09-19 04:52:36 Vivo 写前 1 readMs=31 policy0 ?-?MHz cur=500MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2300MHz cur=600MHz thermal=0 powerSave=false
+2026-09-19 04:52:37 Vivo 写前 2 readMs=30 policy0 ?-?MHz cur=300MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2300MHz cur=600MHz thermal=0 powerSave=false
+2026-09-19 04:52:38 VIVO uid=2000 start=true descriptor=com.vivo.framework.vperf.IVivoPerfManager register=0 resources=0x40804000=4095, 0x40804100=4095, 0x40804200=4095 duration=5000ms handle=1102541 ACCEPTED（不代表资源生效） thermal=0 powerSave=false
+2026-09-19 04:52:38 Vivo 写后 elapsed=714ms duration=5000ms 名义期限内，仍需结合读取耗时 readMs=46 policy0 ?-?MHz cur=500MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2300MHz cur=600MHz thermal=0 powerSave=false
+2026-09-19 04:52:38 battery level=45 scale=100 temperatureTenthsC=360 plugged=0
+2026-09-19 04:52:39 Vivo 写后 elapsed=1463ms duration=5000ms 名义期限内，仍需结合读取耗时 readMs=32 policy0 ?-?MHz cur=500MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2300MHz cur=600MHz thermal=0 powerSave=false
+2026-09-19 04:52:39 battery level=45 scale=100 temperatureTenthsC=360 plugged=0
+2026-09-19 04:52:40 Vivo 写后 elapsed=2198ms duration=5000ms 名义期限内，仍需结合读取耗时 readMs=35 policy0 ?-?MHz cur=500MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2300MHz cur=600MHz thermal=0 powerSave=false
+2026-09-19 04:52:40 battery level=45 scale=100 temperatureTenthsC=360 plugged=0
+2026-09-19 04:52:41 Vivo 写后 elapsed=2943ms duration=5000ms 名义期限内，仍需结合读取耗时 readMs=33 policy0 ?-?MHz cur=700MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2300MHz cur=600MHz thermal=0 powerSave=false
+2026-09-19 04:52:41 battery level=45 scale=100 temperatureTenthsC=360 plugged=0
+2026-09-19 04:52:41 Vivo 写后 elapsed=3682ms duration=5000ms 名义期限内，仍需结合读取耗时 readMs=41 policy0 ?-?MHz cur=500MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2300MHz cur=600MHz thermal=0 powerSave=false
+2026-09-19 04:52:41 battery level=45 scale=100 temperatureTenthsC=360 plugged=0
+2026-09-19 04:52:42 Vivo 写后 elapsed=4427ms duration=5000ms 名义期限内，仍需结合读取耗时 readMs=31 policy0 ?-?MHz cur=1800MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2300MHz cur=600MHz thermal=0 powerSave=false
+2026-09-19 04:52:42 battery level=45 scale=100 temperatureTenthsC=360 plugged=0
+2026-09-19 04:52:43 Vivo 写后 elapsed=5161ms duration=5000ms 已过名义期限，不用于效果判定 readMs=33 policy0 ?-?MHz cur=500MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2300MHz cur=600MHz thermal=0 powerSave=false
+2026-09-19 04:52:43 battery level=45 scale=100 temperatureTenthsC=360 plugged=0
+2026-09-19 04:52:43 VIVO uid=2000 start=false releaseHandle=1102541 return=0（回读另记；返回码不代替恢复验证） thermal=0 powerSave=false
+2026-09-19 04:52:44 Vivo 释放并等待到期后 0 readMs=47 policy0 ?-?MHz cur=800MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2300MHz cur=600MHz thermal=0 powerSave=false
+2026-09-19 04:52:45 Vivo 释放并等待到期后 1 readMs=45 policy0 ?-?MHz cur=1400MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2300MHz cur=600MHz thermal=0 powerSave=false
+2026-09-19 04:52:45 Vivo 释放并等待到期后 2 readMs=47 policy0 ?-?MHz cur=1100MHz, policy4 550-2400MHz cur=550MHz, policy7 600-2300MHz cur=600MHz thermal=0 powerSave=false
+2026-09-19 04:52:46 接口验证结束；ACCEPTED 只代表返回句柄，效果与恢复需结合上下限回读
+2026-09-19 04:52:46 本次记录结束
