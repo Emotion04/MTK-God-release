@@ -5,6 +5,7 @@ import android.os.Parcel
 import android.os.Process
 import androidx.annotation.Keep
 import magicau.mtkcontroller.IRuntimeService
+import magicau.mtkcontroller.R
 import rikka.shizuku.SystemServiceHelper
 
 /**
@@ -48,7 +49,30 @@ class RuntimeUserService : IRuntimeService.Stub {
         }
     }.getOrElse { "ERROR: ${it.javaClass.simpleName}: ${it.message}" }
 
-    override fun axMaintenance(kind: String, pkg: String): String = runCatching { AxMaintenance.run(kind, pkg) }.getOrElse { "ERROR:${it.message}" }
+    /**
+     * 应用维护。回包格式 `OK:<resId>` / `ERROR:<resId>`，必要时追加一行原始输出。
+     *
+     * **传的是资源 id 而不是中文**：这个进程与 App 是两个进程，资源表由同一个 APK
+     * 产出，所以 App 侧用 R 解析得到同一句话，而且跟着系统语言走。
+     * 把中文拼在串里发过去，就等于把文案焊死在了跨进程协议上。
+     */
+    override fun appMaintenance(kind: String, pkg: String): String {
+        val outcome = runCatching { AppMaintenance.run(kind, pkg) }
+            .getOrElse { return "ERROR:${R.string.maintenance_failed}" }
+        val head = "${if (outcome.success) "OK" else "ERROR"}:${outcome.message.res}"
+        // 参数只有"读取了多少 MiB"这一种，是纯数字，跟着 id 一起传。
+        val args = outcome.message.args.joinToString(",")
+        return listOfNotNull(head, args.takeIf { it.isNotEmpty() }, outcome.detail).joinToString("\n")
+    }
+
+    /**
+     * 旧名，转发到 [appMaintenance]。
+     *
+     * **不能删。** Shizuku 可能还留着上一次启动的服务进程，里面的 AIDL stub 只认旧方法；
+     * 删掉之后 App 调过去会打到别的方法上，而且不报错。等确认没有旧进程在跑再清理。
+     */
+    @Deprecated("用 appMaintenance")
+    override fun axMaintenance(kind: String, pkg: String): String = appMaintenance(kind, pkg)
     override fun fakeBattery(command: String): String = runCatching { FakeBattery.dispatch(command) }.getOrElse { "ERROR:${it.message}" }
 
     override fun foregroundApp(): String = runCatching { ForegroundApp.current() }

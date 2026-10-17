@@ -3,12 +3,15 @@ package magicau.mtkcontroller.ui.navigation
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import kotlinx.coroutines.flow.distinctUntilChanged
 
@@ -20,23 +23,29 @@ import kotlinx.coroutines.flow.distinctUntilChanged
  * 用 NavHost 时切标签是"换一页"，中间没有过渡；用 Pager 之后几个标签像是**并排
  * 连在一起**，左右滑动就能过去，底栏也跟着手指走。这是用户明确要的形态。
  *
- * 子页面（设置里的二级页、实验室等）仍然走 NavHost，压在 Pager 之上 ——
- * 它们是"进入下一层"，不是"平移到隔壁"，两者的返回语义不同。
+ * ## 这一层归谁所有
  *
- * ## `beyondViewportPageCount = 0` 是关键
+ * 由 `AppNavHost` 渲染在 **NavHost 之外**。子页面（设置里的二级页、实验室等）
+ * 是 NavHost 的独立目的地，压在它上面 —— 它们是"进入下一层"，不是"平移到隔壁"，
+ * 两者的返回语义不同。
  *
- * 默认值会预组合相邻页以便滑动时立刻出内容。但那有个具体代价：**两个标签页会
- * 同时处于"可见"状态，而首页和性能页都挂着按可见性开关的采样器** ——
- * 首页每秒读一次内核状态、性能页持续读频率。预组合等于让它们在后台一起跑，
- * 白白耗电。
+ * 放在 NavHost 之外是性能上的必需：放进 `composable(TABS_ROUTE)` 的话，
+ * 一进子页这一层就离开组合、返回时整套重新组合加重新布局，实测返回一帧要 233 ms。
  *
- * 设成 0 之后只有当前页被组合，采样器的可见性判断自然成立。代价是快速滑动时
- * 目标页要现组合，而这两个页面都不重，实测无感。
+ * ## 四个标签全部常驻组合
+ *
+ * 见 [HorizontalPager] 处 `beyondViewportPageCount` 的注释。结论是给页数减一：
+ * 切换 = 纯动画，没有组合也没有布局。
  *
  * ## 与底栏的关系
  *
- * 双向：底栏点了标签要滑过去，手动滑了页面底栏要高亮跟着变。两个方向都经过
- * [onTabChange]，避免各自维护一份"当前是哪个标签"而分叉。
+ * 两个方向，一条出口：**这一层只往上报"用户停在哪一页"**（[onTabChange]，
+ * 由 `settledPage` 的收集器触发），从不自己决定"现在该显示哪个标签"。
+ * 反方向（外部选中变了要滑过去）由下面那个 `LaunchedEffect(selectedIndex)` 做。
+ *
+ * 所以"当前是哪个标签"只有一份，在调用方的 `selectedTab` 里。底栏点击走的是
+ * 调用方自己的 `switchTab`，不经 [onTabChange] —— 那条路调用方本来就要改
+ * `selectedTab`，再绕一圈回来只会多一次重算。
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -55,12 +64,18 @@ fun TabsPager(
 ) {
     val selectedIndex = tabs.indexOf(selected).coerceAtLeast(0)
 
-    // 外部选中变化 → 滑过去。判断 currentPage 避免自己触发的回调再滑一次
-    // （那会在滑动过程中反复打断动画）。
+    // 外部选中变化 → 滑过去。
+    //
+    // **"到位"要同时看页码和偏移，不能只看 currentPage。** 拖过中线松手时
+    // Pager 的 currentPage 已经跳到目标页，而滚动位置还停在那两页中间 ——
+    // 只判 currentPage 的话这里会认为"已经在那儿了"从而整段跳过，
+    // 页面就卡在两页中间，要用户再碰一下才好。
     LaunchedEffect(selectedIndex, tabs.size) {
-        if (selectedIndex in tabs.indices && pagerState.currentPage != selectedIndex) {
-            pagerState.animateScrollToPage(selectedIndex)
+        if (selectedIndex !in tabs.indices) return@LaunchedEffect
+        if (pagerState.currentPage == selectedIndex && pagerState.currentPageOffsetFraction == 0f) {
+            return@LaunchedEffect
         }
+        pagerState.animateScrollToPage(selectedIndex)
     }
 
     // 滑动停止 → 通知外部。用 settledPage 而不是 currentPage：后者在滑动过程中
@@ -85,18 +100,37 @@ fun TabsPager(
         }
     }
 
+    // 冷启动那一帧只造当前标签，其余的在首帧画完之后补齐。
+    //
+    // 为什么要拆开：四个一起造会把另外三个标签的界面也塞进启动帧，
+    // 而启动帧是用户等得最久的那一帧。补齐全在下一帧发生，晚几毫秒没人感觉得到，
+    // 换来的结果是之后每一次切标签都不再造页。
+    var tabsResident by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        // 等一个帧回调：LaunchedEffect 在首帧的组合阶段之后跑，所以这个回调
+        // 落在下一帧 —— 那时首帧已经画完送上屏了，再加活就不挡它。
+        withFrameNanos { }
+        tabsResident = true
+    }
+
     HorizontalPager(
         state = pagerState,
         modifier = modifier.fillMaxSize(),
-        // 预组合相邻一页。
+        // **四个标签全部常驻组合，一个都不在动画中途现造。**
         //
-        // 曾经设成 0（只组合当前页），为的是不让相邻页的采样器跟着跑。
-        // 但那样滑动时目标页要**现组合**，手上能明显感到卡顿、不跟手 ——
-        // 用一个取巧换来的省电，代价是主交互手感变差，不划算。
+        // 曾经设成 1（只预组合左右各一页）。省下的那点内存换来的是每次切标签
+        // 必掉一帧：Pager 按"离当前滚动位置多远"决定组合哪些页，滑动一开始
+        // 边界就往外扩一页，那一页此刻才第一次组合。实测每一跳都有**一帧**
+        // 卡在 130 ms（其中 92 ms 在主线程的 Compose 帧里），
+        // 而它落在动画中段，正是眼睛最盯着的地方 —— 用户说的"卡一下"就是它。
+        // 跨两页的切换要连造两页，掉帧更多。
         //
-        // 现在改成 1，改用**可见性门控**采样器：页面照样预组合，
-        // 但只有当前显示的那页才做周期读取。见 [page] 的 isSelected 参数。
-        beyondViewportPageCount = 1,
+        // 常驻之后切换 = 纯动画，没有组合、没有布局，帧时间只剩动画本身的几毫秒。
+        // 代价是四个标签的界面同时活着，所以周期读取必须按可见性门控：
+        // 首页的采样器和性能页的频率轮询都只看 [page] 的 isSelected，
+        // 没被选中的那一页只是"组合着"，不读任何节点、不发任何请求。
+        // 只有四个标签，所以给页数减一（Compose 会自己夹到页数）。
+        beyondViewportPageCount = if (tabsResident) tabs.size - 1 else 1,
     ) { index ->
         // 同上：标签页也要有自己的底，否则滑动时相邻两页的文字会叠。
         androidx.compose.material3.Surface(

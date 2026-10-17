@@ -22,8 +22,8 @@ import kotlinx.coroutines.withContext
 import magicau.mtkcontroller.data.Failure
 import magicau.mtkcontroller.data.Message
 import magicau.mtkcontroller.data.cpu.CpuControl
+import magicau.mtkcontroller.data.cpu.CpuFreqNodes
 import magicau.mtkcontroller.data.cpu.CpuLoadRunner
-import magicau.mtkcontroller.data.cpu.CpuScanner
 import magicau.mtkcontroller.data.thermal.ThermalPolicyController
 import magicau.mtkcontroller.data.powerhal.PowerHal
 import magicau.mtkcontroller.data.privilege.PrivilegeManager
@@ -34,6 +34,7 @@ import magicau.mtkcontroller.domain.model.CpuCluster
 import magicau.mtkcontroller.domain.model.Profile
 import java.util.UUID
 import magicau.mtkcontroller.data.thermal.ThermalPolicyReader
+import magicau.mtkcontroller.data.lab.ThermalPolicyCatalog
 import magicau.mtkcontroller.data.thermal.ThermalPolicySummary
 import magicau.mtkcontroller.data.thermal.ThermalPolicy
 import magicau.mtkcontroller.domain.model.CpuLayoutMode
@@ -124,6 +125,18 @@ data class CpuUiState(
     val thermalReadError: Failure? = null,
     /** 各档位的一句话摘要，跟着 thermalIndices 一起读出来。 */
     val thermalBriefs: Map<Int, String> = emptyMap(),
+    /**
+     * 当前**实际生效**的皮肤温控阈值，形如 "40/42/45/48/60/80 °C"。
+     *
+     * 它和 [thermalBriefs] 不是一回事：摘要说"这一档是什么阶梯"，
+     * 这个说"现在加载的是哪一档"。每份 `thermal_policy_NN.conf` 的
+     *    `[thermalhal-threshold]` 段各不相同，所以这组数字能反指当前策略。
+     * 无 root 时这是唯一能做到这件事的通道（见 docs/thermal/facts.md 的 THERM-013）。
+     *
+     * 原来它只在实验室显示，而用户选档位的地方是 CPU 页 —— 那边看不到
+     * "我选了 03，实际加载的是哪一份"。已移到这两处都显示。
+     */
+    val thermalSkinThreshold: String? = null,
     /** 参数原文。只在用户打开「显示详细参数」时读 —— 它比摘要长得多。 */
     val thermalFull: Map<Int, String> = emptyMap(),
     /**
@@ -171,7 +184,7 @@ class CpuViewModel(private val container: AppContainer) : ViewModel() {
             val result = runCatching {
                 withContext(Dispatchers.IO) {
                     val output = container.context.contentResolver.openOutputStream(uri, "wt")
-                        ?: error("无法打开目标文件")
+                        ?: error(container.context.getString(R.string.cpu_probe_open_target_failed))
                     if (report.startsWith("ROM_ZIP:")) {
                         val name = report.removePrefix("ROM_ZIP:")
                         require(name.matches(Regex("rom-configs-[0-9]+\\.zip")))
@@ -179,7 +192,9 @@ class CpuViewModel(private val container: AppContainer) : ViewModel() {
                     } else output.bufferedWriter(Charsets.UTF_8).use { it.write(report) }
                 }
             }
-            _state.value = _state.value.copy(probeSaveNote = if (result.isSuccess) "报告已导出" else "导出失败：${result.exceptionOrNull()?.message}")
+            _state.value = _state.value.copy(probeSaveNote = if (result.isSuccess)
+                container.context.getString(R.string.cpu_probe_export_done)
+            else container.context.getString(R.string.cpu_probe_export_failed, result.exceptionOrNull()?.message))
         }
     }
 
@@ -191,7 +206,7 @@ class CpuViewModel(private val container: AppContainer) : ViewModel() {
 
     fun collectRomConfigs() {
         if (_state.value.busy) return
-        _state.value = _state.value.copy(busy = true, probing = true, configArchive = "", probeReport = "", probeSaveNote = "查找实现文件…")
+        _state.value = _state.value.copy(busy = true, probing = true, configArchive = "", probeReport = "", probeSaveNote = container.context.getString(R.string.cpu_probe_finding_files))
         probeJob = viewModelScope.launch {
             // ui-check:ignore 诊断报告的头部，本来就是给开发者看的数据行
             val manifest = StringBuilder("MTK God ${magicau.mtkcontroller.BuildConfig.VERSION_NAME}\nROM=${android.os.Build.DISPLAY}\n")
@@ -206,7 +221,7 @@ class CpuViewModel(private val container: AppContainer) : ViewModel() {
                     java.util.zip.ZipOutputStream(temp.outputStream()).use { zip ->
                         for ((index, path) in paths.withIndex()) {
                             kotlinx.coroutines.currentCoroutineContext().ensureActive()
-                            _state.value = _state.value.copy(probeStage = "读取 ${index + 1}/${paths.size}：$path")
+                            _state.value = _state.value.copy(probeStage = container.context.getString(R.string.cpu_probe_stage_read_impl, index + 1, paths.size, path))
                             // 每次仅保留一个文件；同名库按序号区分，原路径写入清单。
                             val bytes = try { PrivilegeManager.readFullRomConfig(index) }
                             catch (e: CancellationException) { throw e }
@@ -237,21 +252,21 @@ class CpuViewModel(private val container: AppContainer) : ViewModel() {
                                     digest.update(buffer, 0, n)
                                 }
                             }
-                            check(digest.digest().joinToString("") { "%02x".format(it) } == hash) { "ZIP 校验失败：$entry" }
+                            check(digest.digest().joinToString("") { "%02x".format(it) } == hash) { container.context.getString(R.string.cpu_probe_zip_verify_failed, entry) }
                         }
                         check(zip.getInputStream(zip.getEntry("manifest.txt")).bufferedReader().use { it.readText() } == manifest.toString())
                     }
-                    check(temp.renameTo(java.io.File(probeDirectory, name))) { "保存 ZIP 失败" }
+                    check(temp.renameTo(java.io.File(probeDirectory, name))) { container.context.getString(R.string.cpu_probe_zip_save_failed) }
                 }
-                _state.value = _state.value.copy(configArchive = name, probeSaveNote = "已保存 ${hashes.size}/${paths.size} 项，请导出实现包 ZIP；失败项见清单。")
+                _state.value = _state.value.copy(configArchive = name, probeSaveNote = container.context.getString(R.string.cpu_probe_impl_saved, hashes.size, paths.size))
             } catch (e: CancellationException) {
                 manifest.appendLine("已取消，未生成完整包")
-                _state.value = _state.value.copy(probeSaveNote = "已取消，未生成完整实现包")
+                _state.value = _state.value.copy(probeSaveNote = container.context.getString(R.string.cpu_probe_impl_cancelled))
                 throw e
             }
             catch (e: Exception) {
                 manifest.appendLine("导出失败：${e.message}")
-                _state.value = _state.value.copy(probeSaveNote = "保存失败：${e.message}")
+                _state.value = _state.value.copy(probeSaveNote = container.context.getString(R.string.cpu_probe_save_failed, e.message))
             }
             finally {
                 withContext(Dispatchers.IO + NonCancellable) { temp.delete() }
@@ -260,20 +275,18 @@ class CpuViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
-    fun probe(index: Int, mode: CpuProbeMode) = runProbe(index,
-        if (mode == CpuProbeMode.VIVO_POLICY_71) listOf(CpuProbeMode.VIVO_POLICY_9, CpuProbeMode.VIVO_POLICY_71, CpuProbeMode.VIVO_POLICY_9)
-        else listOf(mode))
+    fun probe(index: Int, mode: CpuProbeMode) = runProbe(index, listOf(mode))
 
     private fun runProbe(index: Int, modes: List<CpuProbeMode>) {
         if (_state.value.busy) return
         val edit = _state.value.edits.getOrNull(index) ?: return
         val clusters = _state.value.edits.map { it.cluster }
-        if (modes.size > 1 && CpuProbeMode.VIVO_POLICY_71 !in modes && edit.minFreqKhz == edit.maxFreqKhz) {
-            _state.value = _state.value.copy(probeSaveNote = "请选择两个不同的频率端点后开始完整测试")
+        if (modes.size > 1 && edit.minFreqKhz == edit.maxFreqKhz) {
+            _state.value = _state.value.copy(probeSaveNote = container.context.getString(R.string.cpu_probe_need_two_endpoints))
             return
         }
         val reportName = "cpu-probe-${System.currentTimeMillis()}.txt"
-        _state.value = _state.value.copy(busy = true, probing = true, probeReport = "", probeSaveNote = "记录中，结束或停止后自动保存")
+        _state.value = _state.value.copy(busy = true, probing = true, probeReport = "", probeSaveNote = container.context.getString(R.string.cpu_probe_recording_note))
         probeJob = viewModelScope.launch {
             fun record(line: String) {
                 val text = "${magicau.mtkcontroller.data.diag.DiagReport.timestamp(System.currentTimeMillis())} $line"
@@ -284,55 +297,37 @@ class CpuViewModel(private val container: AppContainer) : ViewModel() {
                 record("MTK God ${magicau.mtkcontroller.BuildConfig.VERSION_NAME} ROM=${android.os.Build.DISPLAY}")
                 record("权限=${PrivilegeManager.state.value}")
                 if (modes == listOf(CpuProbeMode.ROM)) {
-                    _state.value = _state.value.copy(probeStage = "读取接口与配置；无需相机和负载")
+                    _state.value = _state.value.copy(probeStage = container.context.getString(R.string.cpu_probe_stage_rom))
                     val result = withContext(NonCancellable) { PrivilegeManager.romControlProbe() }
                     record(result)
                     record(if (result.contains("ROM_PROBE_COMPLETE")) "快照结束；请保留权限拒绝、空输出和截断记录。" else "快照失败，原始错误已保存。")
                     return@launch
                 }
-                if ((modes.size > 1 || CpuProbeMode.CAMERA in modes) &&
+                if (modes.size > 1 &&
                     (container.cpuControl.lastApplied().isNotEmpty() || container.cpuControl.status.value.handler > 0)) {
                     record("请先点击释放，再开始对照；避免原请求污染静置基线。")
                     return@launch
                 }
                 CpuReapplyService.stop(container.context)
-                if (modes == listOf(CpuProbeMode.CAMERA)) {
-                    _state.value = _state.value.copy(probeStage = "只读采集中：20 秒打开相机，40 秒返回，60 秒结束")
-                    record("相机对照：所有簇；不使用滑条、不写频率、不加负载。planned_phase 仅为时间分段，以相机服务输出核对真实状态。")
-                    val result = withContext(NonCancellable) {
-                        magicau.mtkcontroller.data.cpu.CameraProbe.capture()
-                    }
-                    record(result)
-                    record(if (result.contains("CAMERA_PROBE_COMPLETE")) "采集结束；数据可用性见 SELF_CHECK，完成不代表全部来源可读。"
-                        else "采集不完整；保留失败信息，请勿按成功报告解读。")
-                    return@launch
-                }
                 val power = container.context.getSystemService(android.os.PowerManager::class.java)
                 for ((step, mode) in modes.withIndex()) {
-                    val stage = "阶段 ${step + 1}/${modes.size}：${mode.label}"
+                    val stage = container.context.getString(R.string.cpu_probe_stage_phase, step + 1, modes.size, container.context.getString(mode.labelRes))
                     _state.value = _state.value.copy(probeStage = stage)
                     record(stage)
-                    val thermalPolicy = mode == CpuProbeMode.VIVO_POLICY_9 || mode == CpuProbeMode.VIVO_POLICY_71 || mode == CpuProbeMode.VIVO_SOURCE_MAX
-                    if (thermalPolicy && (power?.currentThermalStatus ?: 0) >= android.os.PowerManager.THERMAL_STATUS_MODERATE)
-                        error("系统热状态不适合短时策略对照，请待设备冷却")
                     val outcome = container.cpuControl.probe(clusters, edit.cluster.policy,
                         edit.minFreqKhz, edit.maxFreqKhz, mode) { line ->
                         record("$line thermal=${power?.currentThermalStatus} powerSave=${power?.isPowerSaveMode}")
-                        if (thermalPolicy && (line.startsWith("Vivo 写前 0") || line.startsWith("Vivo 写后"))) {
-                            val battery = container.context.registerReceiver(null, android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED))
-                            record("battery level=${battery?.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1)} scale=${battery?.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, -1)} temperatureTenthsC=${battery?.getIntExtra(android.os.BatteryManager.EXTRA_TEMPERATURE, -1)} plugged=${battery?.getIntExtra(android.os.BatteryManager.EXTRA_PLUGGED, -1)}")
-                        }
-                        if (thermalPolicy && line.startsWith("Vivo 写后") &&
-                            (power?.currentThermalStatus ?: 0) >= android.os.PowerManager.THERMAL_STATUS_MODERATE)
-                            error("系统热状态升高，停止策略对照并释放")
+                        // 这两个前缀匹配的是 CpuControl 写进报告的原文行（"测试 …"/"普通负载预热后 …"），
+                        // 是报告数据而非界面文案；不作资源，搬走会与产出方脱钩。
+                        // ui-check:ignore 匹配产出方的报告原文，不是界面文案
                         if (mode.loaded && (line.startsWith("测试 ") || line.startsWith("普通负载预热后")) &&
                             (power?.currentThermalStatus ?: 0) >= android.os.PowerManager.THERMAL_STATUS_SEVERE)
-                            error("系统报告严重热状态，停止负载测试并恢复")
+                            error(container.context.getString(R.string.cpu_probe_thermal_severe))
                     }
                     record(outcome.message.resolve(container.context))
                     if (!outcome.success) { record("后续阶段中止"); break }
                     if (mode.loaded && step < modes.lastIndex) {
-                        _state.value = _state.value.copy(probeStage = "间隔静置 15 秒（不保证已冷却）")
+                        _state.value = _state.value.copy(probeStage = container.context.getString(R.string.cpu_probe_stage_cooldown))
                         record("间隔静置开始，15 秒后继续；此阶段没有计算负载")
                         kotlinx.coroutines.delay(15_000)
                     }
@@ -350,12 +345,13 @@ class CpuViewModel(private val container: AppContainer) : ViewModel() {
                     }.onFailure { record("轮询恢复失败：${it.message}") }
                     val report = _state.value.probeReport
                     val saved = runCatching { withContext(Dispatchers.IO) {
-                        check(probeDirectory.isDirectory || probeDirectory.mkdirs()) { "无法创建报告目录" }
+                        check(probeDirectory.isDirectory || probeDirectory.mkdirs()) { container.context.getString(R.string.cpu_probe_mkdir_failed) }
                         java.io.File(probeDirectory, reportName).writeText(report)
                         java.io.File(probeDirectory, "latest.txt").writeText(report)
                     } }
                     _state.value = _state.value.copy(probeSaveNote = if (saved.isSuccess)
-                        "已自动保存到应用本地：$reportName（卸载会删除，请导出保留）" else "自动保存失败：${saved.exceptionOrNull()?.message}，请复制或导出")
+                        container.context.getString(R.string.cpu_probe_autosave_ok, reportName)
+                    else container.context.getString(R.string.cpu_probe_autosave_failed, saved.exceptionOrNull()?.message))
                 }
                 _state.value = _state.value.copy(busy = false, probing = false, probeStage = "")
             }
@@ -363,6 +359,23 @@ class CpuViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     init {
+        // 当前生效的温控档位**收**共享状态，不在四个动作点各读一次快照。
+        //
+        // 温控档位有三个来源：用户、按应用规则、实验室。另两个动了这一页必须跟着变；
+        // 快照只在"本页自己刚操作过"那一刻是对的，别处改了就会显示一个过期值 ——
+        // 用户看到的是"实验室明明切了档，CPU 页还说没有"。三处界面各读各的，
+        // 正是当初把它们收敛到一个控制器的理由（见 ThermalPolicyController 的说明）。
+        //
+        // 采集器和四个动作点写过的是同一个字段，后写的那个赢；动作点自己不再写，
+        // 就只剩这一个来源。
+        viewModelScope.launch {
+            ThermalPolicyController.state.collect { thermal ->
+                _state.value = _state.value.copy(
+                    thermalPolicyActive = thermal.appliedIndex != null,
+                    thermalPolicyIndex = thermal.appliedIndex,
+                )
+            }
+        }
         // 方案列表用流收集，而不是只在 refresh 时读一次：存了/删了/改了名
         // 之后界面要立刻对上，否则用户会以为没生效而再点一次。
         viewModelScope.launch {
@@ -397,7 +410,7 @@ class CpuViewModel(private val container: AppContainer) : ViewModel() {
                 runCatching { java.io.File(probeDirectory, "latest.txt").readText() }.getOrNull()
             }
             if (saved != null && !_state.value.probing && _state.value.probeReport.isEmpty())
-                _state.value = _state.value.copy(probeReport = saved, probeSaveNote = "已载入上次自动保存的报告")
+                _state.value = _state.value.copy(probeReport = saved, probeSaveNote = container.context.getString(R.string.cpu_probe_loaded_last))
         }
         viewModelScope.launch {
             PrivilegeManager.state.collect { current ->
@@ -547,12 +560,16 @@ class CpuViewModel(private val container: AppContainer) : ViewModel() {
         if (policies.isEmpty()) return
         val read = withContext(Dispatchers.IO) {
             policies.map { policy ->
-                val dir = "${CpuScanner.CPUFREQ_ROOT}/$policy"
+                // 只按 App 身份直读，**不批量也不提权补读** —— 这是故意的：
+                // 这一页要如实反映 App 自己能看到什么，读不到就显示未知。
+                // 控制验证那条路是提权补读的，两边可能不一致，那是事实。
+                // 路径与解析和验证那条路共用 CpuFreqNodes，不会各改一半。
+                val (minKhz, maxKhz, curKhz) = CpuFreqNodes.readDirect(policy)
                 ClusterCaps(
                     policy = policy,
-                    minKhz = Sysfs.read("$dir/scaling_min_freq")?.trim()?.toIntOrNull(),
-                    maxKhz = Sysfs.read("$dir/scaling_max_freq")?.trim()?.toIntOrNull(),
-                    curKhz = Sysfs.read("$dir/scaling_cur_freq")?.trim()?.toIntOrNull(),
+                    minKhz = minKhz?.toInt(),
+                    maxKhz = maxKhz?.toInt(),
+                    curKhz = curKhz?.toInt(),
                 )
             }
         }
@@ -582,6 +599,8 @@ class CpuViewModel(private val container: AppContainer) : ViewModel() {
             // Record the untouched limits while nothing of ours is applied, so
             // a later release can be judged against them.
             container.cpuControl.captureBaselineIfClean(clusters)
+            // 皮肤阈值：当前实际生效的那一档。读不到就留空，不用历史值顶替。
+            val skin = runCatching { ThermalPolicyCatalog.skinThresholdText() }.getOrNull()
             _state.value = _state.value.copy(
                 loading = false,
                 edits = edits,
@@ -589,11 +608,10 @@ class CpuViewModel(private val container: AppContainer) : ViewModel() {
                 thermalIndices = indices,
                 thermalReadError = thermalFailure,
                 thermalBriefs = briefs,
+                thermalSkinThreshold = skin,
                 thermalPolicies = policies,
                 profiles = allProfiles,
                 activeProfileId = activeId,
-                thermalPolicyActive = ThermalPolicyController.state.value.appliedIndex != null,
-                thermalPolicyIndex = ThermalPolicyController.state.value.appliedIndex,
                 // 编辑区的档位默认就是当前生效的那个；用户没选过之前不要凭空给一个值，
                 // 否则「应用」会把一个用户没选过的档位发下去。
                 thermalIndexEdit = _state.value.thermalIndexEdit
@@ -651,8 +669,6 @@ class CpuViewModel(private val container: AppContainer) : ViewModel() {
             _state.value = _state.value.copy(
                 busy = false,
                 message = Failure(outcome.message, outcome.detail),
-                thermalPolicyActive = ThermalPolicyController.state.value.appliedIndex != null,
-                thermalPolicyIndex = ThermalPolicyController.state.value.appliedIndex,
             )
         }
     }
@@ -685,9 +701,11 @@ class CpuViewModel(private val container: AppContainer) : ViewModel() {
                 CpuLoadRunner.tick()
                 val freqs = withContext(Dispatchers.IO) {
                     _state.value.edits.associate { edit ->
+                        // 只读当前频率一个节点 —— 这是 1 Hz 的负载展示，
+                        // 别为"统一"把下限上限也读一遍。
                         edit.cluster.policy to (
-                            Sysfs.read("${CpuScanner.CPUFREQ_ROOT}/${edit.cluster.policy}/scaling_cur_freq")
-                                ?.trim()?.toLongOrNull()?.let { it / 1000 }?.toInt() ?: 0)
+                            CpuFreqNodes.parseKhz(Sysfs.read(CpuFreqNodes.cur(edit.cluster.policy)))
+                                ?.let { it / 1000 }?.toInt() ?: 0)
                     }
                 }
                 _state.value = _state.value.copy(
@@ -716,17 +734,12 @@ class CpuViewModel(private val container: AppContainer) : ViewModel() {
             _state.value = _state.value.copy(busy = true, message = null)
             val clusters = _state.value.edits.map { it.cluster }
                 .ifEmpty { withContext(Dispatchers.IO) { container.cpuScanner.scan(deep = false) } }
-            val outcome = container.cpuControl.release(clusters)
-            // Polling would just re-acquire what we released.
-            CpuReapplyService.stop(container.context)
-            // 温控档位一起撤。界面上已经没有单独的档位开关了，
-            // 「释放」就是"把 App 加的东西全撤掉"，漏掉档位会留下用户看不见的残留。
-            ThermalPolicyController.releaseAll()
+            // 覆盖面与顺序都在 AppContainer.releaseAllRequests 一处说清，
+            // 不在两个界面各写一遍 —— 原来就是这么漂的（首页那份漏了三样）。
+            val outcome = container.releaseAllRequests(clusters)
             _state.value = _state.value.copy(
                 busy = false,
                 message = Failure(outcome.message, outcome.detail),
-                thermalPolicyActive = ThermalPolicyController.state.value.appliedIndex != null,
-                thermalPolicyIndex = ThermalPolicyController.state.value.appliedIndex,
             )
         }
     }
@@ -824,8 +837,6 @@ class CpuViewModel(private val container: AppContainer) : ViewModel() {
             _state.value = _state.value.copy(
                 busy = false,
                 message = Failure(outcome.message, outcome.detail),
-                thermalPolicyActive = ThermalPolicyController.state.value.appliedIndex != null,
-                thermalPolicyIndex = ThermalPolicyController.state.value.appliedIndex,
                 activeProfileName = null,
                 editorProfileId = null,
                 thermalIndexEdit = null,
@@ -971,5 +982,4 @@ class CpuViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     /** Exposed for the diagnostics screen. */
-    suspend fun clusters(): List<CpuCluster> = container.cpuScanner.scan()
 }

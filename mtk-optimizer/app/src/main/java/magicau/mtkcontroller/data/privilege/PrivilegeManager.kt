@@ -6,6 +6,8 @@ import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.os.IBinder
 import magicau.mtkcontroller.IRuntimeService
+import magicau.mtkcontroller.R
+import magicau.mtkcontroller.data.Message
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
@@ -50,7 +52,7 @@ object PrivilegeManager {
             refresh()
             bindUserService()
         } else {
-            refresh("Shizuku 权限被拒绝")
+            refresh(Message(R.string.priv_shizuku_denied))
         }
     }
 
@@ -62,7 +64,7 @@ object PrivilegeManager {
     private val binderDeadListener = Shizuku.OnBinderDeadListener {
         remote = null
         bound = false
-        refresh("Shizuku 服务已断开")
+        refresh(Message(R.string.priv_shizuku_service_gone))
     }
 
     private val connection = object : ServiceConnection {
@@ -75,7 +77,7 @@ object PrivilegeManager {
         override fun onServiceDisconnected(name: ComponentName?) {
             remote = null
             bound = false
-            refresh("提权服务已断开")
+            refresh(Message(R.string.priv_service_gone))
         }
     }
 
@@ -84,7 +86,7 @@ object PrivilegeManager {
         if (appContext != null) return
         appContext = context.applicationContext
         if (Shizuku.isPreV11()) {
-            _state.value = PrivilegeState(message = "Shizuku 版本过旧,请升级到 v11 以上")
+            _state.value = PrivilegeState(message = resolve(Message(R.string.priv_shizuku_pre_v11)))
             return
         }
         Shizuku.addBinderReceivedListenerSticky(binderReceivedListener)
@@ -94,19 +96,13 @@ object PrivilegeManager {
         if (hasPermission()) bindUserService()
     }
 
-    fun release() {
-        Shizuku.removeBinderReceivedListener(binderReceivedListener)
-        Shizuku.removeBinderDeadListener(binderDeadListener)
-        Shizuku.removeRequestPermissionResultListener(permissionListener)
-    }
-
     fun requestPermission() {
         if (Shizuku.isPreV11()) {
-            refresh("Shizuku 版本过旧，请升级后重试")
+            refresh(Message(R.string.priv_shizuku_too_old_retry))
             return
         }
         if (!runCatching { Shizuku.pingBinder() }.getOrDefault(false)) {
-            refresh("Shizuku 未运行,请先启动 Shizuku")
+            refresh(Message(R.string.priv_shizuku_not_running))
             return
         }
         if (hasPermission()) {
@@ -114,12 +110,22 @@ object PrivilegeManager {
             refresh()
         } else {
             runCatching { Shizuku.requestPermission(REQUEST_CODE) }
-                .onFailure { refresh("授权请求失败，请在 Shizuku 中检查本应用权限：${it.message}") }
+                .onFailure {
+                    refresh(Message(R.string.priv_auth_request_failed, listOf(it.message ?: "null")))
+                }
         }
     }
 
+    /**
+     * 把 [Message] 解析成文本。
+     *
+     * [PrivilegeState.message] 是给授权界面和诊断报告读的 `String`，这里当场解析 ——
+     * 和 [Shortcuts] 一样，`data/` 里有 `Context` 的类就地取资源。见 [Message] 的说明。
+     */
+    private fun resolve(message: Message): String? = appContext?.let(message::resolve)
+
     /** Re-read binder/permission/uid and republish state. */
-    fun refresh(message: String? = null) {
+    fun refresh(message: Message? = null) {
         val alive = runCatching { Shizuku.pingBinder() }.getOrDefault(false)
         val granted = hasPermission()
         val uid = if (granted) runCatching { Shizuku.getUid() }.getOrDefault(-1) else -1
@@ -139,7 +145,7 @@ object PrivilegeManager {
             binderAlive = alive,
             uid = uid,
             shizukuVersion = version,
-            message = message,
+            message = message?.let(::resolve),
         )
     }
 
@@ -161,14 +167,7 @@ object PrivilegeManager {
         if (!hasPermission()) return
         runCatching {
             Shizuku.bindUserService(userServiceArgs(context), connection)
-        }.onFailure { refresh("绑定提权服务失败: ${it.message}") }
-    }
-
-    fun unbindUserService(remove: Boolean = false) {
-        val context = appContext ?: return
-        runCatching { Shizuku.unbindUserService(userServiceArgs(context), connection, remove) }
-        remote = null
-        bound = false
+        }.onFailure { refresh(Message(R.string.priv_bind_failed, listOf(it.message ?: "null"))) }
     }
 
     val isRemoteReady: Boolean get() = remote != null
@@ -226,9 +225,9 @@ object PrivilegeManager {
         } finally { runCatching { service.closeRomConfig(fields[0]) } }
     }
 
-    suspend fun axMaintenance(kind: String, pkg: String): String = withContext(Dispatchers.IO) {
+    suspend fun appMaintenance(kind: String, pkg: String): String = withContext(Dispatchers.IO) {
         if (!awaitRemote()) return@withContext "ERROR:请重新连接 Shizuku"
-        runCatching { remote?.axMaintenance(kind, pkg) ?: "ERROR:服务未连接" }.getOrElse { "ERROR:${it.message}" }
+        runCatching { remote?.appMaintenance(kind, pkg) ?: "ERROR:服务未连接" }.getOrElse { "ERROR:${it.message}" }
     }
 
     suspend fun vivoTouchRequest(level: Int): String = withContext(Dispatchers.IO) {

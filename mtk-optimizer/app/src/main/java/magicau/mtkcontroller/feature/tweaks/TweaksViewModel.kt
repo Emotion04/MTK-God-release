@@ -8,10 +8,11 @@ import magicau.mtkcontroller.data.tweaks.TweakValues
 import magicau.mtkcontroller.data.tweaks.VivoFeature
 
 import magicau.mtkcontroller.data.tweaks.TouchBackend
-import magicau.mtkcontroller.data.diag.SettingChannel
+import magicau.mtkcontroller.data.settings.SettingChannel
 import magicau.mtkcontroller.data.tweaks.TouchItem
 import magicau.mtkcontroller.data.tweaks.TouchNs
 import magicau.mtkcontroller.data.tweaks.TouchItems
+import magicau.mtkcontroller.data.tweaks.Evidence
 
 import kotlin.math.roundToInt
 import androidx.lifecycle.ViewModel
@@ -20,6 +21,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import magicau.mtkcontroller.BuildConfig
 import magicau.mtkcontroller.R
 import magicau.mtkcontroller.data.Message
 import magicau.mtkcontroller.data.privilege.PrivilegeManager
@@ -44,14 +47,14 @@ data class TweaksUiState(
     val tweakReport: String = "",
     val vivoValues: Map<String, String?> = emptyMap(),
     val apps: List<Pair<String, String>> = emptyList(),
-    val task: AxTaskState = AxTaskState(),
+    val task: MaintenanceState = MaintenanceState(),
     val brightnessBackend: magicau.mtkcontroller.data.tweaks.BrightnessBackend = magicau.mtkcontroller.data.tweaks.BrightnessBackend.LEGACY,
     val displaySupported: Boolean = false,
     /** 探测前的占位。界面显示时按语言取资源，这里只是"还没测"的标记。 */
     val displayStatus: String = "",
     val maxDisplayHz: Int = 0,
     val displayHz: Int = 0,
-    val session: AxSessionState = AxSessionState(),
+    val session: DisplaySessionState = DisplaySessionState(),
     val touchBackend: TouchBackend = TouchBackend.LEGACY,
     val vivoStatus: Map<VivoFeature, String> = emptyMap(),
     val vivoSupported: Set<VivoFeature> = emptySet(),
@@ -105,6 +108,20 @@ data class TweaksUiState(
      * 而这些值只在进页面和刷新时变。
      */
     val touchReadout: Map<String, String> = emptyMap(),
+    /**
+     * 用户给数值项填过的值，键为 `"<itemId>|<旋钮键名>"`。
+     *
+     * 和 [touchReadout] 分开：读数是我们从系统读回来的，这里是用户填的。
+     * 合在一起会让"字段里显示的是我的设置还是设备的现状"分不清。
+     */
+    val touchNumbers: Map<String, Int> = emptyMap(),
+    /**
+     * 本机**读得到**的触控项。null = 还没探完，界面先按全部列出。
+     *
+     * 整项的键一个都读不回 `null` 以外的结果时，这一项在本机没有着落，
+     * 写进去只会凭空建一个没人读的键 —— 那种项不列。
+     */
+    val touchPresent: Set<String>? = null,
     val frameInterpolation: Boolean = false,
     val frameInterpolationSr: Boolean = false,
     val rotationSuggestion: Boolean = false,
@@ -123,7 +140,19 @@ data class TweaksUiState(
      * 再存一份必然对不上。新增子项只改 `TouchItems`，这里和界面都不用动。
      */
     val touchItemsById: List<Pair<TouchItem, Boolean>>
-        get() = TouchItems.all(touchRate).map { it to (it.id in touchItems) }
+        get() = TouchItems.all(touchRate)
+            .filter { touchPresent?.contains(it.id) ?: true }
+            // 正式包（`-PminEvidence=CONFIRMED`）里，证据不足的项整个不列 ——
+            // 不是置灰：列表上一排"没用"的开关只会让人以为试过了。
+            .filter { visibleInBuild(it.evidence) }
+            .map { it to (it.id in touchItems) }
+
+    /** 当前构建的最低证据等级，来自 `BuildConfig.MIN_EVIDENCE`。 */
+    private fun visibleInBuild(evidence: Evidence): Boolean {
+        val floor = runCatching { Evidence.valueOf(BuildConfig.MIN_EVIDENCE) }.getOrNull()
+            ?: return true // 写错的构建参数不该让列表变空
+        return evidence >= floor
+    }
 }
 
 class TweaksViewModel(private val container: AppContainer) : ViewModel() {
@@ -154,8 +183,8 @@ class TweaksViewModel(private val container: AppContainer) : ViewModel() {
             if (hz !in 30..240) {
                 return@run TweakRepository.Outcome(false, Message(R.string.tweak_display_no_hz))
             }
-            AxSessionService.start(container.context, hz)
-        } else AxSessionService.stopDisplay(container.context)
+            DisplaySessionService.start(container.context, hz)
+        } else DisplaySessionService.stopDisplay(container.context)
         TweakRepository.Outcome(
             true,
             Message(if (enabled) R.string.tweak_display_on else R.string.tweak_display_off),
@@ -163,6 +192,20 @@ class TweaksViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     private suspend fun refreshVivo() {
+        // **整体切 IO。** 这个方法是整个项目里最贵的读路径：syncSwitchStateFromDevice
+        // 四次 exec、currentValues() 每个 settings 键一次 exec、probeGate 每项一次
+        // getprop、availableKeys() 又一次、再加 vivoDisplayRequest 和逐键回读。
+        // 调用点在 `viewModelScope`（Main）上，以前全压在首屏组合的前几帧里，
+        // 实测把单帧拖到 100 ms 以上 —— "点进调校页卡一下"就是它。
+        //
+        // `PrivilegeManager.exec` 是阻塞的 binder 调用，不是挂起函数：
+        // 没有 withContext 就不会换线程，"suspend" 只换了协程不换线程。
+        withContext(kotlinx.coroutines.Dispatchers.IO) {
+            refreshVivoLocked()
+        }
+    }
+
+    private suspend fun refreshVivoLocked() {
         // 先把几个开关的本地记录换成设备真实状态，再读下面那批。
         // 顺序不能反：本地记录若和设备分叉，界面会显示假状态（看着是关的，
         // 点开却什么都没发生）。读不到时这个方法保持原值不动。
@@ -190,7 +233,8 @@ class TweaksViewModel(private val container: AppContainer) : ViewModel() {
             displaySupported = displayProbe.startsWith("OK:"), displayStatus = displayProbe.substringAfter(":"),
             maxDisplayHz = maxHz, displayHz = currentHz,
             perfAvailableKeys = container.tweakRepository.vivo.availableKeys(),
-            touchReadout = readTouchReadout())
+            touchReadout = readTouchReadout(),
+            touchNumbers = container.tweakRepository.touchValues())
     }
 
     /**
@@ -200,8 +244,10 @@ class TweaksViewModel(private val container: AppContainer) : ViewModel() {
      * 整项一个值显示不出来。
      */
     private suspend fun readTouchReadout(): Map<String, String> = buildMap {
+        // 数值项也要读：字段旁边显示"设备现在是多少"，用户才分得清
+        // "我填的这个数有没有落进去"和"它原本是多少"。
         for (item in TouchItems.all()) {
-            if (!item.showsValues) continue
+            if (!item.showsValues && item.numericKnobs.isEmpty()) continue
             for (knob in item.knobs) {
                 val value = if (knob.ns == TouchNs.PROP) {
                     // 必须剥掉用户服务的输出包装，否则值里拖着 "[exit] 0"。
@@ -395,11 +441,11 @@ class TweaksViewModel(private val container: AppContainer) : ViewModel() {
     fun runMaintenance(kind: String, pkg: String) {
         if (_state.value.task.running || !_state.value.canRun) return
         viewModelScope.launch {
-            try { AxTaskService.start(container.context, kind, pkg) }
+            try { MaintenanceService.start(container.context, kind, pkg) }
             catch (e: Exception) {
                 _state.value = _state.value.copy(
                     message = Failure.from(
-                        "AxTask",
+                        "Maintenance",
                         Message(R.string.tweak_task_start_failed, listOf(e.message.orEmpty())),
                         e,
                     ),
@@ -418,9 +464,22 @@ class TweaksViewModel(private val container: AppContainer) : ViewModel() {
     fun setPhaseOffset(prop: String, ns: Long) {
         if (!_state.value.canRun) return
         viewModelScope.launch {
+            // 成功与否由数据层回的结果说了算。**以前这里判 `result.startsWith("OK")`，
+            // 而 `PhaseOffset.set` 从来不返回以 "OK" 开头的串** —— 于是每次成功的写入
+            // 都被渲染成红色错误。拿前缀猜状态就是这么坏掉的。
             val result = runCatching { magicau.mtkcontroller.data.tweaks.PhaseOffset.set(prop, ns) }
-                .getOrElse { "ERROR:${it.javaClass.simpleName}: ${it.message}" }
-            _state.value = _state.value.copy(phaseMessage = result, phaseSuccess = result.startsWith("OK"))
+                .getOrNull()
+            if (result == null) {
+                _state.value = _state.value.copy(
+                    phaseMessage = container.context.getString(R.string.tweak_phase_failed),
+                    phaseSuccess = false,
+                )
+                return@launch
+            }
+            _state.value = _state.value.copy(
+                phaseMessage = result.message.resolve(container.context),
+                phaseSuccess = result.success,
+            )
             refreshPhaseOffsets()
         }
     }
@@ -442,12 +501,16 @@ class TweaksViewModel(private val container: AppContainer) : ViewModel() {
                 _state.value = _state.value.copy(phaseMessage = container.context.getString(R.string.tweak_phase_no_original), phaseSuccess = false)
                 return@launch
             }
-            val report = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val items = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 magicau.mtkcontroller.data.tweaks.PhaseOffset.restore(snap)
             }
+            // 逐项读数行是**证据**（属性名 + 结果），拼起来给用户看。
+            // 成功与否由每一项自己报，不去猜生成出来的文字里有没有"失败"。
             _state.value = _state.value.copy(
-                phaseMessage = report,
-                phaseSuccess = !report.contains(container.context.getString(R.string.phase_restore_failed_marker)),
+                phaseMessage = items.joinToString("\n") {
+                    "${it.prop} ${it.message.resolve(container.context)}"
+                },
+                phaseSuccess = items.all { it.success },
             )
             refreshPhaseOffsets()
         }
@@ -539,7 +602,9 @@ class TweaksViewModel(private val container: AppContainer) : ViewModel() {
     fun refreshForegroundApp() {
         if (!_state.value.canRun) return
         viewModelScope.launch {
-            val reply = PrivilegeManager.foregroundApp()
+            // 一次 dumpsys 就是几十毫秒 CPU 加几十 KB 输出（见 ForegroundApp），
+            // 不能跑在 Main 上。
+            val reply = withContext(kotlinx.coroutines.Dispatchers.IO) { PrivilegeManager.foregroundApp() }
             _state.value = _state.value.copy(
                 foregroundApp = if (reply.startsWith("ERROR")) "" else reply,
                 foregroundError = reply.takeIf { it.startsWith("ERROR") }?.substringAfter(':'),
@@ -555,10 +620,26 @@ class TweaksViewModel(private val container: AppContainer) : ViewModel() {
             }
         }
         val vivo = container.tweakRepository.vivo
-        _state.value = _state.value.copy(smartInitial = vivo.smartBackup(), smartImported = vivo.smartBackup("imported"),
-            smartPrevious = vivo.smartBackup("previous"), smartReminder = vivo.remindSmartBackup())
+        // 四份 SharedPreferences 读 + 四份编解码。第一次读要落盘加载整个文件，
+        // 解码是 base64 + 反序列化。全在 IO 上做，别占首屏组合的帧。
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val smart = SmartState(
+                initial = vivo.smartBackup(),
+                imported = vivo.smartBackup("imported"),
+                previous = vivo.smartBackup("previous"),
+                reminder = vivo.remindSmartBackup(),
+            )
+            withContext(kotlinx.coroutines.Dispatchers.Main) {
+                _state.value = _state.value.copy(
+                    smartInitial = smart.initial,
+                    smartImported = smart.imported,
+                    smartPrevious = smart.previous,
+                    smartReminder = smart.reminder,
+                )
+            }
+        }
         viewModelScope.launch {
-            AxTaskService.state.collect { task -> _state.value = _state.value.copy(task = task) }
+            MaintenanceService.state.collect { task -> _state.value = _state.value.copy(task = task) }
         }
         viewModelScope.launch {
             val apps = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
@@ -574,7 +655,7 @@ class TweaksViewModel(private val container: AppContainer) : ViewModel() {
             }
         }
         viewModelScope.launch {
-            AxSessionService.state.collect { session ->
+            DisplaySessionService.state.collect { session ->
                 _state.value = _state.value.copy(session = session, displayHz = displayInfo().second)
             }
         }
@@ -653,7 +734,7 @@ class TweaksViewModel(private val container: AppContainer) : ViewModel() {
         val result = container.tweakRepository.setTouchOptimization(enabled, _state.value.touchRate)
         _state.value = _state.value.copy(touchChanges = container.tweakRepository.lastTouchChanges)
         if (result.success && enabled && _state.value.touchBackend == TouchBackend.VIVO) {
-            try { AxSessionService.start(container.context) }
+            try { DisplaySessionService.start(container.context) }
             catch (e: Exception) { container.tweakRepository.setTouchOptimization(false); throw e }
         }
         result
@@ -681,9 +762,39 @@ class TweaksViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     /** 单个触控子项开关。只改这一项，其他项不动。 */
+    /**
+     * 探一次本机有哪些触控项。进页面调一次即可 —— 它跑 N 条 shell 读，
+     * 每次重组都跑会拖慢列表。
+     */
+    fun probeTouchItems() {
+        viewModelScope.launch {
+            val present = runCatching { container.tweakRepository.presentTouchItemIds() }.getOrNull()
+                ?: return@launch
+            _state.value = _state.value.copy(touchPresent = present)
+        }
+    }
+
     fun setTouchItem(id: String, enabled: Boolean) = run {
         val result = container.tweakRepository.setTouchItem(id, enabled, _state.value.touchRate)
-        _state.value = _state.value.copy(touchChanges = container.tweakRepository.lastTouchChanges)
+        _state.value = _state.value.copy(
+            touchChanges = container.tweakRepository.lastTouchChanges,
+            touchReadout = readTouchReadout(),
+        )
+        result
+    }
+
+    /**
+     * 数值项里填了一个数。
+     *
+     * 项关着时只记下来（仓库那边同一套逻辑），所以这里不读回 —— 没写设备就没有新值可读。
+     */
+    fun setTouchNumber(id: String, knobKey: String, value: Int) = run {
+        val result = container.tweakRepository.setTouchNumber(id, knobKey, value, _state.value.touchRate)
+        _state.value = _state.value.copy(
+            touchNumbers = container.tweakRepository.touchValues(),
+            touchChanges = container.tweakRepository.lastTouchChanges,
+            touchReadout = if (id in _state.value.touchItems) readTouchReadout() else _state.value.touchReadout,
+        )
         result
     }
 
@@ -700,7 +811,9 @@ class TweaksViewModel(private val container: AppContainer) : ViewModel() {
         run {
             val outcome = container.tweakRepository.setThermalBrightnessWatch(enabled)
             if (outcome.success) {
-                if (enabled && _state.value.brightnessBackend == magicau.mtkcontroller.data.tweaks.BrightnessBackend.LEGACY) {
+                // 判据和首页共用一份（原来这里自己写了一遍，只认 LEGACY，
+                // 首页那份却是无条件起 —— 同一个开关两种行为）。
+                if (container.tweakRepository.brightnessGuardShouldRun()) {
                     try { ThermalBrightnessService.start(container.context) }
                     catch (e: Exception) { container.tweakRepository.setThermalBrightnessWatch(false); throw e }
                 } else ThermalBrightnessService.stop(container.context)
@@ -714,3 +827,16 @@ class TweaksViewModel(private val container: AppContainer) : ViewModel() {
         PrivilegeManager.refresh()
     }
 }
+
+/**
+ * [TweaksViewModel.init] 里一次读出来的四份智算平台备份。
+ *
+ * 只为跨线程传递存在：这四份必须在 IO 上读，读完好一次性交给 Main 更新界面。
+ * 直接在这里写 `_state` 四次会让界面看到三个中间态。
+ */
+private data class SmartState(
+    val initial: magicau.mtkcontroller.data.tweaks.SmartBackup?,
+    val imported: magicau.mtkcontroller.data.tweaks.SmartBackup?,
+    val previous: magicau.mtkcontroller.data.tweaks.SmartBackup?,
+    val reminder: Boolean,
+)

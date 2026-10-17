@@ -1,6 +1,7 @@
-package magicau.mtkcontroller.data.diag
+package magicau.mtkcontroller.data.settings
 
 import magicau.mtkcontroller.data.log.AppLog
+import magicau.mtkcontroller.data.exec.DaemonExec
 
 
 /**

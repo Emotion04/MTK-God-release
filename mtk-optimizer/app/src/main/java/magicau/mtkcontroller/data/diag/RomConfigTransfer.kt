@@ -3,8 +3,6 @@ package magicau.mtkcontroller.data.diag
 import java.io.File
 import java.security.MessageDigest
 import java.util.UUID
-import java.util.zip.ZipEntry
-import java.util.zip.ZipOutputStream
 
 /** 只允许固定配置和系统目录枚举结果，快照按小块传输。 */
 class RomConfigTransfer(private val read: (String) -> ByteArray = { path ->
@@ -43,21 +41,6 @@ class RomConfigTransfer(private val read: (String) -> ByteArray = { path ->
                 offset += part.size
             }
             return output.also { check(sha(it) == hash) { "SHA256 校验失败" } }
-        }
-        fun archive(file: File, contents: Map<String, ByteArray>, manifest: String) {
-            ZipOutputStream(file.outputStream()).use { zip ->
-                for ((name, bytes) in contents + ("manifest.txt" to manifest.toByteArray(Charsets.UTF_8))) {
-                    require(name.matches(Regex("[A-Za-z0-9_.-]+")))
-                    zip.putNextEntry(ZipEntry(name)); zip.write(bytes); zip.closeEntry()
-                }
-            }
-            // 回读落盘 ZIP，确认压缩与文件写入没有破坏内容。
-            java.util.zip.ZipFile(file).use { zip ->
-                for ((name, expected) in contents + ("manifest.txt" to manifest.toByteArray(Charsets.UTF_8))) {
-                    val actual = zip.getInputStream(zip.getEntry(name)).use { it.readBytes() }
-                    check(actual.size == expected.size && sha(actual) == sha(expected)) { "ZIP 回读校验失败：$name" }
-                }
-            }
         }
     }
     private var token = ""

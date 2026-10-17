@@ -25,7 +25,7 @@ data class AppThermalRule(
  *
  * 存 DataStore，跟随备份（与 Profile 同一套 store，见 [AppThermalStore] 的 key）。
  * **不存任何"每个索引是什么意思"** —— 那是会随 ROM 变的分析结论，
- * 见 `docs/thermal/facts.md` 与 `assets/thermal-policies.md`。
+ * 见 `docs/thermal/facts.md`。
  */
 class AppThermalStore(private val context: Context) {
 

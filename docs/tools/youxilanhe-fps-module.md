@@ -3,7 +3,7 @@
 <!-- external-symbols -->
 本页记录外部模块实现，其中的类名属于该模块，不在本项目源码里。
 
-> - 分析对象：`reference/26.10参考/游戏蓝盒1.1.4.apk`（第三方文件，git-ignored）
+> - 分析对象：`reference/sources/2026-10-b1/游戏蓝盒1.1.4.apk`（第三方文件，git-ignored）
 > - sha256：`038993f1399a16acf8eb0380e8dada29914086cc5b402788d51589f2d3358dea`（4 034 162 字节）
 > - 分析日期：2026-09-21
 > - 材料来源：`AndroidManifest.xml`（二进制 AXML 字符串池）、`classes.dex` 字符串池、4 个 arm64 ELF 的可打印字符串与符号表

@@ -1,6 +1,8 @@
 package magicau.mtkcontroller.data.privilege
 
-import magicau.mtkcontroller.data.diag.DaemonExec
+import magicau.mtkcontroller.R
+import magicau.mtkcontroller.data.Message
+import magicau.mtkcontroller.data.exec.DaemonExec
 
 /**
  * 编译前的只读状态。
@@ -24,7 +26,12 @@ object CompileStatus {
         val apkMtimeMs: Long?,
         val odexMtimeMs: Long?,
         val profileBytes: Long?,
-        val note: String,
+        /**
+         * 一行结论。**是 `Message` 不是 `String`** —— 它是给用户看的文案，
+         * 而这里拿不到 `Context`（也不该拿：数据层不该依赖资源系统）。
+         * 构造 `Message` 不需要 `Context`，解析留给展示边界。
+         */
+        val note: Message,
     ) {
         /** odex 比 apk 新，说明编译发生在最近一次安装或更新之后。 */
         val compiledAfterUpdate: Boolean
@@ -45,7 +52,8 @@ object CompileStatus {
         } else null
         if (apkPath == null) {
             return State(null, null, null, null, null, null,
-                if (apk == null) "命令没能送到用户服务，请确认 Shizuku 已连接" else "读不到 $pkg 的安装路径")
+                if (apk == null) Message(R.string.compile_status_no_service)
+                else Message(R.string.compile_status_no_path, listOf(pkg)))
         }
         val dir = apkPath.substringBeforeLast('/')
 
@@ -91,25 +99,33 @@ object CompileStatus {
         apkMtimeMs: Long?,
         odexMtimeMs: Long?,
         profileBytes: Long?,
-    ): String {
-        val parts = mutableListOf<String>()
-        val odex = odexKb?.let { "odex ${it / 1024} MiB" }
-        val vdex = vdexKb?.takeIf { it > 0 }?.let { "vdex ${it / 1024} MiB" }
-        listOfNotNull(odex, vdex).takeIf { it.isNotEmpty() }?.let { parts += it.joinToString(" · ") }
-        when {
-            // vdex 是验证信息，odex 才是编译出来的机器码。两者都没有才算没编译。
-            odexKb == null && vdexKb == null -> parts += "没有编译产物"
-            odexKb == null -> parts += "只有验证产物，未编译"
-            odexMtimeMs == null -> parts += "读不到编译时间"
-            apkMtimeMs == null -> parts += "读不到应用更新时间"
-            apkMtimeMs > odexMtimeMs -> parts += "编译早于上次应用更新，可能已失效"
-            else -> parts += "编译晚于上次应用更新"
+    ): Message {
+        // 产物大小那一段是 ASCII（"odex 12 MiB"），不是文案，保持拼好的 String 当参数。
+        val sizes = listOfNotNull(
+            odexKb?.let { "odex ${it / 1024} MiB" },
+            vdexKb?.takeIf { it > 0 }?.let { "vdex ${it / 1024} MiB" },
+        ).joinToString(" · ")
+
+        // vdex 是验证信息，odex 才是编译出来的机器码。两者都没有才算没编译。
+        val status = when {
+            odexKb == null && vdexKb == null -> R.string.compile_note_none
+            odexKb == null -> R.string.compile_note_vdex_only
+            odexMtimeMs == null -> R.string.compile_note_no_odex_time
+            apkMtimeMs == null -> R.string.compile_note_no_apk_time
+            apkMtimeMs > odexMtimeMs -> R.string.compile_note_stale
+            else -> R.string.compile_note_fresh
         }
-        parts += when {
-            profileBytes == null -> "使用记录读不到"
-            profileBytes == 0L -> "使用记录为空"
-            else -> "使用记录 ${profileBytes / 1024} KiB"
+        val profile = when (profileBytes) {
+            null -> Message(R.string.compile_note_profile_unreadable)
+            0L -> Message(R.string.compile_note_profile_empty)
+            else -> Message(R.string.compile_note_profile_size, listOf(profileBytes / 1024))
         }
-        return parts.joinToString(" · ")
+
+        // 两套模板，免得产物不存在时拼出一个开头的分隔符。
+        return if (sizes.isEmpty()) {
+            Message(R.string.compile_note_plain, listOf(Message(status), profile))
+        } else {
+            Message(R.string.compile_note_full, listOf(sizes, Message(status), profile))
+        }
     }
 }

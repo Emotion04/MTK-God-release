@@ -3,6 +3,7 @@ package magicau.mtkcontroller.data.diag
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import magicau.mtkcontroller.data.settings.SettingChannel
 
 /**
  * [SettingChannel] 的命令生成测试。

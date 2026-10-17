@@ -67,7 +67,7 @@ fun FeatureTrialScreen(container: magicau.mtkcontroller.di.AppContainer) {
             Text(it, style = MaterialTheme.typography.bodySmall)
         }
 
-        SectionLabel("全部功能")
+        SectionLabel(stringResource(R.string.tweaks_trial_section_all))
         // 限时实验不放进来：它 20 秒后自动还原，人来不及观察。
         val features = VivoFeature.entries.filter {
             it.lifetime != TweakLifetime.TIMED && it != VivoFeature.AI
@@ -86,7 +86,7 @@ fun FeatureTrialScreen(container: magicau.mtkcontroller.di.AppContainer) {
             }
         }
 
-        SectionLabel("导出")
+        SectionLabel(stringResource(R.string.tweaks_trial_section_export))
         SettingsCard {
             // 一键流程：收集 → 直接弹保存框。中间不在对话框里展示报告 ——
             // 报告很长（几十项键值），在对话框里看反而是负担。
@@ -105,7 +105,7 @@ fun FeatureTrialScreen(container: magicau.mtkcontroller.di.AppContainer) {
             InsetDivider()
             SettingsRow(
                 Icons.Default.Delete, MaterialTheme.colorScheme.error,
-                stringResource(R.string.trial_clear), "清掉本机所有试用判定",
+                stringResource(R.string.trial_clear), stringResource(R.string.tweaks_trial_clear_sub),
                 onClick = { confirmClear = true },
             )
         }
@@ -186,11 +186,12 @@ fun FeatureTrialScreen(container: magicau.mtkcontroller.di.AppContainer) {
     }
 
     // 备份收好后同样直接弹保存框，中间不再多一步确认。
+    val backupFilePrefix = stringResource(R.string.tweaks_trial_backup_file_prefix)
     val pendingBackup by vm.pendingBackup.collectAsStateWithLifecycle()
     androidx.compose.runtime.LaunchedEffect(pendingBackup) {
         if (pendingBackup.isNotEmpty()) {
             vm.consumeBackupExport()
-            backupExportLauncher.launch("mtk-god-状态备份-${System.currentTimeMillis()}.txt")
+            backupExportLauncher.launch("$backupFilePrefix-${System.currentTimeMillis()}.txt")
         }
     }
 
@@ -211,11 +212,11 @@ fun FeatureTrialScreen(container: magicau.mtkcontroller.di.AppContainer) {
     if (showReport) {
         AlertDialog(
             onDismissRequest = { showReport = false },
-            title = { Text("试用报告") },
+            title = { Text(stringResource(R.string.tweaks_trial_report_title)) },
             text = {
                 SelectionContainer {
                     Text(
-                        state.report.ifBlank { "报告是空的，请先点上面的导出收集。" },
+                        state.report.ifBlank { stringResource(R.string.tweaks_trial_report_empty) },
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
@@ -224,22 +225,22 @@ fun FeatureTrialScreen(container: magicau.mtkcontroller.di.AppContainer) {
                 TextButton(
                     enabled = state.report.isNotBlank(),
                     onClick = { showReport = false; vm.buildReportThenExport() },
-                ) { Text("存成文件") }
+                ) { Text(stringResource(R.string.tweaks_trial_report_save)) }
             },
-            dismissButton = { TextButton(onClick = { showReport = false }) { Text("关闭") } },
+            dismissButton = { TextButton(onClick = { showReport = false }) { Text(stringResource(R.string.action_close)) } },
         )
     }
 
     if (confirmClear) {
         AlertDialog(
             onDismissRequest = { confirmClear = false },
-            title = { Text("清空试用记录") },
-            text = { Text("只清判定记录，不动系统里已写入的值。已开启的功能请先逐项恢复原值。") },
+            title = { Text(stringResource(R.string.tweaks_trial_clear_title)) },
+            text = { Text(stringResource(R.string.tweaks_trial_clear_body)) },
             confirmButton = {
-                TextButton(onClick = { confirmClear = false; vm.clear() }) { Text("清空") }
+                TextButton(onClick = { confirmClear = false; vm.clear() }) { Text(stringResource(R.string.action_clear)) }
             },
             dismissButton = {
-                TextButton(onClick = { confirmClear = false }) { Text("取消") }
+                TextButton(onClick = { confirmClear = false }) { Text(stringResource(R.string.action_cancel)) }
             },
         )
     }
@@ -308,7 +309,7 @@ private fun RestoreConfirmDialog(
                                     stringResource(R.string.backup_restore_unchanged) + "  $current"
                                 } else {
                                     stringResource(R.string.backup_restore_changed) +
-                                        "  备份 $backup → 当前 $current"
+                                        "  " + stringResource(R.string.tweaks_trial_restore_compare, backup, current)
                                 },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = if (item.unchanged) MaterialTheme.colorScheme.onSurfaceVariant
@@ -337,7 +338,7 @@ private fun RestoreConfirmDialog(
             ) { Text(stringResource(R.string.backup_restore_apply)) }
         },
         dismissButton = {
-            TextButton(onClick = { vm.cancelRestore() }) { Text("取消") }
+            TextButton(onClick = { vm.cancelRestore() }) { Text(stringResource(R.string.action_cancel)) }
         },
     )
 }
@@ -370,7 +371,7 @@ private fun TrialRow(
 
         // 门禁没过的项保留开关但置灰，并说清是哪一条没过。
         blocked?.let {
-            Text("本机不支持：$it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+            Text(stringResource(R.string.trial_unsupported, it), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
         }
 
         // 取值控件和正常页面共用同一份 —— 后端本来就是同一个 apply()。
@@ -385,7 +386,10 @@ private fun TrialRow(
 
         trial?.let { t ->
             Text(
-                "上次试用：写入${if (t.writeOk) "成功" else "失败"}，${t.message}",
+                stringResource(
+                    if (t.writeOk) R.string.tweaks_trial_last_ok else R.string.tweaks_trial_last_fail,
+                    t.message,
+                ),
                 style = MaterialTheme.typography.bodySmall,
             )
         }

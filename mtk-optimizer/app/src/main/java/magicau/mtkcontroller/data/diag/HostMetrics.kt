@@ -4,6 +4,7 @@ import magicau.mtkcontroller.R
 import magicau.mtkcontroller.data.Message
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import magicau.mtkcontroller.data.exec.DaemonExec
 
 /**
  * 只读主机指标：温度、GPU 频率、DDR 频率、内存/Zram 详情。

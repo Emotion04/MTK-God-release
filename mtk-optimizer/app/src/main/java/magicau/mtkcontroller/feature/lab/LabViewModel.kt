@@ -1,9 +1,9 @@
 package magicau.mtkcontroller.feature.lab
 
+import kotlinx.coroutines.CancellationException
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -11,11 +11,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
+import magicau.mtkcontroller.data.lab.LabPlacement
 import magicau.mtkcontroller.data.lab.LabCatalog
 import magicau.mtkcontroller.data.lab.LabCategory
 import magicau.mtkcontroller.data.lab.LabCores
 import magicau.mtkcontroller.data.lab.LabController
 import magicau.mtkcontroller.data.lab.ThermalPolicyCatalog
+import magicau.mtkcontroller.data.Failure
 import magicau.mtkcontroller.data.log.AppLog
 import magicau.mtkcontroller.data.thermal.ThermalPolicyReader
 import magicau.mtkcontroller.data.thermal.ThermalPolicyController
@@ -44,10 +46,6 @@ data class LabItemState(
     val values: Map<String, Int> = emptyMap(),
     val hold: Boolean = false,
     val busy: Boolean = false,
-    /** 自动扫档进行到哪儿，null = 没在扫。 */
-    val sweepProgress: String? = null,
-    /** 自动扫档的结果，一档一行。 */
-    val sweepResults: List<SweepRow> = emptyList(),
     /**
      * 运行时解析出的选项，来自 [LabFeature.dynamicChoices]。
      * 空 = 这个功能用静态选项，或还没解析出来。
@@ -57,39 +55,36 @@ data class LabItemState(
     val readout: String? = null,
     /** 各档位的中文摘要（只有温度和频率），key = 档位编号。 */
     val briefs: Map<Int, String> = emptyMap(),
-    /** 当前选中的那一档的摘要，直接显示在卡片上。 */
-    val selectedBrief: String? = null,
-)
-
-/**
- * 自动扫档里一个索引的实测结果。
- *
- * 采的是**上限节点本身**，不是当前频率 —— 上限不需要负载就会变，
- * 而频率没有负载时只会停在下限，看了等于没看。
- */
-data class SweepRow(
-    val value: Int,
-    /** true = 扫档前的无请求基线，不是某一档的结果。 */
-    val isBaseline: Boolean = false,
-    val capMin: Int?,
-    val capMax: Int?,
-    val curMin: Int?,
-    val curMax: Int?,
-    val samples: Int,
 ) {
-    val capText: String
-        get() = capMin?.let { lo -> capMax?.let { hi -> if (lo == hi) "$lo" else "$lo–$hi" } } ?: "读不到"
-
-    val curText: String
-        get() = curMin?.let { lo -> curMax?.let { hi -> if (lo == hi) "$lo" else "$lo–$hi" } } ?: "读不到"
+    /** 当前选中的那一档的摘要，按 [values] 现取 —— 换档立刻跟着变。 */
+    val selectedBrief: String?
+        get() = if (feature.key == THERMAL_POLICY_KEY) {
+            values.values.firstOrNull()?.let { briefs[it] }
+        } else {
+            null
+        }
 }
 
 data class LabUiState(
     val loading: Boolean = true,
     val powerHalReady: Boolean = false,
     val clusters: List<CpuCluster> = emptyList(),
-    val groups: List<Pair<LabCategory, List<LabItemState>>> = emptyList(),
-    val message: String? = null,
+    /**
+     * 按**归属**（[LabPlacement]）分组，组内按技术分类（[LabCategory]）排序。
+     *
+     * 分组键从 category 换成 placement，是因为用户要先分清"哪些是正式功能、
+     * 哪些只是探测、哪些是开发工具" —— 那是使用决策；而"这块归 CPU 还是调度"
+     * 是实现细节，排在第二级就够了。
+     */
+    val groups: List<Pair<LabPlacement, List<LabItemState>>> = emptyList(),
+    /**
+     * 一次性结论（释放结果一类）。
+     *
+     * 用 [Failure] 而不是裸 `String`：**摘要给人看、原话收起可复制**。
+     * 原来这里是 `String`，`LabController.reset()` 直接 `resolve(context)` 把中文
+     * 焊死返回，调用方连成功失败都分不出来，点"显示更多"也没有东西可看。
+     */
+    val message: Failure? = null,
     /**
      * 固件当前生效的温控档位，以及它是谁要求的。
      *
@@ -99,7 +94,15 @@ data class LabUiState(
      */
     val thermalAppliedIndex: Int? = null,
     val thermalAppliedSource: ThermalPolicyController.Source? = null,
+    /**
+     * 编辑模式：行上显示"能用 / 没用"的标记按钮。
+     *
+     * 平时不显示 —— 用户大部分时间是来**用**这些东西的，不是来打分的。
+     * 标记是偶尔做一次的事，藏在编辑模式里，评分按钮就不会天天占着屏幕。
+     */
+    val editing: Boolean = false,
 )
+
 
 /**
  * Backs the canary lab.
@@ -113,7 +116,6 @@ data class LabUiState(
 
 class LabViewModel(private val container: AppContainer) : ViewModel() {
 
-    private var sweepJob: Job? = null
 
     companion object {
         /** Key used for features that are not per-cluster. */
@@ -202,12 +204,6 @@ class LabViewModel(private val container: AppContainer) : ViewModel() {
                     choices = dynamic[feature.key] ?: emptyList(),
                     readout = readouts[feature.key],
                     briefs = if (feature.key == THERMAL_POLICY_KEY) briefs else emptyMap(),
-                    selectedBrief = if (feature.key == THERMAL_POLICY_KEY) {
-                        val chosen = defaultValues(feature, dynamic[feature.key]).values.firstOrNull()
-                        chosen?.let { briefs[it] }
-                    } else {
-                        null
-                    },
                 )
             }
 
@@ -215,9 +211,23 @@ class LabViewModel(private val container: AppContainer) : ViewModel() {
                 loading = false,
                 powerHalReady = powerHalReady,
                 clusters = clusters,
-                groups = items.groupBy { it.feature.category }
+                // 一级按归属，二级按技术分类。compareBy 用两个 order 字段，
+                // 不要在组内再分组 —— 那会把一屏又切碎。
+                // 标为「没用」的直接不显示 —— **除非在编辑模式**（不然用户没法取消标记）。
+                // 这是 iOS 那种"清理掉用不上的东西"的做法：列表越用越干净，
+                // 剩下的都是这台机器上真能用的。
+                groups = items
+                    .filter { _state.value.editing || it.verdict?.stateEnum() != LabController.State.MANUAL_UNUSABLE }
+                    .groupBy { it.feature.placement }
                     .toSortedMap(compareBy { it.order })
-                    .map { (category, list) -> category to list },
+                    .map { (placement, list) ->
+                        placement to list.sortedWith(
+                            // 只有分类一个键。以前第二个键是 label，那是中文串；
+                            // 现在它是资源 id，排序会变成按 id 数字排（毫无意义）。
+                            // 去掉即可 —— sortedWith 是稳定排序，同类保持声明顺序。
+                            compareBy({ it.feature.category.order }),
+                        )
+                    },
             )
         }
     }
@@ -292,129 +302,56 @@ class LabViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
-    /**
-     * 把 [LabFeature.sweepValues] 一个一个自动发下去，每档采一次上限节点。
-     *
-     * 判据是 `scaling_max_freq`：温控策略换了，上限节点立刻变，不需要负载。
-     * 每档之间先释放再发，否则两把锁叠在一起，看不出是哪一档起的作用。
-     */
-    fun sweep(feature: LabFeature, stopOnHit: Boolean = true) {
-        val values = feature.sweepValues ?: return
-        if (sweepJob?.isActive == true) return
-        sweepJob = viewModelScope.launch {
-            // 取最大的那一簇：温控压的就是大核。
-            val cluster = clusters.maxByOrNull { c ->
-                c.policy.removePrefix("policy").toIntOrNull() ?: -1
-            }
-            val dir = cluster?.let { "/sys/devices/system/cpu/cpufreq/${it.policy}" }
-            val capNode = dir?.plus("/scaling_max_freq")
-            val curNode = dir?.plus("/scaling_cur_freq")
-            val rows = mutableListOf<SweepRow>()
-            var hit = -1
-
-            // 先取一个无请求基线。温控噪声自己就能在 1800000–2600000 之间跳，
-            // 拿绝对数当阈值必然误判 —— 只有高于这个基线的峰值才算信号。
-            updateItem(feature.key) { item ->
-                item.copy(
-                    sweepProgress = "正在测基线（${SWEEP_HOLD_MS / 1000} 秒）…",
-                    sweepResults = emptyList(),
-                )
-            }
-            val baseline = sample(capNode, curNode, 0).copy(isBaseline = true)
-            rows += baseline
-            AppLog.i(TAG, "[扫] 基线 · cap ${baseline.capText} · cur ${baseline.curText}")
-
-            for ((index, value) in values.withIndex()) {
-                updateItem(feature.key) { item ->
-                    item.copy(
-                        values = item.values + ("" to value),
-                        sweepProgress = "第 ${index + 1}/${values.size} 档，索引 $value",
-                        sweepResults = rows.toList(),
-                    )
-                }
-                container.labController.releaseRequests()
-                container.labController.apply(
-                    feature = feature,
-                    clusters = clusters,
-                    values = mapOf("" to value),
-                    hold = false,
-                    durationMs = SWEEP_HOLD_MS,
-                )
-
-                val row = sample(capNode, curNode, value) { live ->
-                    updateItem(feature.key) { item ->
-                        item.copy(
-                            sweepProgress = "第 ${index + 1}/${values.size} 档，索引 $value，cap $live",
-                        )
-                    }
-                }
-                rows += row
-                AppLog.i(TAG, "[扫] 索引 $value · cap ${row.capText} · cur ${row.curText} · ${row.samples} 点")
-                updateItem(feature.key) { it.copy(sweepResults = rows.toList(), sweepProgress = null) }
-
-                // 整档都高于基线的峰值才算命中：温控噪声自己就能跳到 2600000，
-                // 只有"比不请求时最好的情况还高"才可能是策略的作用。
-                val base = baseline.capMax
-                if (stopOnHit && base != null && row.capMin != null && row.capMin > base) {
-                    hit = value
-                    AppLog.i(
-                        TAG,
-                        "[扫] 索引 $value 整档 cap ${row.capText} 都高于基线峰值 $base，提前收工",
-                    )
-                    break
-                }
-            }
-
-            container.labController.releaseRequests()
-            updateItem(feature.key) { it.copy(sweepProgress = null) }
-            _state.value = _state.value.copy(
-                message = if (hit >= 0) "索引 $hit 把上限抬上去了" else "扫完了，没有索引抬动上限",
-            )
-        }
+    fun setEditing(on: Boolean) {
+        _state.value = _state.value.copy(editing = on)
     }
 
-    /** 采样串的人类可读形式，扫档过程中实时显示。 */
-    private fun List<Int>.capText(): String =
-        if (isEmpty()) "读不到" else if (min() == max()) "${max()}" else "${min()}–${max()}"
+    /**
+     * 手动标一条：能用 / 没用 / 清除。
+     *
+     * 传 null 表示清除标记，回到"未测试"。
+     */
+    /**
+     * 编辑期间改本地草稿，**不落盘、不重扫**。
+     *
+     * 这里原来调 `refresh()`，而 `refresh` 会置 `loading = true` 把整页换成转圈 ——
+     * 每点一次标记就闪一下、等半秒，连续标几项根本没法用。
+     * 标记只是改本地一个字段，和设备无关，不该触发重新扫描。
+     */
+    fun mark(feature: LabFeature, state: LabController.State?) {
+        pending[feature.key] = state
+        updateItem(feature.key) { it.copy(verdict = state?.let { s -> LabController.Verdict(s.name, "") }) }
+    }
+
+    /** 编辑过程中改过的项，等「完成」时一次性落盘。 */
+    private val pending = mutableMapOf<String, LabController.State?>()
 
     /**
-     * 采 [SWEEP_HOLD_MS] 毫秒的上限与当前频率。
+     * 左上角的「×」或返回：放弃本次编辑，把草稿丢掉。
      *
-     * 采上限节点而不是当前频率：上限不需要负载就会变，而频率没有负载时只会
-     * 停在下限，看了等于没看。
+     * 草稿只活在内存里，丢掉不会影响已保存的标记。
      */
-    private suspend fun sample(
-        capNode: String?,
-        curNode: String?,
-        value: Int,
-        onLive: (String) -> Unit = {},
-    ): SweepRow {
-        val caps = mutableListOf<Int>()
-        val curs = mutableListOf<Int>()
-        val deadline = System.currentTimeMillis() + SWEEP_HOLD_MS
-        // 协协取消靠 delay() 抛 CancellationException，不需要在这里查 isActive ——
-        // suspend 函数里也没有 CoroutineScope 接收者可用。
-        while (System.currentTimeMillis() < deadline) {
-            capNode?.let { Sysfs.read(it)?.trim()?.toIntOrNull()?.let(caps::add) }
-            curNode?.let { Sysfs.read(it)?.trim()?.toIntOrNull()?.let(curs::add) }
-            onLive(caps.capText())
-            delay(SWEEP_SAMPLE_MS)
+    fun discardEditing() {
+        pending.clear()
+        _state.value = _state.value.copy(editing = false)
+        refresh()
+    }
+
+    /** 右上角的「√」：把这次改过的项一次性写进去。 */
+    fun commitEditing() {
+        viewModelScope.launch {
+            pending.forEach { (key, state) -> container.labController.markManually(key, state) }
+            pending.clear()
+            _state.value = _state.value.copy(editing = false)
+            refresh()
         }
-        return SweepRow(
-            value = value,
-            capMin = caps.minOrNull(),
-            capMax = caps.maxOrNull(),
-            curMin = curs.minOrNull(),
-            curMax = curs.maxOrNull(),
-            samples = caps.size,
-        )
     }
 
     /** Release everything the lab holds and re-read the panel. */
     fun resetAll() {
         viewModelScope.launch {
-            val message = container.labController.reset()
-            _state.value = _state.value.copy(message = message)
+            val outcome = container.labController.reset()
+            _state.value = _state.value.copy(message = Failure(outcome.message, outcome.detail))
         }
     }
 
@@ -430,15 +367,35 @@ class LabViewModel(private val container: AppContainer) : ViewModel() {
 
     private fun updateItem(key: String, transform: (LabItemState) -> LabItemState) {
         _state.value = _state.value.copy(
-            groups = _state.value.groups.map { (category, items) ->
-                category to items.map { if (it.feature.key == key) transform(it) else it }
+            groups = _state.value.groups.map { (placement, items) ->
+                placement to items.map { if (it.feature.key == key) transform(it) else it }
             },
         )
     }
+
+    /**
+     * 离开页面就放掉本页持有的请求。
+     *
+     * **为什么必须有这个**：实验室的请求是 daemon UserService 发的、句柄存在
+     * DataStore 里，离开页面不会自动消失。原来三个 ViewModel 一个 onCleared
+     * 都没有，于是"长期保持"的请求在用户离开后继续压着频率，而两边界面都不报错 ——
+     * 正是"我设了却没用 / 设完又弹回去"那类故障的成因。
+     *
+     * `reset()` 同时放 lock 和温控档位（[LabController.reset]），
+     * 与 CPU 页「释放」撤的是同一套东西。
+     */
+    override fun onCleared() {
+        // onCleared 不在协程里，而 reset() 要跑 binder。用 applicationScope 之类
+        // 长寿命作用域会越过 ViewModel 寿命，所以这里起一个一次性的：
+        // ViewModel 已死，但释放必须跑完。
+        viewModelScope.launch {
+            runCatching { container.labController.reset() }
+                .onFailure { if (it is CancellationException) throw it }
+        }
+        super.onCleared()
+    }
 }
+
 
 private const val TAG = "Lab"
 
-/** 自动扫档的节奏：每档 8 秒、0.4 秒采一次。判据是上限节点，不需要负载。 */
-private const val SWEEP_HOLD_MS = 8_000
-private const val SWEEP_SAMPLE_MS = 400L

@@ -150,13 +150,15 @@
     <string name="touch_item_pointer_speed">指针速度</string>
     <string name="touch_item_pointer_speed_detail">调快光标跟随。开启后滑动会明显更灵敏。</string>
 
-    <string name="touch_item_render_vsync">渲染去同步</string>
-    <string name="touch_item_render_vsync_detail">渲染不等垂直同步，可能降低帧节奏延迟；可能增加发热和耗电。</string>
+    <string name="touch_item_render_vsync">不等垂直同步</string>
+    <string name="touch_item_render_vsync_detail">画面画完就交给屏幕，不等屏幕刷新节奏。操作到画面可能快一点，代价是画面可能撕裂、更耗电。</string>
 
-    <string name="touch_item_sf_latch">帧提交链</string>
-    <string name="touch_item_sf_latch_detail">调整帧提交与背压策略，可能降低帧节奏延迟。</string>
+    <string name="touch_item_sf_latch">帧提交不排队</string>
+    <string name="touch_item_sf_latch_detail">系统在排帧时不再等上一帧排好，新画面可能更快上屏；也可能造成轻微卡顿。</string>
 
     <string name="touch_items_heading">逐项调整</string>
+    <string name="touch_number_current">设备现在：%1$s</string>
+    <string name="touch_number_range">可填 %1$d–%2$d</string>
     <string name="touch_items_backend_note">当前触控方案不支持逐项控制，切换到默认方案后可逐项开关。</string>
     <string name="touch_item_state_on">已开启</string>
     <string name="touch_item_state_off">已关闭</string>
@@ -202,7 +204,6 @@
     <string name="backup_imported">已导入 %1$d 个方案</string>
     <string name="backup_imported_with_smart">已导入 %1$d 个方案；智算备份仅存档，恢复系统配置请进入智算平台备份</string>
     <string name="drift_result_heading">漂移结果</string>
-    <string name="touch_value_current">当前 %1$s</string>
     <string name="touch_value_unreadable">读不到当前值</string>
 
     <!-- ============ 频率请求的调度器配合项（实验） ============ -->
@@ -218,6 +219,10 @@
     <string name="freq_ceiling_both">限区间</string>
     <string name="freq_ceiling_floor_only">只保下限</string>
     <string name="freq_ceiling_only">只压上限</string>
+    <string name="freq_hard_limits_title">附带硬上下限</string>
+    <!-- 实测软硬等效后才默认关的。说清"换机型可能用得上"，别让人以为关了是残缺。 -->
+    <string name="freq_hard_limits_on">同时下发硬上下限（换机型时若只认硬限再开）</string>
+    <string name="freq_hard_limits_off">只发软上下限（本机实测已够）</string>
     <string name="freq_ceiling_hint">“限区间”把频率限制在选定范围内，低于系统默认值时用它。
 “只保下限”不限制最高频率，想突破系统默认上限时用它 —— 厂商的高性能场景就是只发下限。
 “只压上限”不抬下限，用于压住发热。</string>
@@ -228,32 +233,27 @@
     <string name="lab_raw_test">逐 ID 测试</string>
         <!-- 按功能域命名，不按当前所在页面：这一页讲的是"温控档位"，
              不属于"实验室"。将来这一页搬到哪儿，名字都不用改。 -->
-        <string name="policy_notes_title">这个档位实测效果</string>
-        <string name="policy_notes_open">档位说明</string>
-        <string name="policy_notes_loading">正在读各档位规则…</string>
-        <string name="policy_notes_empty">读不到档位说明。</string>
-        <string name="policy_notes_stale">读不到设备上的规则文件，下面是随包说明，可能已过时。</string>
         <!-- %1$d 是档位编号，补零成两位，和文件名里的编号一致。 -->
-        <string name="policy_notes_index">档位 %1$02d</string>
         <string name="battery_whitelist_title">电池优化白名单</string>
-    <string name="battery_whitelist_sub">加入后系统不会因为长期不用而冻结本软件。需要常驻的功能（按应用温控）依赖它。</string>
-    <string name="battery_whitelist_on">已加入</string>
-    <string name="battery_whitelist_off">未加入</string>
+    <string name="battery_whitelist_sub">加入后系统不会因为长时间不用而把它切掉。</string>
     <string name="battery_whitelist_unknown">读不到</string>
+    <string name="battery_whitelist_open">系统电池优化</string>
+    <string name="battery_whitelist_open_sub">弹出系统自带的电池优化授权，需要你点允许。</string>
         <string name="app_thermal_channel_name">按应用温控</string>
     <string name="app_thermal_title">按应用温控</string>
     <string name="app_thermal_sub">前台应用命中表里的规则时，切换到指定的温控策略。只在本软件运行时生效。</string>
-    <string name="app_thermal_enable">开启</string>
-    <string name="app_thermal_disable">关闭</string>
     <string name="app_thermal_running">运行中</string>
     <string name="app_thermal_empty">还没有规则。加一条：选应用 → 选温控策略。</string>
     <string name="app_thermal_add">添加规则</string>
     <string name="app_thermal_pick_app">选择应用</string>
     <string name="app_thermal_pick_index">温控策略</string>
     <string name="app_thermal_remove">删除</string>
-    <string name="app_thermal_app">应用</string>
     <string name="app_thermal_index">策略</string>
     <string name="app_thermal_note">系统自己也会给相机/游戏/跑分选策略，那部分会盖掉这里的设置；退出那些应用后自动还回。两边目标应用不重叠。</string>
+    <string name="app_thermal_need_shizuku">需要先授权 Shizuku</string>
+    <string name="app_thermal_no_indices">读不到温控策略，先确认 Shizuku 已授权</string>
+    <string name="app_thermal_need_app">先选应用</string>
+    <string name="app_thermal_no_path">读不到这个应用的安装路径，请重新选</string>
     <string name="lab_reset">恢复</string>
     <string name="lab_clear_observations">清空全部记录</string>
     <string name="lab_hold_long">长期保持</string>
@@ -275,7 +275,6 @@
     <string name="drift_found">监测期间有 %1$d 项被外部改动：</string>
     <string name="drift_restart_hint">说明：debug.* 开头的属性不跨重启，重启即可恢复；其余是系统设置，重启也会保留。</string>
     <string name="trial_state_untried">未试用</string>
-    <string name="trial_state_pending">已开启，待观察</string>
     <string name="trial_state_worked">有变化</string>
     <string name="trial_state_no_effect">没变化</string>
     <string name="trial_state_unsure">看不出</string>
@@ -289,7 +288,6 @@
     <string name="trial_hint_charge_limit">插上电，看电量是否停在设定值不再上升。</string>
     <string name="trial_hint_hawkeye">打开游戏，看画面是否更锐。</string>
     <string name="trial_hint_touch_boost">进游戏快速滑动，看跟手程度有没有变化。</string>
-    <string name="trial_hint_touch">在桌面上快速滑动，看跟手程度。</string>
     <string name="trial_hint_animation">打开和关闭应用，看动画快慢。</string>
     <string name="trial_hint_preload">重新打开常用应用，看启动快慢。</string>
     <string name="trial_hint_memory">切换多个应用，看后台保留情况。</string>
@@ -343,8 +341,6 @@
     <string name="export_baseline_ok">已记录 · %1$s</string>
     <string name="export_baseline_missing">尚未记录</string>
 
-    <string name="export_adaptation_title">适配报告</string>
-    <string name="export_adaptation_sub">设备信息与功能逐项结果。体积小，任何时候都能导。</string>
 
     <string name="export_record_title">问题录制</string>
     <string name="export_record_idle">开始录制后复现问题，回来结束并导出。</string>
@@ -367,8 +363,6 @@
     <string name="export_share">分享</string>
     <string name="export_save">保存到文件</string>
     <string name="export_copy_path">复制路径</string>
-    <string name="export_copied">路径已复制</string>
-    <string name="export_need_one">至少选择一项</string>
     <string name="action_got_it">知道了</string>
 
     <!-- ============ 归档 ============ -->
@@ -388,7 +382,6 @@
     <string name="profile_empty_title">还没有方案</string>
     <string name="profile_empty_sub">保存一套频率与温控设置，点一下切过去。</string>
     <string name="profile_create_examples">创建示例方案</string>
-    <string name="profile_add">新建方案</string>
     <!-- 内建的"回到没有任何 App 限制"的那一项。不是用户建的方案，删不掉。 -->
     <string name="profile_default">默认</string>
 
@@ -399,7 +392,6 @@
     <string name="backup_cat_profiles">方案</string>
     <string name="backup_cat_preferences">应用偏好</string>
     <string name="backup_cat_smart">厂商配置备份</string>
-    <string name="backup_cat_smart_note">只在同机型上有意义</string>
     <string name="thermal_detail_show">显示详细参数</string>
     <string name="thermal_detail_hide">收起详细参数</string>
     <string name="tab_swipe_title">拖底栏松手后</string>
@@ -524,8 +516,6 @@
     <string name="action_rename">重命名</string>
     <!-- 一次性结果的共用提示。设置项改完、开关切换成功都用它 ——
          同一句散在多处就会各写各的，改一处漏三处。 -->
-    <string name="result_saved">已保存</string>
-    <string name="result_done">完成</string>
     <string name="home_reset_cards">恢复默认</string>
     <string name="home_tests_summary">接口验证、配置采集与测试报告</string>
     <string name="home_open_tests">打开测试中心</string>
@@ -554,6 +544,8 @@
     <string name="cpu_no_clusters_title">未检测到 CPU 簇</string>
     <string name="cpu_no_clusters_body">设备上没有找到频率策略目录。</string>
     <string name="cpu_range_title">频率区间</string>
+    <!-- %1$s = 形如 "40/42/45/48/60/80 °C" 的阈值串 -->
+    <string name="cpu_thermal_skin">当前皮肤温控阈值 %1$s</string>
     <string name="cpu_thermal_badge">温控 %1$02d</string>
     <string name="cpu_thermal_badge_none">温控未选</string>
     <string name="cpu_pending_suffix">（未应用）</string>
@@ -699,6 +691,9 @@
     <string name="tweak_touch_close_first">请先关闭触控优化，再切换实现方案</string>
     <string name="tweak_touch_no_vivo">未检测到有效 vivo 触控能力，请先授权 Shizuku</string>
     <string name="tweak_touch_no_per_item">当前触控方案不支持逐项控制，请切换到默认方案</string>
+    <string name="tweak_touch_no_field">这一项没有可填的数值</string>
+    <string name="tweak_touch_out_of_range">只能填 %1$d–%2$d</string>
+    <string name="tweak_touch_value_saved">已记下，开启这一项时生效</string>
     <string name="tweak_need_shizuku">需要先授权 Shizuku</string>
     <string name="tweak_mode_changed">已改为%1$s</string>
     <string name="tweak_companion_on">已开启%1$s</string>
@@ -723,21 +718,21 @@
 
     <!-- ============ 前台会话与前台任务的通知 ============
          服务本身就是通知的展示边界，按 wording.md 在这里读资源。 -->
-    <string name="ax_session_channel">显示与触控</string>
-    <string name="ax_session_running">显示与触控请求运行中</string>
-    <string name="ax_session_stop_hint">点击停止可释放请求</string>
-    <string name="ax_session_idle">未运行</string>
-    <string name="ax_session_active">请求中</string>
-    <string name="ax_session_stopped">已停止请求</string>
-    <string name="ax_session_failed">请求失败</string>
-    <string name="ax_session_shizuku_lost">Shizuku 已断开，请重新连接后关闭请求</string>
-    <string name="ax_session_interrupted">请求中断，请关闭后重试</string>
-    <string name="ax_task_channel">应用维护</string>
-    <string name="ax_task_running">应用维护中</string>
-    <string name="ax_task_hint">可离开页面；任务限时执行</string>
-    <string name="ax_task_working">处理中</string>
-    <string name="ax_task_interrupted">任务中断；系统编译可能仍在收尾，请稍后查看日志</string>
-    <string name="ax_task_idle">尚未运行</string>
+    <string name="display_session_channel">显示与触控</string>
+    <string name="display_session_running">显示与触控请求运行中</string>
+    <string name="display_session_stop_hint">点击停止可释放请求</string>
+    <string name="display_session_idle">未运行</string>
+    <string name="display_session_active">请求中</string>
+    <string name="display_session_stopped">已停止请求</string>
+    <string name="display_session_failed">请求失败</string>
+    <string name="display_session_shizuku_lost">Shizuku 已断开，请重新连接后关闭请求</string>
+    <string name="display_session_interrupted">请求中断，请关闭后重试</string>
+    <string name="maintenance_channel">应用维护</string>
+    <string name="maintenance_running">应用维护中</string>
+    <string name="maintenance_hint">可离开页面；任务限时执行</string>
+    <string name="maintenance_working">处理中</string>
+    <string name="maintenance_interrupted">任务中断；系统编译可能仍在收尾，请稍后查看日志</string>
+    <string name="maintenance_idle">尚未运行</string>
 
     <!-- ============ PowerHAL 与请求句柄的结论 ============
          这几条会经 CpuControl 传到界面，所以进资源。 -->
@@ -755,6 +750,8 @@
     <!-- 嵌套：%1$s 是底层释放请求的结论。 -->
     <string name="lock_release_previous_failed">无法释放上一次请求:%1$s</string>
     <string name="lock_accepted">请求已接受</string>
+    <!-- 旧请求已释放、新请求没拿到、已把上一份放回去。用户原来的设置还在。 -->
+    <string name="lock_apply_failed_restored">本次设置未生效，已保留原设置</string>
     <string name="lock_released">已释放</string>
     <string name="lock_no_test_handler">无测试句柄</string>
     <string name="lock_no_recorded_request">没有已记录的请求</string>
@@ -803,6 +800,9 @@
     <string name="cpu_verify_summary_conflict">请求已发送，实际范围冲突</string>
     <string name="cpu_poll_exception">轮询异常: %1$s</string>
     <string name="cpu_governor_done">调速器已切换</string>
+    <!-- 温控档位摘要：现读现解设备上的 thermal_policy_NN.conf，不随包静态说明。 -->
+    <string name="lab_brief_loading">正在读这一档的规则…</string>
+    <string name="lab_thermal_selected">第 %1$d 档的规则</string>
     <string name="lab_released_all">已释放实验室的所有请求</string>
     <string name="cpu_governor_all_failed">调速器切换失败:节点不可写,需要 root</string>
     <string name="cpu_governor_partial">调速器部分失败:%1$s 不可写</string>
@@ -833,7 +833,7 @@
     <string name="tweak_refreshed">已刷新配置状态</string>
     <string name="tweak_inspect_empty">未取得检测结果，请检查授权或稍后重试</string>
     <string name="tweak_inspect_done">只读检测完成；配置存在不代表引擎生效</string>
-    <!-- 应用维护任务的标题。是否成功由 AxTaskState.ok 决定，界面不认协议前缀。 -->
+    <!-- 应用维护任务的标题。是否成功由 MaintenanceState.ok 决定，界面不认协议前缀。 -->
     <string name="tweaks_task_running">任务进行中</string>
     <string name="tweaks_task_failed">任务未完成</string>
     <string name="tweaks_task_status">任务状态</string>
@@ -917,7 +917,6 @@
     <string name="app_startup">%1$s %2$s (build %3$d) 启动</string>
     <string name="gauge_ceiling">上限 %1$s</string>
     <string name="value_dash_short">—</string>
-    <string name="phase_restore_failed_marker">失败</string>
     <string name="tweak_touch_item_on">开</string>
     <string name="tweak_touch_item_off">关</string>
     <!-- CPU 页：调频不可用的原因与方案保存。 -->
@@ -987,7 +986,6 @@
     <string name="metric_missing">%1$s 不存在或为空</string>
     <string name="metric_hint_root">需要 root 权限</string>
     <string name="metric_dumpsys_failed">dumpsys thermalservice 失败：%1$s</string>
-    <string name="metric_dumpsys_exit">退出码 %1$d</string>
     <string name="metric_no_probe">thermalservice 没有返回任何温度探头</string>
     <string name="metric_gpu_unread">读不到 GPU 频率。需要 root 权限</string>
     <string name="metric_ddr_caveat">%1$s。读不到不代表内存带宽没有变化</string>
@@ -1361,4 +1359,438 @@
     <string name="touch_backend_vivo">vivo 触控服务（实验）</string>
     <string name="brightness_backend_legacy">亮度值恢复</string>
     <string name="brightness_backend_vivo">vivo 亮度策略（实验）</string>
+
+    <!-- ============ 实验室条目文案 ============
+         19 个 LabFeature 的 label / description / danger。
+         命名 lab_<key>_label|desc|danger，key 就是 LabFeature.key。
+
+         这些文案以前是 LabFeature.kt 里的字面量：它们是**给用户看的**，
+         只是恰好写在数据层。搬进来之后 check_strings.py 看得见、
+         措辞可以 review，和别的界面文案同一套规矩。
+    -->
+    <string name="lab_row_merged">%1$s（%2$d 项）</string>
+    <string name="lab_uclamp_ta_label">前台应用 uclamp 下限</string>
+    <string name="lab_uclamp_ta_desc">调高后前台应用更容易拿到高性能核心。</string>
+    <string name="lab_uclamp_fg_label">可见应用 uclamp 下限</string>
+    <string name="lab_uclamp_fg_desc">与上一项同机制，作用于所有可见应用。</string>
+    <string name="lab_fpsgo_enable_label">FPSGO 总开关</string>
+    <string name="lab_fpsgo_enable_desc">帧率与调度协调器，关掉会改变整机调度。</string>
+    <string name="lab_fpsgo_enable_danger">影响整机调度，关掉后行为不可预测。</string>
+    <string name="lab_fpsgo_thrm_label">FPSGO 温控联动</string>
+    <string name="lab_fpsgo_thrm_desc">部分机型上关闭它可改善未发热时的掉帧。</string>
+    <string name="lab_tchbst_enable_label">触控加速</string>
+    <string name="lab_tchbst_enable_desc">触摸时临时提高频率上限。</string>
+    <string name="lab_tchbst_opp_label">触控加速档位</string>
+    <string name="lab_tchbst_opp_desc">触摸后提到哪一档。</string>
+    <string name="lab_tchbst_eas_label">触控加速 EAS 权重</string>
+    <string name="lab_tchbst_eas_desc">触摸时给调度器的负载加权。</string>
+    <string name="lab_tchbst_duration_label">触控加速时长</string>
+    <string name="lab_tchbst_duration_desc">值的单位因平台而异，请先看只读面板确认量级。</string>
+    <string name="lab_tchbst_duration_danger">单位不确定。填错量级会让触控加速永不结束或完全失效。</string>
+    <string name="lab_syslimiter_label">系统总频率上限</string>
+    <string name="lab_syslimiter_desc">厂商的总上限，叠在其他限制之上。-1 表示不限制。</string>
+    <string name="lab_cci_mode_label">CCI 互连模式</string>
+    <string name="lab_cci_mode_desc">互连总线的模式开关。提供更低的跨簇延迟，代价是耗电。</string>
+    <string name="lab_dram_opp_label">DRAM OPP 下限</string>
+    <string name="lab_dram_opp_desc">内存带宽档位下限。方向上各来源说法不一，请先在只读面板观察取值。</string>
+    <string name="lab_dram_opp_danger">方向和量级都未在本机验证。</string>
+    <string name="lab_core_min_label">每簇最少在线核心</string>
+    <string name="lab_core_min_desc">每簇至少保持多少个核心在线。比限频省电得多。</string>
+    <string name="lab_core_max_label">每簇最多在线核心</string>
+    <string name="lab_core_max_desc">每簇最多允许多少个核心在线。</string>
+    <string name="lab_core_max_danger">设得过低会让前台应用缺核。</string>
+    <string name="lab_core_online_label">单个核心开关</string>
+    <string name="lab_core_online_desc">**逐个核心**开关(cpu0…cpu7)。开=允许上线,关=下线该核。
+
+与上面的「每簇最少/最多在线核心」不是一回事:那两个是**数量**约束、只在同一个内核真的做热插拔时才有意义;这里是**指定哪一个核**。
+
+偏移约定未在本机验证过(`_CPU_n` 这一族的第一格是「整簇」而非 cpu0,所以 cpu0 从 +0x100 起)。读回看 `affected_cpus` —— 核下线后它会从列表里消失。</string>
+    <string name="lab_core_online_danger">下线前台需要的核会造成卡顿。</string>
+    <string name="lab_core_pause_label">逐核暂停调度</string>
+    <string name="lab_core_pause_desc">核仍在线，但不再分配任务。</string>
+    <string name="lab_core_pause_danger">暂停的核不参与调度，前台任务可能缺核。</string>
+    <string name="lab_thermal_policy_label">温控策略索引</string>
+    <string name="lab_thermal_policy_desc">加载 /vendor/etc/thermal/ 下的策略文件。</string>
+    <string name="lab_thermal_policy_danger">会改变整机温控行为，部分策略让设备明显更热。</string>
+    <string name="lab_perf_mode_label">性能模式(全核满频)</string>
+    <string name="lab_perf_mode_desc">把所有簇的下限顶到最高频并全核在线。</string>
+    <string name="lab_perf_mode_danger">会覆盖性能页的频率范围设置，功耗和发热显著上升。</string>
+    <string name="lab_hard_limit_max_label">硬上限(每簇)</string>
+    <string name="lab_hard_limit_max_desc">独立的硬上限，实测与软上限等效。</string>
+    <string name="lab_hard_limit_max_danger">会压过温控保护。</string>
+    <string name="lab_syslimiter_disable_label">关闭系统总上限</string>
+    <string name="lab_syslimiter_disable_desc">移除厂商的总上限。</string>
+    <string name="lab_syslimiter_disable_danger">会移除功耗与温控保护。</string>
+
+    <!-- ============ 从代码字面量迁移的界面文案 ============
+         原来散在各层代码里，现在统一进资源：检查器看得见、措辞可以 review、
+         以后要加语言也只动这一处。设备原文与协议标识不在此列。
+    -->
+    <!-- strings_cpu.xml -->
+<string name="cpu_tests_full_compare_title">开始完整对照测试</string>
+    <string name="cpu_tests_full_compare_body">约 2 分钟，请留在本页。结束自动保存报告，可随时停止。</string>
+    <string name="cpu_tests_start_record">开始记录</string>
+    <string name="cpu_tests_mode_rom_body">只读采集，不写频率、不改温控。通常数秒。</string>
+    <string name="cpu_tests_mode_generic_body">测试当前选定的范围，结束后尝试恢复。</string>
+    <string name="cpu_tests_start_test">开始测试</string>
+    <string name="cpu_tests_collect_title">适配数据采集</string>
+    <string name="cpu_tests_collect_desc">只读采集这台 ROM 的性能接口与实现文件，不修改频率或温控。适配新机型时用。</string>
+    <string name="cpu_tests_release_hint">开始前先释放 CPU 设置。</string>
+    <string name="cpu_tests_release">释放 CPU 设置</string>
+    <string name="cpu_tests_collect_snapshot">采集接口快照（文本）</string>
+    <string name="cpu_tests_collect_files">采集实现文件（ZIP）</string>
+    <string name="cpu_tests_export_zip">导出 ZIP 实现包</string>
+    <string name="cpu_tests_recording_title">正在记录</string>
+    <string name="cpu_tests_stop">停止并清理请求</string>
+    <string name="cpu_tests_feature_trial_title">功能逐个试用</string>
+    <string name="cpu_tests_feature_trial_desc">一次只开一项，由你判断有没有变化。判定和键值一起导出，适配新机型直接用。</string>
+    <string name="cpu_tests_open_feature_trial">进入功能试用</string>
+    <string name="cpu_tests_report_title">测试报告</string>
+    <string name="cpu_tests_report_desc">结束后自动保存在应用内。导出到本地文件可长期保留。</string>
+    <string name="cpu_tests_no_report">暂无报告</string>
+    <string name="cpu_tests_clip_label">测试报告</string>
+    <string name="cpu_tests_copy_report">复制报告</string>
+    <string name="cpu_tests_export_txt">导出 TXT 报告</string>
+    <string name="cpu_tests_collapse_preview">收起预览</string>
+    <string name="cpu_tests_view_tail">查看报告末尾</string>
+    <string name="cpu_tests_legacy_title">历史测试</string>
+    <string name="cpu_tests_legacy_desc">旧版排查项目，日常使用无需运行。展开后选择参数与测试。</string>
+    <string name="cpu_tests_legacy_collapse">收起历史测试</string>
+    <string name="cpu_tests_legacy_expand">展开历史测试</string>
+    <string name="cpu_tests_freq_range">%1$s，%2$d–%3$d MHz</string>
+    <string name="cpu_tests_range_note">范围仅供历史测试使用，不会自动应用。</string>
+    <string name="cpu_tests_full_load_compare">完整负载对照</string>
+    <string name="cpu_probe_open_target_failed">无法打开目标文件</string>
+    <string name="cpu_probe_export_done">报告已导出</string>
+    <string name="cpu_probe_export_failed">导出失败：%1$s</string>
+    <string name="cpu_probe_finding_files">查找实现文件…</string>
+    <string name="cpu_probe_stage_read_impl">读取 %1$d/%2$d：%3$s</string>
+    <string name="cpu_probe_zip_verify_failed">ZIP 校验失败：%1$s</string>
+    <string name="cpu_probe_zip_save_failed">保存 ZIP 失败</string>
+    <string name="cpu_probe_impl_saved">已保存 %1$d/%2$d 项，请导出实现包 ZIP；失败项见清单。</string>
+    <string name="cpu_probe_impl_cancelled">已取消，未生成完整实现包</string>
+    <string name="cpu_probe_save_failed">保存失败：%1$s</string>
+    <string name="cpu_probe_need_two_endpoints">请选择两个不同的频率端点后开始完整测试</string>
+    <string name="cpu_probe_recording_note">记录中，结束或停止后自动保存</string>
+    <string name="cpu_probe_stage_rom">读取接口与配置；无需相机和负载</string>
+    <string name="cpu_probe_stage_phase">阶段 %1$d/%2$d：%3$s</string>
+    <string name="cpu_probe_thermal_severe">系统报告严重热状态，停止负载测试并恢复</string>
+    <string name="cpu_probe_stage_cooldown">间隔静置 15 秒（不保证已冷却）</string>
+    <string name="cpu_probe_mkdir_failed">无法创建报告目录</string>
+    <string name="cpu_probe_autosave_ok">已自动保存到应用本地：%1$s（卸载会删除，请导出保留）</string>
+    <string name="cpu_probe_autosave_failed">自动保存失败：%1$s，请复制或导出</string>
+    <string name="cpu_probe_loaded_last">已载入上次自动保存的报告</string>
+    <!-- strings_data_misc.xml -->
+<string name="lab_state_untested">未测试</string>
+<string name="lab_state_working">生效</string>
+<string name="lab_state_no_effect">未见效</string>
+<string name="lab_state_unsupported">本机不支持</string>
+<string name="lab_state_unknown">无法判断</string>
+<string name="lab_probe_section_limiter">谁在限制</string>
+<string name="lab_probe_section_limiter_note">硬限范围 vs 当前范围；仅用于判断是否被压，不是当前读数</string>
+<string name="lab_probe_section_enforced">当前生效的限制</string>
+<string name="lab_probe_section_enforced_note">内核实际在执行的,不是我们请求的</string>
+<string name="lab_probe_section_uclamp">调度 (uclamp)</string>
+<string name="lab_probe_section_uclamp_note">0-100。作用于整个任务组,不是单个应用</string>
+<string name="lab_probe_section_platform">平台限制器</string>
+<string name="lab_probe_section_platform_note">厂商自己的上限,叠在我们的限制之上</string>
+<string name="lab_probe_section_thermal">温控</string>
+<string name="lab_probe_section_thermal_note">只读;写温控策略需要替换加密的厂商策略文件,本应用不做</string>
+<string name="lab_probe_section_touch">触控加速</string>
+<string name="lab_probe_section_touch_note">触摸时写入，系统自己也会改</string>
+<string name="lab_probe_label_limit_lowered">%1$s 上限被压低</string>
+<string name="lab_probe_label_limit_lifted">%1$s 下限被抬高</string>
+<string name="lab_probe_label_power_save">省电模式</string>
+<string name="lab_probe_label_thermal_status">热状态</string>
+<string name="lab_probe_label_battery">电池</string>
+<string name="lab_probe_label_cluster_min">%1$s 下限</string>
+<string name="lab_probe_label_cluster_max">%1$s 上限</string>
+<string name="lab_probe_label_cluster_cur">%1$s 当前</string>
+<string name="lab_probe_label_uclamp_min">%1$s · 下限</string>
+<string name="lab_probe_label_uclamp_max">%1$s · 上限</string>
+<string name="lab_probe_label_syslimiter">系统总频率上限</string>
+<string name="lab_probe_label_boost_ctrl">加速控制器</string>
+<string name="lab_probe_label_fpsgo_max">FPSGO 帧率上限</string>
+<string name="lab_probe_label_fpsgo_min">FPSGO 帧率下限</string>
+<string name="lab_probe_label_thermal_policy">温控策略索引</string>
+<string name="lab_probe_label_touch_state">触控加速状态</string>
+<string name="lab_probe_label_cci_mode">CCI 模式</string>
+<string name="lab_probe_note_lowered">上限低于硬件 —— 有东西在压它</string>
+<string name="lab_probe_note_lifted">下限高于硬件 —— 有东西钉着它</string>
+<string name="lab_probe_note_battery">低电量时系统和厂商的省电逻辑都会压频率</string>
+<string name="lab_probe_value_limit_none">无(可到 %1$sMHz)</string>
+<string name="lab_probe_value_limit_drop">%1$sMHz(硬件 %2$s / 当前 %3$s)</string>
+<string name="lab_probe_value_limit_lift">+%1$sMHz(硬件 %2$s / 当前 %3$s)</string>
+<string name="lab_probe_value_power_save_on">开 —— 系统会主动压频率</string>
+<string name="lab_probe_value_off">关</string>
+<string name="lab_probe_value_battery_charging">%1$d%% · 充电中</string>
+<string name="lab_probe_value_battery_idle">%1$d%% · 未充电</string>
+<string name="lab_probe_thermal_none">NONE · 正常</string>
+<string name="lab_probe_thermal_light">LIGHT · 轻微</string>
+<string name="lab_probe_thermal_moderate">MODERATE · 中度</string>
+<string name="lab_probe_thermal_severe">SEVERE · 严重</string>
+<string name="lab_probe_thermal_critical">CRITICAL · 临界</string>
+<string name="lab_probe_thermal_emergency">EMERGENCY · 紧急</string>
+<string name="lab_probe_thermal_shutdown">SHUTDOWN · 即将关机</string>
+<string name="lab_probe_thermal_unknown">未知(%1$d)</string>
+<string name="tweaks_vivo_describe_failed">读取失败，请检查 Shizuku</string>
+<string name="tweaks_vivo_describe_saved">已保存原值，%1$s</string>
+<string name="tweaks_vivo_describe_missing">本机未提供所需配置</string>
+<string name="tweaks_vivo_describe_current">当前配置：%1$s</string>
+<string name="tweaks_vivo_gate_pkg_missing">未安装 %1$s</string>
+<string name="tweaks_vivo_gate_prop_mismatch">%1$s=%2$s，需要 %3$s</string>
+<string name="tweaks_vivo_gate_keys_missing">本机没有 %1$s</string>
+<string name="tweaks_vivo_need_shizuku_initial">请先授权 Shizuku，再保存初始状态</string>
+<string name="tweaks_vivo_no_config_backup">未读到配置，未生成备份，请重新连接 Shizuku 后重试</string>
+<string name="tweaks_vivo_save_initial_failed">保存初始备份失败</string>
+<string name="tweaks_vivo_save_import_failed">保存导入档案失败</string>
+<string name="tweaks_vivo_restore_need_shizuku">恢复需要 Shizuku 授权</string>
+<string name="tweaks_vivo_no_restorable_backup">没有可恢复的备份</string>
+<string name="tweaks_vivo_restore_preload_first">请先恢复 AI 预加载，避免覆盖其配置</string>
+<string name="tweaks_vivo_save_previous_failed">保存恢复前状态失败</string>
+<string name="tweaks_game_boost_status_no_app">未选择应用</string>
+<string name="tweaks_game_boost_standby_bucket">待机分桶=</string>
+<string name="tweaks_game_boost_unreadable">读不到</string>
+<string name="tweaks_game_boost_doze_prefix"> · Doze 白名单=</string>
+<string name="tweaks_game_boost_doze_in">已加入</string>
+<string name="tweaks_game_boost_doze_out">未加入</string>
+<string name="tweaks_game_boost_driver_prefix"> · Game Driver=</string>
+<string name="tweaks_game_boost_driver_in">已在列表</string>
+<string name="tweaks_game_boost_driver_out">未在列表</string>
+<string name="tweaks_game_boost_step_bucket">待机分桶</string>
+<string name="tweaks_game_boost_step_doze">deviceidle 白名单</string>
+<string name="tweaks_game_boost_step_cleanup">恢复快照清理</string>
+<string name="tweaks_game_boost_no_output">无输出</string>
+<string name="tweaks_game_boost_no_service">命令没能送到用户服务，请确认 Shizuku 已连接</string>
+<string name="tweaks_state_backup_keys">%1$d 个键</string>
+<string name="tweaks_state_backup_owners">，来自 %1$d 项功能</string>
+<string name="tweaks_state_backup_time">取自 %1$s</string>
+<string name="tweaks_state_backup_device">备份时设备 %1$s</string>
+<string name="lab_verdict_node_absent">节点不存在：%1$s</string>
+<string name="lab_verdict_no_resources">没有可下发的资源(缺少簇信息?)</string>
+<string name="lab_verdict_rejected">下发被拒绝: %1$s</string>
+<string name="lab_verdict_no_readback">已下发，但没有可读回的节点，无法判断是否生效。</string>
+<string name="lab_verdict_readback_failed">读回失败</string>
+<string name="lab_verdict_already_target">节点已是目标值(%1$s)</string>
+<string name="lab_verdict_unchanged">节点无变化，仍是 "%1$s"。</string>
+<string name="lab_verdict_working">节点 \"%1$s\" → \"%2$s\",已生效</string>
+<string name="lab_verdict_no_ids">没有勾选任何 ID</string>
+<string name="lab_verdict_all_invalid">%1$d 个 ID 全部无效 —— 节点仍是 "%2$s"</string>
+<string name="lab_verdict_changed">节点 \"%1$s\" → \"%2$s\"</string>
+    <!-- strings_feature_rest.xml -->
+<string name="about_version_line">versionCode %1$d，%2$s</string>
+<string name="app_thermal_foreground">当前前台：%1$s</string>
+<string name="app_thermal_rules_title">规则表</string>
+<string name="app_thermal_more_indices">还有 %1$d 个编号，含义见「性能 → 高级设置 → 温控档位」。</string>
+<string name="app_thermal_add_confirm">添加</string>
+<string name="app_thermal_notification_starting">启动中</string>
+<string name="app_thermal_notification_none">未应用策略</string>
+<string name="app_thermal_notification_applied">%1$s，温控策略 %2$d</string>
+    <!-- strings_lab.xml -->
+<string name="lab_intro">这里的功能尚未在本机验证。每一项都会读回系统状态，直接告诉你有没有生效。</string>
+    <string name="lab_freq_unavailable">调频服务当前不可用，写入不会成功。</string>
+    <string name="lab_live_thermal_row">当前生效 %1$d（%2$s）</string>
+    <string name="lab_risk_high">高风险</string>
+    <string name="lab_badge_absent">本机没有</string>
+    <string name="lab_risk_badge">风险 %1$s</string>
+    <string name="lab_unsupported_body">本机没有这一项，功能不可用。</string>
+    <string name="lab_hold_on_desc">一直生效，直到用「恢复全部」撤销</string>
+    <string name="lab_hold_off_desc">20 秒后自动撤销</string>
+    <string name="lab_testing">测试中…</string>
+    <string name="lab_test">测试</string>
+    <string name="lab_on">开</string>
+    <string name="lab_off">关</string>
+    <string name="lab_target_value">目标值</string>
+    <string name="lab_merge_note">同一个机制 · %1$d 项</string>
+    <string name="lab_panel_intro">系统实际在执行的限制。这个页面不做任何写入。</string>
+    <string name="lab_panel_readings">读到 %1$d/%2$d 项</string>
+    <string name="lab_refresh">刷新</string>
+    <string name="lab_panel_footer">只读，不代表控件可用。详情页里能改的项目以读回结果为准。</string>
+    <string name="lab_absent">不存在</string>
+    <string name="lab_raw_intro">发一个 ID 看系统怎么响应。发送前先读回，读不到就不发。</string>
+    <string name="lab_raw_cluster">簇</string>
+    <string name="lab_raw_cluster_chip">%1$s，%2$d核</string>
+    <string name="lab_raw_cluster_info">index=%1$d，可用 %2$d 档，范围 %3$d-%4$dMHz</string>
+    <string name="lab_raw_send_ids">要发送的 ID</string>
+    <string name="lab_raw_units_hint">单位 kHz。先只勾一个,单独测出每个 ID 的作用,再组合。</string>
+    <string name="lab_raw_hold_on">永久有效,必须手动撤销</string>
+    <string name="lab_raw_hold_off">20 秒后自动失效</string>
+    <string name="lab_raw_sending">发送中…</string>
+    <string name="lab_raw_send">发送并读回</string>
+    <string name="lab_raw_release">释放(撤销本次下发)</string>
+    <string name="lab_raw_no_ids">没有勾选任何 ID</string>
+    <string name="lab_raw_row_min">MIN 软下限</string>
+    <string name="lab_raw_row_max">MAX 软上限</string>
+    <string name="lab_raw_row_hard_min">MIN_HL 硬下限</string>
+    <string name="lab_raw_row_hard_max">MAX_HL 硬上限</string>
+    <string name="lab_raw_node_min">下限</string>
+    <string name="lab_raw_node_max">上限</string>
+    <!-- strings_priv_cpu.xml -->
+<string name="priv_shizuku_denied">Shizuku 权限被拒绝</string>
+    <string name="priv_shizuku_service_gone">Shizuku 服务已断开</string>
+    <string name="priv_service_gone">提权服务已断开</string>
+    <string name="priv_shizuku_pre_v11">Shizuku 版本过旧,请升级到 v11 以上</string>
+    <string name="priv_shizuku_too_old_retry">Shizuku 版本过旧，请升级后重试</string>
+    <string name="priv_shizuku_not_running">Shizuku 未运行,请先启动 Shizuku</string>
+    <string name="priv_auth_request_failed">授权请求失败，请在 Shizuku 中检查本应用权限：%1$s</string>
+    <string name="priv_bind_failed">绑定提权服务失败: %1$s</string>
+    <string name="priv_shortcut_page">系统页面</string>
+    <string name="priv_shortcut_dialer">拨号盘</string>
+    <!-- strings_tweaks.xml -->
+<!-- feature/tweaks：调校页导航（TuningScreen.kt） -->
+    <string name="tweaks_tuning_title">调校</string>
+    <string name="tweaks_section_system">系统配置</string>
+    <string name="tweaks_nav_smart_sub">状态读取、实验配置与备份恢复</string>
+    <string name="tweaks_nav_display_sub">刷新率、亮度、触控与画面</string>
+    <string name="tweaks_nav_config_sub">可恢复配置、动画与私人 DNS</string>
+    <string name="tweaks_nav_maintenance_sub">编译优化与充电预热</string>
+    <string name="tweaks_nav_game_sub">帧率解锁、后台放开、画面时序与假电量</string>
+    <string name="tweaks_nav_status_sub">温度、GPU、DDR、内存实时读数，以及系统页面直达</string>
+
+    <!-- feature/tweaks：配置项取值控件（FeatureOptionEditor.kt） -->
+    <string name="tweaks_abe_restrict">限制调度</string>
+    <string name="tweaks_abe_balanced">官方均衡</string>
+    <string name="tweaks_perf_enhanced">增强</string>
+    <string name="tweaks_option_on">开启</string>
+    <string name="tweaks_option_off">关闭</string>
+
+    <!-- feature/tweaks：设置行控件与报告入口（TweakControls.kt） -->
+    <string name="tweaks_anim_system_default">系统默认，未设置</string>
+    <string name="tweaks_anim_current">当前 %1$s×</string>
+    <string name="tweaks_value_not_read">未读取</string>
+    <string name="tweaks_anim_standard">标准 1×</string>
+    <string name="tweaks_experiment_waiting">已等待 %1$d 秒，含写入和恢复核对</string>
+    <string name="tweaks_experiment_returned">结果已返回，正在刷新配置并保存报告…</string>
+    <string name="tweaks_experiment_start">测试 20 秒</string>
+    <string name="tweaks_htp_preset_low">预设 0，50°C</string>
+    <string name="tweaks_htp_preset_medium">预设 1，48°C</string>
+    <string name="tweaks_htp_preset_high">预设 2，43°C</string>
+    <string name="tweaks_htp_backup_test">备份并测试</string>
+    <string name="tweaks_unavailable_status">暂不可控制</string>
+    <string name="tweaks_report_section">诊断报告</string>
+    <string name="tweaks_report_generate">生成报告</string>
+    <string name="tweaks_report_generate_sub">当前配置、恢复快照、操作记录及服务摘要</string>
+    <string name="tweaks_report_info">生成后自动保存在应用内，复制和导出用最近一次生成的内容。</string>
+    <string name="tweaks_clip_label">调校报告</string>
+
+    <!-- feature/tweaks：功能逐个试用（FeatureTrialScreen.kt） -->
+    <string name="tweaks_trial_section_all">全部功能</string>
+    <string name="tweaks_trial_section_export">导出</string>
+    <string name="tweaks_trial_clear_sub">清掉本机所有试用判定</string>
+    <string name="tweaks_trial_backup_file_prefix">mtk-god-状态备份</string>
+    <string name="tweaks_trial_report_title">试用报告</string>
+    <string name="tweaks_trial_report_empty">报告是空的，请先点上面的导出收集。</string>
+    <string name="tweaks_trial_report_save">存成文件</string>
+    <string name="tweaks_trial_clear_title">清空试用记录</string>
+    <string name="tweaks_trial_clear_body">只清判定记录，不动系统里已写入的值。已开启的功能请先逐项恢复原值。</string>
+    <string name="tweaks_trial_restore_compare">备份 %1$s → 当前 %2$s</string>
+    <string name="tweaks_trial_last_ok">上次试用：写入成功，%1$s</string>
+    <string name="tweaks_trial_last_fail">上次试用：写入失败，%1$s</string>
+
+    <!-- feature/tweaks：试用的状态与动作（FeatureTrialViewModel.kt） -->
+    <string name="tweaks_trial_msg_writing">正在写入…</string>
+    <string name="tweaks_trial_msg_restoring">正在恢复…</string>
+    <string name="tweaks_trial_msg_reading_config">正在读取本机配置…</string>
+    <string name="tweaks_trial_err_write_failed">无法写入所选文件</string>
+    <string name="tweaks_trial_msg_exported">已导出 %1$d 个键的当前值</string>
+    <string name="tweaks_trial_msg_reading_backup">正在读取备份…</string>
+    <string name="tweaks_trial_msg_none_selected">没有勾选任何一项</string>
+    <string name="tweaks_trial_msg_applying">正在恢复并核对…</string>
+    <string name="tweaks_trial_msg_restored">已恢复并核对 %1$d 项</string>
+    <string name="tweaks_trial_msg_restore_partial">恢复 %1$d 项；%2$d 项未写入：%3$s</string>
+    <string name="tweaks_trial_msg_sampling">正在读取当前配置…</string>
+    <string name="tweaks_trial_msg_resampling">正在再次读取…</string>
+    <string name="tweaks_trial_msg_collecting">正在收集…</string>
+    <string name="tweaks_trial_msg_collecting_device">正在收集本机信息…</string>
+    <string name="tweaks_trial_msg_report_saved">报告已保存</string>
+    <string name="tweaks_trial_msg_save_failed">保存失败</string>
+<string name="release_all_cpu_ok">频率已释放</string>
+    <string name="release_all_cpu_failed">频率释放失败</string>
+    <string name="release_all_lab_ok">实验室已恢复</string>
+    <string name="release_all_lab_failed">实验室恢复失败：%1$s</string>
+    <string name="release_all_thermal_ok">温控档位已释放</string>
+    <string name="release_all_thermal_failed">温控档位释放失败</string>
+    <string name="release_all_gpu_ok">GPU 已解除</string>
+    <string name="release_all_gpu_failed">GPU 解除失败</string>
+    <string name="release_all_gpu_unreadable">GPU 读取失败，未解除</string>
+    <string name="release_all_separator">；</string>
+<string name="lab_placement_integrated">已接入正式功能</string>
+    <string name="lab_placement_integrated_hint">别处有正式入口，这里可以单独发一个资源号</string>
+    <string name="lab_placement_capability">本机探测</string>
+    <string name="lab_placement_capability_hint">协议上成立，效果依这台机器而定</string>
+    <string name="lab_cat_cpu">CPU</string>
+    <string name="lab_cat_sched">调度</string>
+    <string name="lab_cat_touch">触控</string>
+    <string name="lab_cat_platform">平台限制</string>
+    <string name="lab_cat_memory">内存 · 互连</string>
+    <string name="lab_cat_thermal">温控</string>
+    <string name="lab_cat_accel">GPU · 加速器</string>
+    <string name="lab_cat_oem">厂商保留区</string>
+    <string name="lab_cat_advanced">高级</string>
+    <string name="lab_risk_level_low">低</string>
+    <string name="lab_risk_level_medium">中</string>
+    <string name="lab_risk_level_high">高</string>
+<string name="probe_mode_observe">只读观察 30 秒</string>
+    <string name="probe_mode_range">三资源范围 8 秒</string>
+    <string name="probe_mode_hard_range">四资源范围 8 秒</string>
+    <string name="probe_mode_point">上端点单值 8 秒</string>
+    <string name="probe_mode_range_load">三资源范围 + 计算负载</string>
+    <string name="probe_mode_hard_range_load">四资源范围 + 计算负载</string>
+    <string name="probe_mode_point_load">上端点单值 + 计算负载</string>
+    <string name="probe_mode_rom">ROM 控制接口快照（只读）</string>
+<string name="compile_note_full">%1$s · %2$s · %3$s</string>
+    <string name="compile_note_plain">%1$s · %2$s</string>
+    <string name="compile_note_none">没有编译产物</string>
+    <string name="compile_note_vdex_only">只有验证产物，未编译</string>
+    <string name="compile_note_no_odex_time">读不到编译时间</string>
+    <string name="compile_note_no_apk_time">读不到应用更新时间</string>
+    <string name="compile_note_stale">编译早于上次应用更新，可能已失效</string>
+    <string name="compile_note_fresh">编译晚于上次应用更新</string>
+    <string name="compile_note_profile_unreadable">使用记录读不到</string>
+    <string name="compile_note_profile_empty">使用记录为空</string>
+    <string name="compile_note_profile_size">使用记录 %1$d KiB</string>
+<string name="compile_progress_no_service">命令没能送到用户服务，请确认 Shizuku 已连接</string>
+    <string name="compile_progress_no_count">读不到 dex2oat 进程数；进度只按 odex 体积变化判断</string>
+    <string name="compile_progress_idle">当前没有 dex2oat 在跑；可能已结束，也可能还没到编译阶段</string>
+    <string name="compile_progress_running">有 %1$d 个 dex2oat 在跑</string>
+<string name="phase_unknown_key">未知相位偏移键</string>
+    <string name="phase_out_of_range">取值需在 0–%1$d 之间</string>
+    <string name="phase_write_unconfirmed">写入未回读确认，本机可能不支持该属性</string>
+    <string name="phase_set_ok">%1$s 已设为 %2$s。时序微调，可能反而掉帧；重启后恢复</string>
+    <string name="phase_restore_skipped">原值不可读，跳过</string>
+    <string name="phase_restore_ok">已恢复 %1$s</string>
+    <string name="phase_restore_failed">恢复失败（目标 %1$s）</string>
+<string name="tweak_phase_failed">写入失败</string>
+<string name="compile_status_no_service">命令没能送到用户服务，请确认 Shizuku 已连接</string>
+    <string name="compile_status_no_path">读不到 %1$s 的安装路径</string>
+<string name="lab_verdict_unreadable_no_write">读不到判据节点，未下发。</string>
+<string name="maintenance_bad_package">应用包名无效</string>
+    <string name="maintenance_no_install_path">无法读取应用安装路径</string>
+    <string name="maintenance_apk_unreadable">应用不存在或 APK 不可读</string>
+    <string name="maintenance_unknown_kind">未知任务</string>
+    <string name="maintenance_compile_ok">编译请求完成；提速效果因应用而异</string>
+    <string name="maintenance_compile_unconfirmed">编译未确认完成</string>
+    <string name="maintenance_need_power">请连接电源后预热</string>
+    <string name="maintenance_fake_charge">框架报告已插电，但内核电源节点显示未连接 —— 可能是假充电生效中。请先关闭假充电，或真正连接电源</string>
+    <string name="maintenance_warm_timeout">预热超时</string>
+    <string name="maintenance_warm_read_failed">预热读取失败</string>
+    <string name="maintenance_warm_ok">已读取 %1$d MiB；缓存可被系统回收</string>
+<string name="maintenance_failed">维护任务失败</string>
+<string name="battery_report_unreadable">无法读取该文件</string>
+    <string name="battery_report_too_small">文件太小，不像 bugreport</string>
+    <string name="battery_report_no_text_entry">zip 里没有文本条目</string>
+    <string name="battery_report_entry_too_small">主文本条目太小，可能不是完整 bugreport</string>
+    <string name="battery_report_parsed">已解析 %1$s（%2$d KiB）</string>
+    <string name="battery_report_failed">解析失败：%1$s: %2$s</string>
+    <string name="picker_parse_failed_with_reason">%1$s</string>
+    <string name="lab_state_manual_usable">能用</string>
+    <string name="lab_state_manual_unusable">没用</string>
+    <string name="lab_edit">编辑</string>
+    <string name="lab_edit_done">完成</string>
+    <string name="lab_mark_usable">能用</string>
+    <string name="lab_mark_unusable">没用</string>
+    <string name="lab_edit_exit_title">保存这次的标记吗？</string>
+    <string name="lab_edit_exit_body">不保存的话，这次改的都会丢掉。</string>
+    <string name="lab_edit_save">保存</string>
+    <string name="lab_edit_discard">不保存</string>
 </resources>

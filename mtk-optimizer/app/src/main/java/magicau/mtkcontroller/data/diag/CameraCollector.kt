@@ -1,4 +1,5 @@
 package magicau.mtkcontroller.data.diag
+import magicau.mtkcontroller.data.probe.ProbeProcess
 
 /** Runs in Shizuku, independent of Activity scheduling. Each command has its own deadline. */
 object CameraCollector {

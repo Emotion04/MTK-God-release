@@ -56,6 +56,7 @@ data class SettingsUiState(
     val freqCompanionLabel: String = "",
     /** true = 只发下限，不设上限。 */
     val freqRangeMode: TweakCommands.RangeMode = TweakCommands.RangeMode.RANGE,
+    val freqHardLimits: Boolean = false,
     /** 授权状态。界面不直接读权限层 —— 那是系统副作用，统一经 ViewModel。 */
     val privilege: magicau.mtkcontroller.data.privilege.PrivilegeState =
         magicau.mtkcontroller.data.privilege.PrivilegeState(),
@@ -84,6 +85,14 @@ data class SettingsUiState(
     val report: CapabilityReport? = null,
     val backupMessage: Failure? = null,
     val busy: Boolean = false,
+    /**
+     * 在不在电池优化白名单里。
+     *
+     * **null = 读不到**，不是"不在"。没授权 Shizuku 或命令失败时是这个值，
+     * 界面据此不显示开关、只显示"读不到" —— 拿 false 冒充"未加入"会让用户
+     * 去拨一个我们并不知道状态的开关。
+     */
+    val batteryWhitelisted: Boolean? = null,
 )
 
 class SettingsViewModel(private val container: AppContainer) : ViewModel() {
@@ -146,6 +155,10 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch { container.tweakRepository.setFreqRangeMode(mode) }
     }
 
+    fun setFreqHardLimits(enabled: Boolean) {
+        viewModelScope.launch { container.tweakRepository.setFreqHardLimits(enabled) }
+    }
+
     fun setFreqCompanion(id: String?) {
         viewModelScope.launch {
             container.tweakRepository.setFreqSchedCompanion(id)
@@ -164,12 +177,20 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     init {
-        // 只设下限这个选项的状态也必须读回来，否则单选按钮永远显示默认值 ——
-        // 数据写进去了（DataStore 里确实有 freq_floor_only），界面不知道。
+        // 这几个开关的状态都必须读回来，否则控件永远显示默认值 —— 数据写进去了
+        // （DataStore 里确实有值），界面不知道。**每个 Flow 一个 launch。**
+        // DataStore 的 Flow 不会结束，写在同一个 launch 里串成
+        // `a.collect{}; b.collect{}` 的话，第二行是死代码 —— 实测就是这个错：
+        // 硬上下限写进去了、读不回来，开关看起来按不动。
         viewModelScope.launch {
             container.tweakRepository.freqRangeMode.collect { mode ->
                 // 只存枚举本身；文案由界面按 labelRes 取 —— 这层不产出句子。
                 _state.value = _state.value.copy(freqRangeMode = mode)
+            }
+        }
+        viewModelScope.launch {
+            container.tweakRepository.freqHardLimits.collect { on ->
+                _state.value = _state.value.copy(freqHardLimits = on)
             }
         }
         viewModelScope.launch {
@@ -213,6 +234,8 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             magicau.mtkcontroller.data.privilege.PrivilegeManager.state.collect { p ->
                 _state.value = _state.value.copy(privilege = p)
+                // 授权状态一变就重读白名单：没授权时读不到，刚授权完立刻就能读到。
+                if (p.mode.canElevate) refreshBatteryWhitelist()
             }
         }
         viewModelScope.launch {
@@ -237,16 +260,24 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
                 _state.value = _state.value.copy(rangeControlMode = RangeControlMode.fromName(name))
             }
         }
+        // 一个 Flow 一个 launch —— DataStore 的 Flow 不会结束，串写会让后面几个
+        // collect 变成死代码（界面读不到已保存的值，控件停在一个默认值上）。
         viewModelScope.launch {
             container.settingsRepository.navBarVisibility.collect { name ->
                 _state.value = _state.value.copy(navBarVisibility = NavBarVisibility.fromName(name))
             }
+        }
+        viewModelScope.launch {
             container.settingsRepository.tabRestoreMode.collect { name ->
                 _state.value = _state.value.copy(tabRestoreMode = TabRestoreMode.fromName(name))
             }
+        }
+        viewModelScope.launch {
             container.settingsRepository.customHue.collect { hue ->
                 _state.value = _state.value.copy(customHue = hue)
             }
+        }
+        viewModelScope.launch {
             container.settingsRepository.customConcentration.collect { c ->
                 _state.value = _state.value.copy(customConcentration = c)
             }
@@ -463,5 +494,33 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
      */
     fun requestAuth() {
         PrivilegeManager.requestPermission()
+    }
+
+    /** 现读白名单状态。**不缓存**：它是系统事实，存下来就会和真实状态不一致。 */
+    private fun refreshBatteryWhitelist() {
+        viewModelScope.launch {
+            val inWhitelist = withContext(Dispatchers.IO) {
+                magicau.mtkcontroller.data.power.BatteryWhitelist.isWhitelisted()
+            }
+            _state.value = _state.value.copy(batteryWhitelisted = inWhitelist)
+        }
+    }
+
+    /**
+     * 加入 / 移出白名单，然后**回读**。
+     *
+     * `set()` 返回 true 只说明"命令被系统接受"，不等于状态已变 ——
+     * 所以界面显示的是回读结果，不是命令的结果。
+     */
+    fun setBatteryWhitelist(enabled: Boolean) {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(busy = true)
+            val accepted = withContext(Dispatchers.IO) {
+                magicau.mtkcontroller.data.power.BatteryWhitelist.set(enabled)
+            }
+            if (!accepted) AppLog.w("Settings", "白名单${if (enabled) "加入" else "移出"}命令未被接受")
+            refreshBatteryWhitelist()
+            _state.value = _state.value.copy(busy = false)
+        }
     }
 }

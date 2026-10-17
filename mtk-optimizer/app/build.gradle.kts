@@ -1,3 +1,4 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.util.Properties
 
 plugins {
@@ -25,8 +26,27 @@ android {
         minSdk = 33
         targetSdk = 37
         // Bump hand-off APKs so reports identify the exact installed revision.
-        versionCode = 101
-        versionName = "0.3.97"
+        versionCode = 150
+        versionName = "0.5.1"
+        // 证据等级低于这个值的功能在设置页不列出。
+        //
+        // **按构建类型定，不按“正式/非正式”定**：canary（debug）是给先锋用户试的，
+        // 不该把“预计无效”的东西摆在面前；release 是交付包，列出来的都要能用 ——
+        // 但发布前没法逐台真机复验，所以 release 不设门槛，靠 Evidence 标签说明。
+        // 默认值跟着构建类型走；`-PminEvidence=` 可以单独覆盖（例如发一个纯验证包）。
+        buildConfigField(
+            "String",
+            "MIN_EVIDENCE",
+            "\"" + (providers.gradleProperty("minEvidence").getOrElse("LIKELY_USELESS")) + "\"",
+        )
+    }
+
+    testOptions {
+        unitTests {
+            // Robolectric 要读 res/ 才能让 Context.getString 真的返回 strings.xml 里的文案。
+            // 不开这个，所有资源 id 都解析不出来，测试里看到的只会是占位符。
+            isIncludeAndroidResources = true
+        }
     }
 
     signingConfigs {
@@ -58,6 +78,14 @@ android {
             signingConfig = signingConfigs.getByName("release")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
+        debug {
+            // canary 包：把证据不足的项藏起来，见 defaultConfig 里 MIN_EVIDENCE 的说明。
+            buildConfigField(
+                "String",
+                "MIN_EVIDENCE",
+                "\"" + (providers.gradleProperty("minEvidence").getOrElse("WRITTEN")) + "\"",
+            )
+        }
     }
 
     compileOptions {
@@ -65,10 +93,38 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    // Kotlin 的字节码版本必须和上面那一行一致。
+    //
+    // 不设的话 Kotlin 跟着 Gradle 守护进程的 JDK 走 —— 这台机器是 JDK 25，
+    // 于是 Kotlin 出 Java 25 字节码（class file major version 69），而 Java 源码
+    // 是 17。两边不一致平时看不出问题（DEX 编译器都收），但 Robolectric 的
+    // 插桩 classloader 只认到 Java 21，一跑测试就炸
+    // "Unsupported class file major version 69"。
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(JvmTarget.JVM_17)
+        }
+    }
+
     buildFeatures {
         compose = true
         aidl = true
         buildConfig = true
+    }
+}
+
+// Robolectric 4.14.1 自带 ASM 9.7.1，只认到 Java 24 字节码。
+// 而 Gradle 守护进程跑在 JDK 25 上，插桩时要读 JDK 自己的类（v69），
+// 于是每个测试都在 teardown 里炸
+// "Unsupported class file major version 69" —— 断言其实都跑过了，挂在收尾。
+// ASM 9.9 起支持 Java 25。ASM 只在测试类路径上，不进 APK。
+configurations.configureEach {
+    resolutionStrategy {
+        force("org.ow2.asm:asm:9.9.1")
+        force("org.ow2.asm:asm-tree:9.9.1")
+        force("org.ow2.asm:asm-analysis:9.9.1")
+        force("org.ow2.asm:asm-commons:9.9.1")
+        force("org.ow2.asm:asm-util:9.9.1")
     }
 }
 
@@ -102,6 +158,10 @@ if (!skipChecks) {
 
 dependencies {
     testImplementation("junit:junit:4.13.2")
+    // 单元测试里的 Context 只能靠它。`CpuControl` 和 `SmartPlatform.report`
+    // 都拿 Context 去 getString，而 Context 有 103 个抽象方法，纯 JUnit 伪造不出来。
+    // 不改成注入解析器是因为那要动 CPU 控制路径 —— 那条路径不许为测试便利而改。
+    testImplementation("org.robolectric:robolectric:4.14.1")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
 

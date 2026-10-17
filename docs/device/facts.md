@@ -81,4 +81,17 @@ ADB 的 `yes` 与 App 负载执行环境不同。即使 App 满载，峰值也�
 配置对比应尽量保持热状态、其他请求与负载可比。
 关联：[CPU-003](../cpu/facts.md#cpu-003-频率上限由系统温控约束)。
 
-<a id="dev-004"></a>
+<a id="dev-008"></a>
+## DEV-008 构建签名：debug 与 release 是两把不同的密钥
+
+本机 `assembleDebug` 用 `~/.android/debug.keystore`（`CN=Android Debug`）；
+`assembleRelease` 用 `signing/canary-release.jks`（已 gitignore）。两者证书不同，
+所以 **release 包不能覆盖安装 debug 包**，只能先卸载 —— 而卸载会清掉本地方案、设置和报告。
+`signing/` 缺失时 release 构建故意失败，不退回 debug 签名。
+
+debug keystore 的位置由 `ANDROID_USER_HOME` 决定：指到别的目录会换出一把新密钥，
+`adb install -r` 报 `INSTALL_FAILED_UPDATE_INCOMPATIBLE: signatures do not match`。
+这不是版本兼容问题，改成对的 keystore 重新构建即可，**不要去卸载**。
+2026-09-25 踩过一次；2026-10-17 复核当前 debug APK 指纹与已装版本一致。
+
+依据：`apksigner verify --print-certs` 与 `keytool -list -v` 对照。

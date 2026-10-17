@@ -3,6 +3,8 @@ package magicau.mtkcontroller.ui.components
 import androidx.compose.ui.res.stringResource
 import magicau.mtkcontroller.R
 
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,6 +19,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
@@ -37,6 +40,17 @@ fun SubScreenTopBar(
     title: String,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * 右侧操作区，与返回键对称。
+     *
+     * 顶栏右侧放操作是通用做法：用户找"这一页还能干什么"先看右上角。
+     * 放进内容区（比如和别的入口并排）会被当成页面内容的一部分，
+     * 而且要滚到那儿才看得见。
+     */
+    actions: @Composable RowScope.() -> Unit = {},
+    /** 见 [SubScreenScaffold]。 */
+    leadingIcon: ImageVector? = null,
+    leadingDescription: String? = null,
 ) {
     Box(
         modifier = modifier
@@ -52,8 +66,8 @@ fun SubScreenTopBar(
                 .size(48.dp),
         ) {
             Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = stringResource(R.string.action_back),
+                imageVector = leadingIcon ?: Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = leadingDescription ?: stringResource(R.string.action_back),
                 tint = MaterialTheme.colorScheme.onBackground,
             )
         }
@@ -71,6 +85,12 @@ fun SubScreenTopBar(
                 .fillMaxWidth()
                 .padding(horizontal = 56.dp),
         )
+
+        Row(
+            modifier = Modifier.align(Alignment.CenterEnd),
+            verticalAlignment = Alignment.CenterVertically,
+            content = actions,
+        )
     }
 }
 
@@ -86,6 +106,16 @@ fun SubScreenScaffold(
     title: String,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    /** 顶栏右侧操作区。见 [SubScreenTopBar]。 */
+    actions: @Composable RowScope.() -> Unit = {},
+    /**
+     * 顶栏左侧图标。null = 用默认的返回箭头。
+     *
+     * 编辑态下换成一个「×」：那个位置点下去是"放弃编辑"，不是"返回上一页"，
+     * 沿用返回箭头会让人以为编辑已经保存了。
+     */
+    leadingIcon: ImageVector? = null,
+    leadingDescription: String? = null,
     content: @Composable () -> Unit,
 ) {
     // 每个页面必须有**自己的不透明背景**。导航库的页面默认透明，滑动时两页
@@ -97,7 +127,13 @@ fun SubScreenScaffold(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
     ) {
-        SubScreenTopBar(title = title, onBack = onBack)
+        SubScreenTopBar(
+            title = title,
+            onBack = onBack,
+            actions = actions,
+            leadingIcon = leadingIcon,
+            leadingDescription = leadingDescription,
+        )
         Box(
             modifier = Modifier
                 .weight(1f)

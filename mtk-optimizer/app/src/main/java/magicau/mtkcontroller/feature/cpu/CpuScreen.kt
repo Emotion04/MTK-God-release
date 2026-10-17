@@ -84,7 +84,6 @@ import magicau.mtkcontroller.ui.theme.LocalShapeStyle
 @Composable
 fun CpuScreen(
     state: CpuUiState,
-    onGovernorChange: (Int, String) -> Unit,
     onRange: (Int, Int, Int) -> Unit,
     onApply: () -> Unit,
     onRelease: () -> Unit,
@@ -93,8 +92,6 @@ fun CpuScreen(
     onSaveProfile: (String) -> Unit,
     /** 点标签：把方案装进编辑区（不应用）。-1 表示"默认"。 */
     onSelectProfile: (Int) -> Unit = {},
-    /** 长按标签：重命名 / 删除。 */
-    onLongPressProfile: (Int) -> Unit = {},
     /** 一个方案都没有时，一键建两个示例。 */
     onCreateExampleProfiles: () -> Unit = {},
     onDeleteProfile: (Int) -> Unit = {},

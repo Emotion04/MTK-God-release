@@ -3,6 +3,25 @@
 实现入口：`SmartPlatform`、`SmartBackup`、`VivoTweaks`；
 界面和当前候选清单查源码，本页保留容易误判的语义。
 
+## 这是厂商特供功能，名字就该带着厂商
+
+智算平台**是 vivo ROM 自带的**，不是通用能力。凭据是候选清单里的键与服务名：
+`vivo_aie_privacy_switch`、`vivo_gamethermal_switch`、`vivo_qs_center_theme_style`、
+`vendor.vivoperfservice`、`vivo_gfx_display_service`……换个厂商的 ROM，这些全都不存在，
+`SmartPlatform.parse` 读回空值，界面上就是"读不到"。
+
+**所以界面写「vivo 智算平台」不是违规。** `AGENTS.md` 那条
+"不出现其他 App 或第三方模块名称及其指代"，禁的是**别的调优 App 的名字**
+（拿别人做的东西当自己的卖点）；厂商名是**平台的自我标识**，和 MTK、PowerHAL 同一类 ——
+本 App 就叫 MTK Controller，全篇都在写 MTK 的资源号，没有理由单独把 vivo 抹掉。
+抹掉反而更糟：用户看到"智算平台"不知道说的是什么，也不知道换台机器为什么没了。
+
+判断口径：**这个名字属于设备还是属于别人做的软件？** 属于设备 → 照实写；
+属于另一个 App / 第三方模块 → 换成中性说法。判不准就查这个键是不是该厂商专有。
+
+（横屏/小米/OPPO 同理。真遇到非 vivo 机器上这个入口有实际影响，再按机型决定是隐藏
+还是标注"本机无此功能" —— 现在不预判，没有证据。）
+
 ## 配置与功能效果
 
 系统页面截图可证明开关存在，不证明其 Settings 键。

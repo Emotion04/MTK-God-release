@@ -1,21 +1,34 @@
 package magicau.mtkcontroller.data.cpu
 
+import androidx.annotation.StringRes
+import magicau.mtkcontroller.R
+
 import magicau.mtkcontroller.data.powerhal.PowerHal
 
-enum class CpuProbeMode(val label: String, val loaded: Boolean = false) {
-    OBSERVE("只读观察 30 秒"), RANGE("三资源范围 8 秒"),
-    HARD_RANGE("四资源范围 8 秒"), POINT("上端点单值 8 秒"),
-    RANGE_LOAD("三资源范围 + 计算负载", true),
-    HARD_RANGE_LOAD("四资源范围 + 计算负载", true),
-    POINT_LOAD("上端点单值 + 计算负载", true),
-    CAMERA("相机只读对照 60 秒"), ROM("ROM 控制接口快照（只读）"),
-    VIVO_LIMIT("Vivo CPU 限制接口验证（8 秒请求）"),
-    VIVO_POLICY_9("Vivo 策略 9（2 秒）"), VIVO_POLICY_71("Vivo 策略 71（2 秒）"),
-    VIVO_SOURCE_MAX("Vivo ROM MAX=4095 候选（5 秒）");
+/**
+ * 探测模式。
+ *
+ * 2026-10-14 删掉五个：CAMERA、VIVO_LIMIT、VIVO_POLICY_9、VIVO_POLICY_71、
+ * VIVO_SOURCE_MAX。前四个（相机一个、vivo 三个）**已经测过且得不到结论** ——
+ * 事务码返回成功但采样读数没有对应变化，留着一个占位置的按钮只会让人反复重跑。
+ * VIVO_SOURCE_MAX 同理。
+ *
+ * AIDL 侧的 `cameraProbe` / `vivoCpuLimitProbe` / `vivoPolicyProbe` **没有删**：
+ * AIDL 注释里写着 "Appended to preserve existing transaction IDs"，
+ * 从中间抽掉一项会把后面所有事务码平移，而 Shizuku 按 version 留着旧服务，
+ * 表现是"新的调用打到旧的方法上"且不报错。留着三个没人调的方法比那个安全得多。
+ */
+enum class CpuProbeMode(@StringRes val labelRes: Int, val loaded: Boolean = false) {
+    OBSERVE(R.string.probe_mode_observe), RANGE(R.string.probe_mode_range),
+    HARD_RANGE(R.string.probe_mode_hard_range), POINT(R.string.probe_mode_point),
+    RANGE_LOAD(R.string.probe_mode_range_load, true),
+    HARD_RANGE_LOAD(R.string.probe_mode_hard_range_load, true),
+    POINT_LOAD(R.string.probe_mode_point_load, true),
+    ROM(R.string.probe_mode_rom);
 
     fun pairs(index: Int, low: Long, high: Long): List<Pair<String, String>> {
         require(index in 0..255 && low > 0 && low <= high && high <= Int.MAX_VALUE)
-        if (this == OBSERVE || this == CAMERA || this == ROM || this == VIVO_LIMIT || this == VIVO_POLICY_9 || this == VIVO_POLICY_71 || this == VIVO_SOURCE_MAX) return emptyList()
+        if (this == OBSERVE || this == ROM) return emptyList()
         val floor = if (this == POINT || this == POINT_LOAD) high else low
         return buildList {
             add(PowerHal.commandId(PowerHal.BASE_MIN, index) to floor.toString())

@@ -1,4 +1,4 @@
-package magicau.mtkcontroller.data.diag
+package magicau.mtkcontroller.data.probe
 
 import java.util.concurrent.TimeUnit
 

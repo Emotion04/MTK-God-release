@@ -2,7 +2,7 @@ package magicau.mtkcontroller.data.tweaks
 
 import magicau.mtkcontroller.R
 import magicau.mtkcontroller.data.Message
-import magicau.mtkcontroller.data.diag.SettingChannel
+import magicau.mtkcontroller.data.settings.SettingChannel
 import magicau.mtkcontroller.data.powerhal.PowerHal
 
 /**

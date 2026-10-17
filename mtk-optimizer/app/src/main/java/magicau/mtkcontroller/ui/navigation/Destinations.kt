@@ -53,7 +53,6 @@ object SubRoutes {
     const val SMART_BACKUP = "tools/smart/backup"
     const val CONFIG = "tools/config"
     const val MAINTENANCE = "tools/maintenance"
-    const val UNAVAILABLE = "tools/unavailable"
     const val TESTS = "settings/tests"
     const val FEATURE_TRIAL = "settings/tests/trial"
     const val DIAGNOSTICS = "settings/diagnostics"
@@ -67,5 +66,8 @@ object SubRoutes {
     const val LAB = "settings/lab"
     const val LAB_PANEL = "settings/lab/panel"
     const val LAB_RAW = "settings/lab/raw"
+    /** 二级页：一个入口下的控件。参数是 mergeKey（有合并时）或 feature key。 */
+    const val LAB_DETAIL = "settings/lab/detail/{entry}"
+    fun labDetail(entry: String): String = "settings/lab/detail/$entry"
     const val APP_THERMAL = "thermal/app"
 }

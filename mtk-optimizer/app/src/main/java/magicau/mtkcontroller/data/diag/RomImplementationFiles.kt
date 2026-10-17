@@ -1,6 +1,7 @@
 package magicau.mtkcontroller.data.diag
 
 import java.io.File
+import magicau.mtkcontroller.data.probe.ProbeProcess
 
 /** 只枚举系统分区的实现文件，不执行库、加载类或调用厂商控制事务。 */
 object RomImplementationFiles {

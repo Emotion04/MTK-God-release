@@ -11,10 +11,12 @@
 # Reference material — a third party's files, kept local only.
 #
 # Everything under reference/ is either someone else's file or derived from
-# someone else's binary. Only the README is tracked: it explains the folder and
-# the rule. See docs/README.md.
+# someone else's binary. Only our own two notes are tracked: README explains the
+# folder layout and the rule, LEDGER records which sources were analysed and where
+# their features landed. Neither is needed to build or run the app.
 /reference/*
 !/reference/README.md
+!/reference/LEDGER.md
 
 # Android build artifacts (mtk-optimizer sub-project handles its own)
 *.iml
@@ -71,3 +73,15 @@ desktop.ini
 # where a password leak cannot be undone.
 # ---------------------------------------------------------------------------
 /mtk-optimizer/signing/
+
+# ---------------------------------------------------------------------------
+# 本地临时文件 —— 调试截图、uiautomator 导出、一次性脚本。不参与构建，
+# 也不该进版本库；留着会让 `git status` 每次都被噪声淹没。
+# ---------------------------------------------------------------------------
+/.scratch/
+/.workbuddy/
+/*.png
+/ui*.xml
+/ui-nodes.txt
+/tapnav.py
+/*.stackdump

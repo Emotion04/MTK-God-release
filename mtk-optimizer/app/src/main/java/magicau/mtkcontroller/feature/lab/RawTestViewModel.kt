@@ -1,5 +1,7 @@
 package magicau.mtkcontroller.feature.lab
 
+import androidx.annotation.StringRes
+import kotlinx.coroutines.CancellationException
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
@@ -8,7 +10,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import magicau.mtkcontroller.R
 import magicau.mtkcontroller.data.lab.LabController
+import magicau.mtkcontroller.data.cpu.CpuFreqNodes
 import magicau.mtkcontroller.data.powerhal.PowerHal
 import magicau.mtkcontroller.di.AppContainer
 import magicau.mtkcontroller.domain.model.CpuCluster
@@ -21,7 +25,7 @@ import magicau.mtkcontroller.domain.model.CpuCluster
  * every previous explanation of this device's behaviour has guessed at.
  */
 data class RawRow(
-    val label: String,
+    @StringRes val labelRes: Int,
     val baseId: Int,
     val enabled: Boolean = false,
     val value: Int = 1_800_000,
@@ -43,10 +47,10 @@ data class RawTestUiState(
 
     companion object {
         fun defaultRows() = listOf(
-            RawRow("MIN 软下限", PowerHal.BASE_MIN, enabled = true),
-            RawRow("MAX 软上限", PowerHal.BASE_MAX, enabled = true),
-            RawRow("MIN_HL 硬下限", PowerHal.BASE_HARD_MIN),
-            RawRow("MAX_HL 硬上限", PowerHal.BASE_HARD_MAX),
+            RawRow(R.string.lab_raw_row_min, PowerHal.BASE_MIN, enabled = true),
+            RawRow(R.string.lab_raw_row_max, PowerHal.BASE_MAX, enabled = true),
+            RawRow(R.string.lab_raw_row_hard_min, PowerHal.BASE_HARD_MIN),
+            RawRow(R.string.lab_raw_row_hard_max, PowerHal.BASE_HARD_MAX),
         )
     }
 }
@@ -101,7 +105,8 @@ class RawTestViewModel(private val container: AppContainer) : ViewModel() {
             .map { it.idFor(cluster.index) to it.value.toString() }
         if (pairs.isEmpty()) {
             _state.value = current.copy(verdict = LabController.Verdict(
-                LabController.State.NO_EFFECT.name, "没有勾选任何 ID",
+                LabController.State.NO_EFFECT.name,
+                container.context.getString(R.string.lab_raw_no_ids),
             ))
             return
         }
@@ -119,18 +124,48 @@ class RawTestViewModel(private val container: AppContainer) : ViewModel() {
 
     fun reset() {
         viewModelScope.launch {
-            val message = container.labController.reset()
+            val outcome = container.labController.reset()
             _state.value = _state.value.copy(
-                verdict = LabController.Verdict(LabController.State.UNTESTED.name, message),
+                verdict = LabController.Verdict(
+                    LabController.State.UNTESTED.name,
+                    outcome.message.resolve(container.context),
+                ),
             )
         }
     }
 
     private fun readNodesFor(policy: String): List<Pair<String, String>> {
-        val dir = "/sys/devices/system/cpu/cpufreq/$policy"
-        return listOf("下限" to "$dir/scaling_min_freq", "上限" to "$dir/scaling_max_freq")
+        // 这两个是 cpufreq 的具名节点，路径走 CpuFreqNodes —— 这个面板整体是
+        // "读用户指定的任意节点"，但这两个不是任意的，别在这里再拼一遍。
+        return listOf(
+            container.context.getString(R.string.lab_raw_node_min) to CpuFreqNodes.min(policy),
+            container.context.getString(R.string.lab_raw_node_max) to CpuFreqNodes.max(policy),
+        )
     }
 
     private fun nodeFor(policy: String) =
-        "/sys/devices/system/cpu/cpufreq/$policy/{scaling_min_freq, scaling_max_freq}"
+        "${CpuFreqNodes.dir(policy)}/{scaling_min_freq, scaling_max_freq}"
+
+    /**
+     * 离开页面就放掉本页持有的请求。
+     *
+     * **为什么必须有这个**：实验室的请求是 daemon UserService 发的、句柄存在
+     * DataStore 里，离开页面不会自动消失。原来三个 ViewModel 一个 onCleared
+     * 都没有，于是"长期保持"的请求在用户离开后继续压着频率，而两边界面都不报错 ——
+     * 正是"我设了却没用 / 设完又弹回去"那类故障的成因。
+     *
+     * `reset()` 同时放 lock 和温控档位（[LabController.reset]），
+     * 与 CPU 页「释放」撤的是同一套东西。
+     */
+    override fun onCleared() {
+        // onCleared 不在协程里，而 reset() 要跑 binder。用 applicationScope 之类
+        // 长寿命作用域会越过 ViewModel 寿命，所以这里起一个一次性的：
+        // ViewModel 已死，但释放必须跑完。
+        viewModelScope.launch {
+            runCatching { container.labController.reset() }
+                .onFailure { if (it is CancellationException) throw it }
+        }
+        super.onCleared()
+    }
 }
+

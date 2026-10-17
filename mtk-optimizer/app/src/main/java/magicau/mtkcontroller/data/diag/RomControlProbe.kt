@@ -1,4 +1,5 @@
 package magicau.mtkcontroller.data.diag
+import magicau.mtkcontroller.data.probe.ProbeProcess
 
 /** Static, read-only evidence for locating ROM-specific control definitions. */
 object RomControlProbe {

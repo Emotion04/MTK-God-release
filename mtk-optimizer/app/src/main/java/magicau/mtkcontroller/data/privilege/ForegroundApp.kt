@@ -1,6 +1,6 @@
 package magicau.mtkcontroller.data.privilege
 
-import magicau.mtkcontroller.data.diag.ProbeProcess
+import magicau.mtkcontroller.data.probe.ProbeProcess
 
 /**
  * 当前前台应用的包名，通过 dumpsys 解析得到。

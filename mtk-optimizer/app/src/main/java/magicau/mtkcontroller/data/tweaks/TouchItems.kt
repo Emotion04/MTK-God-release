@@ -1,7 +1,7 @@
 package magicau.mtkcontroller.data.tweaks
 
 import magicau.mtkcontroller.R
-import magicau.mtkcontroller.data.diag.SettingChannel
+import magicau.mtkcontroller.data.settings.SettingChannel
 
 /**
  * 触控子项。
@@ -52,9 +52,24 @@ data class TouchKnob(
     val onValue: String,
     /** 没有快照时的关态。仅用于从没被本软件打开过的项。 */
     val fallbackOff: String = "0",
+    /**
+     * 可以填的数值范围 —— 只有带范围的旋钮才由用户在界面上填数。
+     *
+     * 为什么有的项是开关、有的是数值：**开关只能表达"有没有这一档"，而这一档背后
+     * 本来就是个数**。按下防抖的四个键是四个毫秒数、指针速度是 0–7 的档位，写成
+     * 开关等于只给人一个出厂预设。范围只写本机确认过的区间；没真机验过取值含义的
+     * 参数（响应延迟）不给范围，免得猜出一个假的上限。
+     */
+    val numberRange: IntRange? = null,
 ) {
-    /** 这条旋钮在指定状态下要执行的命令。写 settings 一律走 [SettingChannel]。 */
-    fun command(on: Boolean, offValue: String): String {
+    /**
+     * 这条旋钮要执行的命令。
+     *
+     * @param onValue 开启时要写的值；用户填过数就是那个数，否则是 [onValue]。
+     *   写 settings 一律走 [SettingChannel]，数值原样作为字符串写 —— 键的消费者可能
+     *   把它当整数（`touch_scan_press_time_delay` 就是毫秒），别在外面做格式化。
+     */
+    fun command(on: Boolean, offValue: String, onValue: String = this.onValue): String {
         val value = if (on) onValue else offValue
         return if (ns == TouchNs.PROP) "setprop $key $value"
         else SettingChannel.putCommand(ns.name.lowercase(), key, value)
@@ -65,7 +80,8 @@ data class TouchKnob(
         if (ns == TouchNs.PROP) "getprop $key" else "settings get ${ns.name.lowercase()} $key"
 
     /** 回读时应该看到的值。 */
-    fun expectedRead(on: Boolean, offValue: String): String = if (on) onValue else offValue
+    fun expectedRead(on: Boolean, offValue: String, onValue: String = this.onValue): String =
+        if (on) onValue else offValue
 }
 
 /** 打开前存下的原值。键由 [TouchKnob.originalKey] 生成。 */
@@ -73,6 +89,14 @@ typealias TouchOriginals = Map<String, String>
 
 /** 这条旋钮的原值在快照里的键。 */
 fun TouchKnob.originalKey(itemId: String): String = "$itemId|${ns.name}|$key"
+
+/**
+ * 在共享快照里这条旋钮的名字：`命名空间.键名`。
+ *
+ * 用点号而不是竖线，是因为快照存储本身的键已经用竖线分隔了空间和条目；
+ * 名字里再带竖线，`release` 按前缀拼键时就分不清边界。
+ */
+val TouchKnob.storeKey: String get() = "${ns.name.lowercase()}.$key"
 
 /**
  * 关闭时该写成什么：优先快照，取不到才退回通用关闭语义。
@@ -113,6 +137,9 @@ data class TouchItem(
     val showsValues: Boolean = readOnly,
 ) {
     val all: List<TouchKnob> get() = knobs
+
+    /** 这一项里可以由用户填数的旋钮；空 = 这一项是纯开关。 */
+    val numericKnobs: List<TouchKnob> get() = knobs.filter { it.numberRange != null }
 }
 
 object TouchItems {
@@ -123,6 +150,15 @@ object TouchItems {
     const val RESPONSE_DELAY = "response_delay"
     const val RENDER_VSYNC = "render_vsync"
     const val SF_LATCH = "sf_latch"
+
+    /**
+     * 按下防抖那几个毫秒键的填写范围。
+     *
+     * 下限 0 是"不防抖"；上限取 1000 ms —— 再长就已经不是防抖，而是"点了要等一秒"，
+     * 固件大概率另有夹取。**这个上限是本软件给的范围，不是固件公布的**，
+     * 所以超过 300（本机出厂值）时界面上要和用户说清楚。
+     */
+    val PRESS_DELAY_MS = 0..1000
 
     /** 上报率的开启值。只有这一项需要用户选档位。 */
     const val DEFAULT_RATE = 360
@@ -156,10 +192,12 @@ object TouchItems {
             evidence = Evidence.WRITTEN,
             showsValues = true,
             knobs = listOf(
-                TouchKnob(TouchNs.SYSTEM, "touch_scan_press_time_delay", "300", "0"),
-                TouchKnob(TouchNs.SYSTEM, "touch_scan_press_time_delay_double", "200", "0"),
-                TouchKnob(TouchNs.SYSTEM, "touch_scan_press_time_delay_single", "300", "0"),
-                TouchKnob(TouchNs.SYSTEM, "touch_scan_press_time_delay_grade", "2", "0"),
+                // 四个键分工没有公开文档，混着毫秒和档位（_grade 是 2 档而不是 2 ms），
+                // 所以每个各给各的范围，界面上用键名区分，不替固件编一句"这是 XX 毫秒"。
+                TouchKnob(TouchNs.SYSTEM, "touch_scan_press_time_delay", "300", "0", PRESS_DELAY_MS),
+                TouchKnob(TouchNs.SYSTEM, "touch_scan_press_time_delay_double", "200", "0", PRESS_DELAY_MS),
+                TouchKnob(TouchNs.SYSTEM, "touch_scan_press_time_delay_single", "300", "0", PRESS_DELAY_MS),
+                TouchKnob(TouchNs.SYSTEM, "touch_scan_press_time_delay_grade", "2", "0", 0..9),
             ),
         ),
         TouchItem(
@@ -169,7 +207,7 @@ object TouchItems {
             // 唯一有系统读数的：0 → 7 已确认落到系统里。
             evidence = Evidence.CONFIRMED,
             knobs = listOf(
-                TouchKnob(TouchNs.SYSTEM, "pointer_speed", "7", "0"),
+                TouchKnob(TouchNs.SYSTEM, "pointer_speed", "7", "0", 0..7),
             ),
         ),
         TouchItem(

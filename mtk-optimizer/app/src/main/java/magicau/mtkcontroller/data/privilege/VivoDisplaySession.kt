@@ -3,7 +3,7 @@ package magicau.mtkcontroller.data.privilege
 import android.os.Parcel
 import android.os.Process
 import rikka.shizuku.SystemServiceHelper
-import magicau.mtkcontroller.data.diag.ProbeProcess
+import magicau.mtkcontroller.data.probe.ProbeProcess
 
 /** 仅用于已核对的 ROM 布局；独立句柄，服务端限时防止应用退出后残留。 */
 class VivoDisplaySession {

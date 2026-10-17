@@ -67,6 +67,9 @@ object DiagReport {
             }
             appendLine("verification : ${cpu.verification}")
             appendLine("detail       : ${cpu.verificationDetail ?: "尚未验证"}")
+            // 内核实际持久什么。和 verification 是两件事：那一个说"我们发的成没成"，
+            // 这一个说"现在固件拿着哪对上下限"—— 厂商电源服务自己也会压。
+            appendLine("observed     : ${cpu.observedLimits ?: "尚未读回"}")
             appendLine()
         }
 
@@ -125,9 +128,9 @@ object DiagReport {
         if (sections.isNotEmpty()) {
             section("谁在限制")
             sections.forEach { s ->
-                appendLine("-- ${s.title}")
+                appendLine("-- ${context.getString(s.titleRes)}")
                 s.readings.forEach { r ->
-                    appendLine("${r.label} = ${r.value ?: "(不可读或不存在)"}")
+                    appendLine("${context.getString(r.labelRes, *r.labelArgs.toTypedArray())} = ${r.value ?: "(不可读或不存在)"}")
                     appendLine("    node: ${r.node}")
                 }
             }

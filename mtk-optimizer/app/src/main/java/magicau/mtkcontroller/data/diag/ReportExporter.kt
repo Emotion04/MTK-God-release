@@ -3,6 +3,7 @@ package magicau.mtkcontroller.data.diag
 import android.content.Context
 import android.net.Uri
 import magicau.mtkcontroller.data.cpu.CpuControl
+import magicau.mtkcontroller.data.privilege.PrivilegeManager
 import magicau.mtkcontroller.data.log.AppLog
 import magicau.mtkcontroller.data.log.LogFileStore
 import org.json.JSONArray
@@ -60,12 +61,15 @@ class ReportExporter(
             Kind.ADAPTATION -> "mtk-god-adaptation-$stamp.zip"
             Kind.DEBUG -> "mtk-god-debug-$stamp.zip"
         }
+        // 适配报告要完整：把 ROM 实现快照一起采进去，用户不必导两次。
+        // 采不到不阻塞报告 —— 那是另一条证据，不是报告的前提。
+        val rom = runCatching { PrivilegeManager.romControlProbe() }.getOrNull()
         val outFile = File(cacheDir(), name)
         var entries = 0
 
         ZipOutputStream(outFile.outputStream().buffered()).use { zip ->
             zip.put("README.txt", readme())
-            zip.put("report.json", buildReport(request).toString(2))
+            zip.put("report.json", buildReport(request, rom).toString(2))
             entries += 2
 
             baseline.read()?.let {
@@ -88,7 +92,30 @@ class ReportExporter(
         }
 
         AppLog.i(TAG, "报告已生成 ${outFile.name}（${entries} 项，${outFile.length()} 字节）")
+        pruneOldReports(outFile)
         return Result(outFile, outFile.length(), entries)
+    }
+
+    /**
+     * 生成新报告后清掉旧的，**除了刚生成的这一个**。
+     *
+     * 为什么必须在这里做：报告落在 `cacheDir/reports/`，而这里原来有一个
+     * `cleanup(file)` 函数**从来没有人调用** —— 每导出一次就多一个几 MB 的 zip，
+     * 一直积到系统回收缓存目录。用户看到的是"这个 App 占了太多空间"，
+     * 而 App 里没有任何一个按钮能清掉它们。死代码不只是难看，它把该做的事漏了。
+     *
+     * 不碰 [current]：它还是 `pending`，用户可能正要去分享或另存。
+     * 按时间戳而不是文件名排序 —— 文件名里的秒级戳在同一秒内会重名，
+     * 而重名时 `File` 会覆盖同一个文件，排序也就失去意义。
+     */
+    private fun pruneOldReports(current: File) {
+        val others = cacheDir().listFiles()
+            ?.filter { it.isFile && it != current && it.extension == "zip" }
+            ?.sortedByDescending { it.lastModified() }
+            ?: return
+        others.drop(KEEP_OLD_REPORTS).forEach { stale ->
+            if (stale.delete()) AppLog.i(TAG, "清理旧报告 ${stale.name}")
+        }
     }
 
     /** Write to the location the user picked in the system file dialog. */
@@ -101,17 +128,9 @@ class ReportExporter(
         false
     }
 
-    /** Whole-disk path, for the "copy path" fallback when sharing is unavailable. */
-    fun pathOf(source: File): String = source.absolutePath
-
-    fun cleanup(source: File) {
-        runCatching { source.delete() }
-    }
-
     // --- assembly ----------------------------------------------------------
-
-    private fun buildReport(request: Request): JSONObject {
-        val current = DeviceSnapshot.capture(context, probeReport(), cpuControl.status.value)
+    private fun buildReport(request: Request, romProbe: String?): JSONObject {
+        val current = DeviceSnapshot.capture(context, probeReport(), cpuControl.status.value, romProbe)
         val base = baseline.read()
         return JSONObject().apply {
             put("schema", SCHEMA)
@@ -269,5 +288,13 @@ class ReportExporter(
 
         /** Sections compared for the delta. Timestamps are excluded on purpose. */
         val COMPARED_SECTIONS = listOf("privilege", "powerhal", "cpu", "gpu", "features")
+
+        /**
+         * 旧报告保留几份（不含当前这一份）。
+         *
+         * 1 就够：用户绝大多数时候只需要刚导出的那一个，留一份是给"另存失败了，
+         * 上一份还在"兜底。这些都是整包 zip，多留一份就是多几 MB 缓存。
+         */
+        const val KEEP_OLD_REPORTS = 1
     }
 }

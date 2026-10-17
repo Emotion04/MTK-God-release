@@ -6,7 +6,7 @@ import magicau.mtkcontroller.BuildConfig
 import magicau.mtkcontroller.R
 import magicau.mtkcontroller.data.Message
 import magicau.mtkcontroller.data.privilege.PrivilegeManager
-import magicau.mtkcontroller.data.diag.SettingChannel
+import magicau.mtkcontroller.data.settings.SettingChannel
 
 /**
  * 功能逐个试用：一次只开一项，由人判断有没有变化，结果记下来并可导出。

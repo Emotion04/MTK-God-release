@@ -2,6 +2,7 @@ package magicau.mtkcontroller.data.diag
 
 import org.junit.Assert.*
 import org.junit.Test
+import magicau.mtkcontroller.data.probe.ProbeProcess
 
 class RomControlProbeTest {
     @Test fun configSelectionRejectsTraversalDiagnosticsAndExecutableFiles() {

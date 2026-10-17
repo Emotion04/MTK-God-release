@@ -1,6 +1,6 @@
 # Kbattery 1.2.3 — 固定版本实现摘录
 
-> 分析对象：`D:\CCode\MTK\reference\26.10参考\Kbattery1.2.3.apk`
+> 分析对象：`D:\CCode\MTK\reference\sources\2026-10-b1\Kbattery1.2.3.apk`
 >
 只记录该版本的接口、命令与来源，不是本项目的功能计划。源码摘录与推断按条目标识；本机效果需独立核验。
 

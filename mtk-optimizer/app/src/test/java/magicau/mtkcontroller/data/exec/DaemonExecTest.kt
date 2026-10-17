@@ -1,10 +1,11 @@
-package magicau.mtkcontroller.data.diag
+package magicau.mtkcontroller.data.exec
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import magicau.mtkcontroller.data.exec.DaemonExec
 
 /**
  * [DaemonExec] 输出解析的单元测试。

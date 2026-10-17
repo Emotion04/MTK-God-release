@@ -11,6 +11,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import magicau.mtkcontroller.R
@@ -33,6 +34,9 @@ fun TweaksScreen(
     onTouchRate: (Int) -> Unit,
     /** 单个触控子项开关：(子项 id, 是否开启)。 */
     onTouchItem: (String, Boolean) -> Unit = { _, _ -> },
+    onTouchNumber: (String, String, Int) -> Unit = { _, _, _ -> },
+    /** 进入显示分组时探一次本机有哪些触控项。与 [onEnterGame] 同理，只跑一次。 */
+    onEnterDisplay: (() -> Unit)? = null,
     /** 选中了一个本机不支持的性能档位；参数是档位 id。 */
     onVivoUnsupported: (String) -> Unit = {},
     onFrameInterpolation: (Boolean) -> Unit,
@@ -57,6 +61,8 @@ fun TweaksScreen(
     // 经 rememberUpdatedState 取，至少保证呼叫的是当前这一份。
     val enterGameNow by rememberUpdatedState(onEnterGame)
     LaunchedEffect(Unit) { enterGameNow?.invoke() }
+    val enterDisplayNow by rememberUpdatedState(onEnterDisplay)
+    LaunchedEffect(group) { if (group == "display") enterDisplayNow?.invoke() }
     var selectedApp by rememberSaveable { mutableStateOf("") }
     var appPicker by rememberSaveable { mutableStateOf(false) }
     if (appPicker) AlertDialog(onDismissRequest = { appPicker = false }, title = { Text(stringResource(R.string.tweaks_pick_app)) },
@@ -140,10 +146,11 @@ fun TweaksScreen(
                 // 看起来能点。切回默认方案即可逐项控制。
                 val perItem = state.canRun && state.touchBackend != TouchBackend.VIVO
                 state.touchItemsById.forEach { (item, on) ->
-                    TouchItemRow(item, on, perItem, onTouchItem,
+                    TouchItemRow(item, on, perItem, onTouchItem, onTouchNumber,
                         knobValues = item.knobs.mapNotNull { knob ->
                             state.touchReadout["${item.id}|${knob.key}"]?.let { knob to it }
                         }.toMap(),
+                        knobNumbers = state.touchNumbers,
                     )
                 }
                 if (!perItem) Text(stringResource(R.string.touch_items_backend_note),
@@ -185,7 +192,7 @@ fun TweaksScreen(
                 val sessionMessage = state.session.message
                 if (state.session.fps > 0 || sessionMessage != null) {
                     Text(
-                        sessionMessage?.text() ?: stringResource(R.string.ax_session_idle),
+                        sessionMessage?.text() ?: stringResource(R.string.display_session_idle),
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
@@ -360,7 +367,7 @@ fun TweaksScreen(
         } }
         }
         if (group == "maintenance") item { ToolCard {
-            InfoHeading(stringResource(R.string.ax_task_channel), stringResource(R.string.maintenance_info))
+            InfoHeading(stringResource(R.string.maintenance_channel), stringResource(R.string.maintenance_info))
             TextButton(onClick = { appPicker = true }, enabled = !state.task.running) {
                 Text(state.apps.firstOrNull { it.first == selectedApp }?.second ?: stringResource(R.string.tweaks_pick_app))
             }
@@ -385,7 +392,7 @@ fun TweaksScreen(
                     cs.stale -> stringResource(R.string.compile_status_stale)
                     cs.compiledAfterUpdate -> stringResource(R.string.compile_status_ok)
                     else -> stringResource(R.string.compile_status_unknown)
-                }, cs.note)
+                }, cs.note.text())
             }
             if (state.task.running) {
                 LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -403,7 +410,7 @@ fun TweaksScreen(
                 progress?.let { p ->
                     InfoHeading(
                         stringResource(R.string.tweaks_compile_progress),
-                        p.note + p.odexSizeKb?.let { stringResource(R.string.tweaks_compile_odex, it / 1024) }.orEmpty(),
+                        p.note.text() + p.odexSizeKb?.let { stringResource(R.string.tweaks_compile_odex, it / 1024) }.orEmpty(),
                     )
                 }
             }
@@ -528,7 +535,7 @@ fun TweaksScreen(
             )
         } }
         item { TweakReportActions(state, onCollectReport, onExportReport) }
-        if (group in listOf("display", "config", "maintenance", "unavailable")) item {
+        if (group in listOf("display", "config", "maintenance")) item {
             SectionLabel(stringResource(R.string.tweaks_section_experimental))
             SettingsCard {
                 val unavailable = stringResource(R.string.tweaks_na_unavailable)
@@ -558,12 +565,6 @@ fun TweaksScreen(
                     "maintenance" -> {
                         UnavailableSetting(stringResource(R.string.tweaks_na_full_compile), unavailable)
                     }
-                    else -> {
-                        UnavailableSetting(
-                            stringResource(R.string.tweaks_na_moved),
-                            stringResource(R.string.tweaks_na_moved_note),
-                        )
-                    }
                 }
             }
         }
@@ -586,6 +587,7 @@ private fun TouchItemRow(
     on: Boolean,
     enabled: Boolean,
     onChange: (String, Boolean) -> Unit,
+    onNumber: (String, String, Int) -> Unit,
     /**
      * 要显示的旋钮当前值，键是旋钮本身。
      *
@@ -594,6 +596,8 @@ private fun TouchItemRow(
      * 否则两边类型都是 Map<String, String>，编译不报错，但值永远取不到。
      */
     knobValues: Map<TouchKnob, String>,
+    /** 用户填过的数，键为 `"<itemId>|<旋钮键名>"`。 */
+    knobNumbers: Map<String, Int>,
 ) {
     val label = stringResource(item.labelRes)
     val detail = buildString {
@@ -619,9 +623,88 @@ private fun TouchItemRow(
     Column {
         ToggleRow(label, checked = on, onCheckedChange = { onChange(item.id, it) },
             enabled = enabled, info = detail)
+        // 带数值的项：每个键一个可填的框。开关只决定"这一族用不用"，
+        // 具体写多少由这里决定 —— 出厂预设只是起点，不是唯一选项。
+        NumericFields(item, enabled, on, knobNumbers, knobValues) { knob, value ->
+            onNumber(item.id, knob.key, value)
+        }
         // 取值来自外部记录、语义未公开的项，把当前值摊开 —— 那是判断
         // "这台机器是什么配置"的唯一依据，也让人看得出开关是不是空动作。
-        if (item.showsValues) ValueLines(item, knobValues)
+        if (item.showsValues && item.numericKnobs.isEmpty()) ValueLines(item, knobValues)
+    }
+}
+
+/**
+ * 数值项的可调控件：滑杆粗调 + 输入框精调。
+ *
+ * 两件工具各管一半：滑杆适合"往左拉一点试试"这种**手感驱动的试**，输入框适合
+ * "我就是要 250"这种**知道自己要什么**的填。滑杆单独用在对不准的毫秒数上会让人
+ * 一直差几毫秒，输入框单独用则每次都要呼键盘、先删再打。
+ *
+ * 输入框不合法（空、超范围）时滑杆保持上一个有效值，**不写设备、不悄悄夹取** ——
+ * 夹取会让人以为自己设的那个数已经生效了。
+ */
+@Composable
+private fun NumericFields(
+    item: TouchItem,
+    enabled: Boolean,
+    on: Boolean,
+    numbers: Map<String, Int>,
+    values: Map<TouchKnob, String>,
+    onEdit: (TouchKnob, Int) -> Unit,
+) {
+    item.numericKnobs.forEach { knob ->
+        val range = knob.numberRange ?: return@forEach
+        val saved = numbers["${item.id}|${knob.key}"]
+        var text by rememberSaveable(item.id, knob.key, saved) {
+            mutableStateOf((saved ?: knob.onValue).toString())
+        }
+        val current = values[knob]
+        // 滑杆的位置：框里是有效数就跟着框走，否则停在上一个有效值。
+        val valid = text.toIntOrNull()?.takeIf { it in range } ?: saved ?: knob.onValue.toIntOrNull() ?: range.first
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(knob.key, style = MaterialTheme.typography.bodySmall)
+                    // 设备上现在是多少。和框里的数不同就说明还没写进去。
+                    Text(
+                        stringResource(R.string.touch_number_current, current ?: "—"),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { input ->
+                        text = input.filter { it.isDigit() }.take(4)
+                        text.toIntOrNull()?.let { if (it in range) onEdit(knob, it) }
+                    },
+                    enabled = enabled && on,
+                    singleLine = true,
+                    isError = text.toIntOrNull()?.let { it !in range } ?: true,
+                    supportingText = {
+                        Text(stringResource(R.string.touch_number_range, range.first, range.last))
+                    },
+                    modifier = Modifier.width(120.dp),
+                )
+            }
+            Slider(
+                value = valid.toFloat(),
+                onValueChange = { raw ->
+                    val next = raw.roundToInt()
+                    text = next.toString()
+                    if (next != valid) onEdit(knob, next)
+                },
+                valueRange = range.first.toFloat()..range.last.toFloat(),
+                // 每单位一格：0–1000 的毫秒在滑杆上要能精确停到整数，
+                // 不给 steps 时 Compose 按像素吸附，拖到哪算哪。
+                steps = (range.last - range.first - 1).coerceAtLeast(0),
+                enabled = enabled && on,
+            )
+        }
     }
 }
 
@@ -633,9 +716,13 @@ private fun ValueLines(item: TouchItem, knobValues: Map<TouchKnob, String>) {
         Text(stringResource(R.string.touch_value_unreadable), style = MaterialTheme.typography.bodySmall)
         return
     }
-    shown.forEach { (knob, value) ->
-        Text("${knob.key}  $value", style = MaterialTheme.typography.labelSmall)
-    }
+    // 四个键一行写完：每个键一行时，按下防抖下面会挂四行键名，看着像调试输出。
+    // 键名仍是键名（用户要拿去比对手册或别的机器），但排在值后面、小一号，不抢正文。
+    Text(
+        shown.joinToString("   ") { (knob, value) -> "${knob.key} $value" },
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
 
 /**

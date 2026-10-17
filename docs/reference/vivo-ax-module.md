@@ -1,6 +1,6 @@
 # vivo AxManager 无 Root 优化模块 — 实现记录
 
-> - 分析对象：`reference/vivo_ax_noroot_optimizer_v1.3.0/`（第三方文件，git-ignored）
+> - 分析对象：`reference/sources/2026-09-ax-module/`（第三方文件，git-ignored）
 > - 分析日期：2026-09-18
 > - 材料来源：模块自带 README、全部 shell 源码、WebUI 源码、5 个 jar 的 DEX 反汇编
 
@@ -573,11 +573,11 @@ green 的条目**要求 guard 存活** —— 比如 `active_mode_target` 要 pe
 
 ```bash
 # 模块本体
-reference/vivo_ax_noroot_optimizer_v1.3.0/
+reference/sources/2026-09-ax-module/
 
 # 5 个 jar 是 DEX-only，没有 .class。用 JDK 的 javap 看不到，
 # 需要直接解析 classes.dex（每个 jar 里就是 classes.dex）
-unzip -l reference/vivo_ax_noroot_optimizer_v1.3.0/lib/vivo_binder_tool.jar
+unzip -l reference/sources/2026-09-ax-module/lib/vivo_binder_tool.jar
 ```
 
 解析工具按本地环境选择；这份来源材料不维护机器上的 JDK 安装路径。

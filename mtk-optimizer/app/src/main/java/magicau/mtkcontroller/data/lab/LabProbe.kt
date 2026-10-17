@@ -3,9 +3,11 @@ package magicau.mtkcontroller.data.lab
 import android.content.Context
 import android.os.BatteryManager
 import android.os.PowerManager
+import androidx.annotation.StringRes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import magicau.mtkcontroller.data.cpu.CpuScanner
+import magicau.mtkcontroller.R
+import magicau.mtkcontroller.data.cpu.CpuFreqNodes
 import magicau.mtkcontroller.data.sysfs.Sysfs
 import magicau.mtkcontroller.domain.model.CpuCluster
 
@@ -32,31 +34,36 @@ import magicau.mtkcontroller.domain.model.CpuCluster
 object LabProbe {
 
     data class Reading(
-        val label: String,
+        @StringRes val labelRes: Int,
         val node: String,
         /** Trimmed contents, or null when the node could not be read at all. */
         val value: String?,
-        /** Set when the value needs interpreting, e.g. units differ per platform. */
-        val note: String? = null,
+        /** Set when the value needs interpreting, e.g. units differ per platform. 0 = 无。 */
+        @StringRes val noteRes: Int = 0,
+        /** [labelRes] 的占位符参数。 */
+        val labelArgs: List<Any> = emptyList(),
+        /** [noteRes] 的占位符参数。 */
+        val noteArgs: List<Any> = emptyList(),
     ) {
         val exists: Boolean get() = value != null
     }
 
     data class Section(
-        val title: String,
-        val note: String? = null,
+        @StringRes val titleRes: Int,
+        /** 0 = 无。 */
+        @StringRes val noteRes: Int = 0,
         val readings: List<Reading>,
     )
 
-    private const val PPM = "/proc/ppm/policy"
+    // 2026-10-14 真机核对：这台机器没有 /proc/ppm 整个目录（`ls` 是 ENOENT，
+    // 不是权限拒绝）。原来这里读四条 PPM 节点、界面还有一行「PPM 软上限」，
+    // 全是死行。删掉，不再每轮读四个不存在的路径。
     private const val PERFMGR = "/proc/perfmgr"
     private const val CPUCTL = "/dev/cpuctl"
     private const val FPSGO = "/sys/kernel/fpsgo/fbt"
 
     /** Uclamp groups worth showing, most to least privileged. */
     private val UCLAMP_GROUPS = listOf("top-app", "foreground", "background")
-
-    private fun freqDir(policy: String) = "${CpuScanner.CPUFREQ_ROOT}/$policy"
 
     suspend fun readAll(context: Context, clusters: List<CpuCluster>): List<Section> =
         withContext(Dispatchers.IO) {
@@ -77,17 +84,14 @@ object LabProbe {
     /** Every node any section reads. Kept beside the readers so they stay in step. */
     private fun allPaths(clusters: List<CpuCluster>): List<String> = buildList {
         clusters.forEach { c ->
-            val dir = freqDir(c.policy)
-            add("$dir/cpuinfo_min_freq")
-            add("$dir/cpuinfo_max_freq")
-            add("$dir/scaling_min_freq")
-            add("$dir/scaling_max_freq")
-            add("$dir/scaling_cur_freq")
+            // 五个节点的路径全部来自 CpuFreqNodes。这里是"一次性把该读的都读回来"，
+            // 和逐条直读不是同一件事，但节点名必须只有一份。
+            add(CpuFreqNodes.hardwareMin(c.policy))
+            add(CpuFreqNodes.hardwareMax(c.policy))
+            add(CpuFreqNodes.min(c.policy))
+            add(CpuFreqNodes.max(c.policy))
+            add(CpuFreqNodes.cur(c.policy))
         }
-        add("$PPM/hard_userlimit_cpu_freq")
-        add("$PPM/userlimit_cpu_freq")
-        add("$PPM/thermal_limit")
-        add("$PPM/thermal_cur_power")
         add("$PERFMGR/thermal_policy")
         add("$PERFMGR/syslimiter/syslimiter_limit_freq")
         add("$PERFMGR/boost_ctrl/cpu_ctrl/cpu_ctrl_enable")
@@ -124,45 +128,47 @@ object LabProbe {
         val readings = mutableListOf<Reading>()
 
         clusters.forEach { cluster ->
-            val dir = freqDir(cluster.policy)
-            val hardwareMax = value("$dir/cpuinfo_max_freq")?.tooLong()?.div(1000)
-            val liveMax = value("$dir/scaling_max_freq")?.tooLong()?.div(1000)
-            val hardwareMin = value("$dir/cpuinfo_min_freq")?.tooLong()?.div(1000)
-            val liveMin = value("$dir/scaling_min_freq")?.tooLong()?.div(1000)
+            val hardwareMax = value(CpuFreqNodes.hardwareMax(cluster.policy))?.tooLong()?.div(1000)
+            val liveMax = value(CpuFreqNodes.max(cluster.policy))?.tooLong()?.div(1000)
+            val hardwareMin = value(CpuFreqNodes.hardwareMin(cluster.policy))?.tooLong()?.div(1000)
+            val liveMin = value(CpuFreqNodes.min(cluster.policy))?.tooLong()?.div(1000)
 
             val drop = if (hardwareMax != null && liveMax != null) hardwareMax - liveMax else null
             readings += Reading(
-                label = "${cluster.policy} 上限被压低",
-                node = "$dir/cpuinfo_max_freq  vs  scaling_max_freq",
+                labelRes = R.string.lab_probe_label_limit_lowered,
+                labelArgs = listOf(cluster.policy),
+                node = "${CpuFreqNodes.hardwareMax(cluster.policy)}  vs  ${CpuFreqNodes.max(cluster.policy)}",
                 value = when {
                     drop == null -> null
-                    drop <= 0L -> "无(可到 ${hardwareMax}MHz)"
-                    else -> "${drop}MHz(硬件 ${hardwareMax} / 当前 ${liveMax})"
+                    drop <= 0L -> context.getString(R.string.lab_probe_value_limit_none, hardwareMax.toString())
+                    else -> context.getString(R.string.lab_probe_value_limit_drop, drop.toString(), hardwareMax.toString(), liveMax.toString())
                 },
-                note = if (drop != null && drop > 0L) "上限低于硬件 —— 有东西在压它" else null,
+                noteRes = if (drop != null && drop > 0L) R.string.lab_probe_note_lowered else 0,
             )
 
             val lift = if (hardwareMin != null && liveMin != null) liveMin - hardwareMin else null
             readings += Reading(
-                label = "${cluster.policy} 下限被抬高",
-                node = "$dir/cpuinfo_min_freq  vs  scaling_min_freq",
+                labelRes = R.string.lab_probe_label_limit_lifted,
+                labelArgs = listOf(cluster.policy),
+                node = "${CpuFreqNodes.hardwareMin(cluster.policy)}  vs  ${CpuFreqNodes.min(cluster.policy)}",
                 value = when {
                     lift == null -> null
-                    lift <= 0L -> "无(可到 ${hardwareMin}MHz)"
-                    else -> "+${lift}MHz(硬件 ${hardwareMin} / 当前 ${liveMin})"
+                    lift <= 0L -> context.getString(R.string.lab_probe_value_limit_none, hardwareMin.toString())
+                    else -> context.getString(R.string.lab_probe_value_limit_lift, lift.toString(), hardwareMin.toString(), liveMin.toString())
                 },
-                note = if (lift != null && lift > 0L) "下限高于硬件 —— 有东西钉着它" else null,
+                noteRes = if (lift != null && lift > 0L) R.string.lab_probe_note_lifted else 0,
             )
         }
 
         context.getSystemService(PowerManager::class.java)?.let { power ->
             readings += Reading(
-                "省电模式", "PowerManager.isPowerSaveMode",
-                if (power.isPowerSaveMode) "开 —— 系统会主动压频率" else "关",
+                R.string.lab_probe_label_power_save, "PowerManager.isPowerSaveMode",
+                if (power.isPowerSaveMode) context.getString(R.string.lab_probe_value_power_save_on)
+                else context.getString(R.string.lab_probe_value_off),
             )
             readings += Reading(
-                "热状态", "PowerManager.currentThermalStatus",
-                thermalName(power.currentThermalStatus),
+                R.string.lab_probe_label_thermal_status, "PowerManager.currentThermalStatus",
+                thermalName(context, power.currentThermalStatus),
             )
         }
 
@@ -170,54 +176,46 @@ object LabProbe {
             val pct = battery.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
             if (pct >= 0) {
                 readings += Reading(
-                    "电池", "BatteryManager",
-                    "$pct%" + if (battery.isCharging) " · 充电中" else " · 未充电",
-                    note = "低电量时系统和厂商的省电逻辑都会压频率",
+                    R.string.lab_probe_label_battery, "BatteryManager",
+                    context.getString(
+                        if (battery.isCharging) R.string.lab_probe_value_battery_charging
+                        else R.string.lab_probe_value_battery_idle,
+                        pct,
+                    ),
+                    noteRes = R.string.lab_probe_note_battery,
                 )
             }
         }
 
-        readings += Reading(
-            "PPM 软上限", "$PPM/userlimit_cpu_freq",
-            value("$PPM/userlimit_cpu_freq"),
-            note = "MTK 的 PPM 把软限制落在这里,应与 scaling_* 一致",
-        )
-
         return Section(
-            title = "谁在限制",
-            note = "硬件范围 vs 当前范围。差值不为零 = 有东西在压,不一定是我们的请求",
+            titleRes = R.string.lab_probe_section_limiter,
+            noteRes = R.string.lab_probe_section_limiter_note,
             readings = readings,
         )
     }
 
-    private fun thermalName(status: Int): String = when (status) {
-        PowerManager.THERMAL_STATUS_NONE -> "NONE · 正常"
-        PowerManager.THERMAL_STATUS_LIGHT -> "LIGHT · 轻微"
-        PowerManager.THERMAL_STATUS_MODERATE -> "MODERATE · 中度"
-        PowerManager.THERMAL_STATUS_SEVERE -> "SEVERE · 严重"
-        PowerManager.THERMAL_STATUS_CRITICAL -> "CRITICAL · 临界"
-        PowerManager.THERMAL_STATUS_EMERGENCY -> "EMERGENCY · 紧急"
-        PowerManager.THERMAL_STATUS_SHUTDOWN -> "SHUTDOWN · 即将关机"
-        else -> "未知($status)"
+    private fun thermalName(context: Context, status: Int): String = when (status) {
+        PowerManager.THERMAL_STATUS_NONE -> context.getString(R.string.lab_probe_thermal_none)
+        PowerManager.THERMAL_STATUS_LIGHT -> context.getString(R.string.lab_probe_thermal_light)
+        PowerManager.THERMAL_STATUS_MODERATE -> context.getString(R.string.lab_probe_thermal_moderate)
+        PowerManager.THERMAL_STATUS_SEVERE -> context.getString(R.string.lab_probe_thermal_severe)
+        PowerManager.THERMAL_STATUS_CRITICAL -> context.getString(R.string.lab_probe_thermal_critical)
+        PowerManager.THERMAL_STATUS_EMERGENCY -> context.getString(R.string.lab_probe_thermal_emergency)
+        PowerManager.THERMAL_STATUS_SHUTDOWN -> context.getString(R.string.lab_probe_thermal_shutdown)
+        else -> context.getString(R.string.lab_probe_thermal_unknown, status)
     }
 
     /** What the kernel is holding right now, per cluster and globally. */
     private fun enforcedLimits(clusters: List<CpuCluster>, value: (String) -> String?): Section {
         val readings = mutableListOf<Reading>()
         clusters.forEach { cluster ->
-            val dir = freqDir(cluster.policy)
-            readings += freqReading("${cluster.policy} 下限", "$dir/scaling_min_freq", value)
-            readings += freqReading("${cluster.policy} 上限", "$dir/scaling_max_freq", value)
-            readings += freqReading("${cluster.policy} 当前", "$dir/scaling_cur_freq", value)
+            readings += freqReading(R.string.lab_probe_label_cluster_min, listOf(cluster.policy), CpuFreqNodes.min(cluster.policy), value)
+            readings += freqReading(R.string.lab_probe_label_cluster_max, listOf(cluster.policy), CpuFreqNodes.max(cluster.policy), value)
+            readings += freqReading(R.string.lab_probe_label_cluster_cur, listOf(cluster.policy), CpuFreqNodes.cur(cluster.policy), value)
         }
-        readings += Reading(
-            "硬限制 (全局)", "$PPM/hard_userlimit_cpu_freq",
-            value("$PPM/hard_userlimit_cpu_freq"),
-            note = "有值就说明有客户端写了硬限制;节点不存在时这类写入是空操作",
-        )
         return Section(
-            title = "当前生效的限制",
-            note = "内核实际在执行的,不是我们请求的",
+            titleRes = R.string.lab_probe_section_enforced,
+            noteRes = R.string.lab_probe_section_enforced_note,
             readings = readings,
         )
     }
@@ -230,49 +228,47 @@ object LabProbe {
      * picks and how readily it uses the big cores.
      */
     private fun uclamp(value: (String) -> String?): Section = Section(
-        title = "调度 (uclamp)",
-        note = "0-100。作用于整个任务组,不是单个应用",
+        titleRes = R.string.lab_probe_section_uclamp,
+        noteRes = R.string.lab_probe_section_uclamp_note,
         readings = UCLAMP_GROUPS.flatMap { group ->
             listOf(
-                Reading("$group · 下限", "$CPUCTL/$group/cpu.uclamp.min", value("$CPUCTL/$group/cpu.uclamp.min")),
-                Reading("$group · 上限", "$CPUCTL/$group/cpu.uclamp.max", value("$CPUCTL/$group/cpu.uclamp.max")),
+                Reading(R.string.lab_probe_label_uclamp_min, "$CPUCTL/$group/cpu.uclamp.min", value("$CPUCTL/$group/cpu.uclamp.min"), labelArgs = listOf(group)),
+                Reading(R.string.lab_probe_label_uclamp_max, "$CPUCTL/$group/cpu.uclamp.max", value("$CPUCTL/$group/cpu.uclamp.max"), labelArgs = listOf(group)),
             )
         },
     )
 
     private fun platformLimiters(value: (String) -> String?): Section = Section(
-        title = "平台限制器",
-        note = "厂商自己的上限,叠在我们的限制之上",
+        titleRes = R.string.lab_probe_section_platform,
+        noteRes = R.string.lab_probe_section_platform_note,
         readings = listOf(
-            Reading("系统总频率上限", "$PERFMGR/syslimiter/syslimiter_limit_freq", value("$PERFMGR/syslimiter/syslimiter_limit_freq")),
-            Reading("Boost 控制", "$PERFMGR/boost_ctrl/cpu_ctrl/cpu_ctrl_enable", value("$PERFMGR/boost_ctrl/cpu_ctrl/cpu_ctrl_enable")),
-            Reading("FPSGO 帧率上限", "$FPSGO/limit_cfreq", value("$FPSGO/limit_cfreq")),
-            Reading("FPSGO 帧率下限", "$FPSGO/limit_rfreq", value("$FPSGO/limit_rfreq")),
+            Reading(R.string.lab_probe_label_syslimiter, "$PERFMGR/syslimiter/syslimiter_limit_freq", value("$PERFMGR/syslimiter/syslimiter_limit_freq")),
+            Reading(R.string.lab_probe_label_boost_ctrl, "$PERFMGR/boost_ctrl/cpu_ctrl/cpu_ctrl_enable", value("$PERFMGR/boost_ctrl/cpu_ctrl/cpu_ctrl_enable")),
+            Reading(R.string.lab_probe_label_fpsgo_max, "$FPSGO/limit_cfreq", value("$FPSGO/limit_cfreq")),
+            Reading(R.string.lab_probe_label_fpsgo_min, "$FPSGO/limit_rfreq", value("$FPSGO/limit_rfreq")),
         ),
     )
 
     private fun thermal(value: (String) -> String?): Section = Section(
-        title = "温控",
-        note = "只读;写温控策略需要替换加密的厂商策略文件,本应用不做",
+        titleRes = R.string.lab_probe_section_thermal,
+        noteRes = R.string.lab_probe_section_thermal_note,
         readings = listOf(
-            Reading("温控频率上限", "$PPM/thermal_limit", value("$PPM/thermal_limit")),
-            Reading("当前热功耗", "$PPM/thermal_cur_power", value("$PPM/thermal_cur_power")),
-            Reading("温控策略索引", "$PERFMGR/thermal_policy", value("$PERFMGR/thermal_policy")),
+            Reading(R.string.lab_probe_label_thermal_policy, "$PERFMGR/thermal_policy", value("$PERFMGR/thermal_policy")),
         ),
     )
 
     private fun touchBoost(value: (String) -> String?): Section = Section(
-        title = "触控加速",
-        note = "共享节点,MTK 自己也在写",
+        titleRes = R.string.lab_probe_section_touch,
+        noteRes = R.string.lab_probe_section_touch_note,
         readings = listOf(
-            Reading("触控加速状态", "$PERFMGR/tchbst/user/usrtch", value("$PERFMGR/tchbst/user/usrtch")),
-            Reading("CCI 模式", "/proc/cpufreq/cpufreq_cci_mode", value("/proc/cpufreq/cpufreq_cci_mode")),
+            Reading(R.string.lab_probe_label_touch_state, "$PERFMGR/tchbst/user/usrtch", value("$PERFMGR/tchbst/user/usrtch")),
+            Reading(R.string.lab_probe_label_cci_mode, "/proc/cpufreq/cpufreq_cci_mode", value("/proc/cpufreq/cpufreq_cci_mode")),
         ),
     )
 
-    private fun freqReading(label: String, node: String, value: (String) -> String?): Reading {
+    private fun freqReading(@StringRes labelRes: Int, labelArgs: List<Any>, node: String, value: (String) -> String?): Reading {
         val raw = value(node)
-        return Reading(label, node, raw?.let { "${it.tooLong()?.div(1000) ?: it} MHz" })
+        return Reading(labelRes, node, raw?.let { "${it.tooLong()?.div(1000) ?: it} MHz" }, labelArgs = labelArgs)
     }
 
     /** These nodes report kHz; parse without throwing on anything unexpected. */

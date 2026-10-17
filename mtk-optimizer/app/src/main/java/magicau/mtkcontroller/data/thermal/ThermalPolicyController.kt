@@ -11,6 +11,7 @@ import magicau.mtkcontroller.R
 import magicau.mtkcontroller.data.Message
 import magicau.mtkcontroller.data.log.AppLog
 import magicau.mtkcontroller.data.powerhal.PowerHal
+import magicau.mtkcontroller.data.powerhal.RequestOutcome
 
 /**
  * 温控档位的**唯一写入口**。
@@ -80,12 +81,6 @@ object ThermalPolicyController {
         val standingIndex: Int? get() = userIndex ?: appRuleIndex
     }
 
-    data class Outcome(
-        val success: Boolean,
-        val message: Message,
-        /** 原始错误，默认收起、可复制。界面用 `FailureNote` 展示。 */
-        val detail: String? = null,
-    )
 
     private val _state = MutableStateFlow(State())
     val state: StateFlow<State> = _state.asStateFlow()
@@ -105,7 +100,7 @@ object ThermalPolicyController {
      *
      * @param index 要生效的档位；null = 撤掉（回到按应用规则或系统默认）。
      */
-    suspend fun applyUserIndex(index: Int?): Outcome = mutex.withLock {
+    suspend fun applyUserIndex(index: Int?): RequestOutcome = mutex.withLock {
         withContext(Dispatchers.IO) {
             _state.value = _state.value.copy(userIndex = index)
             push(_state.value.standingIndex, standingSource())
@@ -114,13 +109,13 @@ object ThermalPolicyController {
     }
 
     /** 按应用温控：规则命中或离开时走这里。null = 当前没有规则命中。 */
-    suspend fun applyAppRule(index: Int?): Outcome = mutex.withLock {
+    suspend fun applyAppRule(index: Int?): RequestOutcome = mutex.withLock {
         withContext(Dispatchers.IO) {
             _state.value = _state.value.copy(appRuleIndex = index)
             // 用户明确选过的档位优先：那是我刚做的决定，不该被轮询盖掉。
             // 已经生效就更不用动。
             if (_state.value.userIndex != null && _state.value.appliedSource == Source.USER) {
-                return@withContext Outcome(
+                return@withContext RequestOutcome(
                     true,
                     Message(R.string.thermal_policy_user_priority),
                 )
@@ -134,12 +129,12 @@ object ThermalPolicyController {
      * 临时档：实验室走这里。durationMs 之后固件自行失效，
      * 调用方到期后应调 [releaseLab] 回到常驻意图。
      */
-    suspend fun requestLab(index: Int, durationMs: Int): Outcome = mutex.withLock {
+    suspend fun requestLab(index: Int, durationMs: Int): RequestOutcome = mutex.withLock {
         withContext(Dispatchers.IO) {
             labDurationMs = durationMs
             push(index, Source.LAB)
             if (_state.value.appliedIndex == index) {
-                Outcome(
+                RequestOutcome(
                     true,
                     when {
                         durationMs > 0 ->
@@ -149,16 +144,16 @@ object ThermalPolicyController {
                     },
                 )
             } else {
-                Outcome(false, Message(R.string.thermal_policy_apply_failed))
+                RequestOutcome(false, Message(R.string.thermal_policy_apply_failed))
             }
         }
     }
 
     /** 交还临时档，回到常驻意图。只有当前是 LAB 持有时才动作。 */
-    suspend fun releaseLab(): Outcome = mutex.withLock {
+    suspend fun releaseLab(): RequestOutcome = mutex.withLock {
         withContext(Dispatchers.IO) {
             if (_state.value.appliedSource != Source.LAB) {
-                return@withContext Outcome(true, Message(R.string.thermal_policy_nothing_to_release))
+                return@withContext RequestOutcome(true, Message(R.string.thermal_policy_nothing_to_release))
             }
             push(_state.value.standingIndex, standingSource())
             outcomeOf(_state.value.appliedIndex, _state.value.userIndex)
@@ -166,14 +161,14 @@ object ThermalPolicyController {
     }
 
     /** 全撤：用户按「释放」、或服务要退出时用。常驻意图一并清空。 */
-    suspend fun releaseAll(): Outcome = mutex.withLock {
+    suspend fun releaseAll(): RequestOutcome = mutex.withLock {
         withContext(Dispatchers.IO) {
             // 先放句柄，再清意图。顺序不能倒：push 的早退条件看的是
             // appliedIndex/appliedSource，先把状态清成"本来就没有"会让它直接返回，
             // 句柄留在固件里没人放。
             push(null, null)
             _state.value = State()
-            Outcome(
+            RequestOutcome(
                 _state.value.appliedIndex == null,
                 Message(
                     if (_state.value.appliedIndex == null) R.string.thermal_policy_released
@@ -206,14 +201,70 @@ object ThermalPolicyController {
      *
      * ## 顺序：先拿新的，再放旧的
      *
-     * 反过来有一个"两把都没有"的窗口，设备在那段时间回到系统默认温度阶梯，
-     * 频率会被压一下再放开 —— 用户看到的是"切档时卡了一下"。
-     * 拿不到新句柄时**保留旧的**：失败不该把现状弄丢。
+     * 拿不到新句柄时**保留旧的**：失败不该把现状弄丢。这是这个顺序**唯一**的理由。
+     *
+     * 曾经还配过一个理由 —— "无请求时设备回落到默认温度阶梯，频率被压一下再放开"。
+     * 那是设计期推断，**没有实测依据**，已删。两种顺序的中间态其实都不可推理，
+     * 只是不可推理的方式不同：
+     *
+     * - 先拿后放（这里）：新旧两把并存，固件选哪一把没有文档。
+     * - 先放后拿：200 ms 无请求，回落到 `thermal.conf`（`docs/thermal/facts.md` 的
+     *   THERM-001 有干净启动对照，cluster2 首档 3100000）。
+     *
+     * 而"并存时选哪把"**连取大取小都推不出来** —— 见下。
+     *
+     * ## 为什么和 `PerfLockController` 的顺序相反，而且不能统一
+     *
+     * 那个类是**先放后拿**，防的是两把同时生效：频率是区间，合并规则有文档
+     * （floor 取最大、ceiling 取最小），中间态是两者交集，用户会看到
+     * "设了 2.0 G 却只给 1.5 G"。它付得起的代价是中间一小段"无请求"——
+     * 对频率就是不受限，无害。
+     *
+     * 本资源付不起这个代价：无请求意味着回落到系统默认温度阶梯。
+     *
+     * 而先拿还有第二个理由，那个更硬：**失败路径不会变得更糟。** 新句柄没拿到时
+     * 旧句柄还在，用户原设置原样保留；先放则是一旦放成功、随后拿失败，就变成
+     * "什么都没有"—— 那是用户完全失去控制的状态。
+     *
+     * 敢先拿的前提是两把并存的窗口只有一趟 binder：拿到新句柄后**立刻**放旧的。
+     * 且本资源是**单值索引**而不是区间，两把并存时固件选哪一把没有文档，
+     * 但至少不会算出交集那种可推导的错误值。
+     *
+     * **看到顺序不一致不要"顺手统一"**，两个方向各在防一个真实的失败。
+     *
+     * ## 索引不在一个尺度上，所以"并存时选哪把"连取大取小都推不出来
+     *
+     * 各索引的 cluster2 首档（kHz，见 `docs/thermal/configs/README.md`）：
+     *
+     * ```
+     * 00=2600000  02=2300000  03=1700000  05=2850000  07=3300000
+     * 10=2800000  11=2000000  13=2600000  18=2100000
+     * ```
+     *
+     * 03 最保守、07 最激进，**索引号大小和激进度无关**。频率那边能说"两把并存取交集"，
+     * 是因为区间有大小；这里没有大小，所以连"固件大概会取哪一边"都说不出来。
+     * 这正是"同一资源一次只有一把句柄"必须靠代码保证、而不能指望固件行为的原因。
      *
      * ## 相同档位也要换句柄
      *
      * 不能因为"索引没变"就只改来源标签。临时档到期是固件行为，我们收不到通知；
      * 若只是改标签，到期后用户那一档也跟着没了。
+     *
+     * ## 放掉的是旧句柄，不是刚设的那个
+     *
+     * `stale` 在 acquire **之前**取，所以它永远是上一把的句柄号。切 1 → 2 的顺序是
+     * 拿到 2 的句柄、写入状态、**然后**放 1 的句柄。新档位在拿到句柄那一刻就已经
+     * 在下发了，中间不需要"先释放"；释放也不会碰刚设好的那一把。
+     *
+     * 但释放这一步**不能省**：PowerHAL 的请求是累积的，不是替换的。不放的话上一把
+     * 永远留在固件里，而我们从此丢了它的句柄号，再也放不掉 —— 只有进程死才能清。
+     * 这就是"同一资源一次只有一把句柄"那条规则的原因。
+     *
+     * ## 两种顺序都不做成设置项
+     *
+     * 这里和 `PerfLockController` 的顺序相反，而且**不提供开关让用户选**：
+     * 这不是用户层面的偏好，是 binder 合并语义，"两把并存时固件选哪一把没有文档"。
+     * 给一个没人能判断对错的选项，只会让用户以为是自己选错了方向。
      */
     private suspend fun push(target: Int?, source: Source?) {
         val current = _state.value
@@ -252,12 +303,12 @@ object ThermalPolicyController {
     }
 
     /** 按"成了 / 本来就是这样 / 没成"给一句结论。 */
-    private fun outcomeOf(applied: Int?, wanted: Int?): Outcome = when {
+    private fun outcomeOf(applied: Int?, wanted: Int?): RequestOutcome = when {
         // 两边都 null 也是"清掉了"，不是"应用了 null"。
         applied != null && applied == wanted ->
-            Outcome(true, Message(R.string.thermal_policy_applied, listOf(applied)))
-        applied == null -> Outcome(true, Message(R.string.thermal_policy_cleared))
-        else -> Outcome(false, Message(R.string.thermal_policy_apply_failed))
+            RequestOutcome(true, Message(R.string.thermal_policy_applied, listOf(applied)))
+        applied == null -> RequestOutcome(true, Message(R.string.thermal_policy_cleared))
+        else -> RequestOutcome(false, Message(R.string.thermal_policy_apply_failed))
     }
 }
 

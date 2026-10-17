@@ -196,4 +196,35 @@ class TweakCommandsTouchTest {
         val cleared = TweakRepository.KnobChange("report_rate", "debug.touch.report_rate", "360", "")
         assertTrue(cleared.describe().contains("360 → "))
     }
+    @Test
+    fun `数值项写的是用户填的数，不是预设`() {
+        val item = TouchItems.all().first { it.id == TouchItems.PRESS_DELAY }
+        val knob = item.numericKnobs.first { it.key == "touch_scan_press_time_delay" }
+        val command = knob.command(on = true, offValue = "0", onValue = "250")
+        assertTrue("应写入 250: $command", command.contains("value:s:'250'"))
+        assertFalse("不该写预设 300: $command", command.contains("'300'"))
+    }
+
+    @Test
+    fun `数值项的关闭仍然是恢复原值，不是恢复成填过的数`() {
+        // 关闭 = 写回打开前的快照。用户把防抖调到 250 之后再关掉，
+        // 设备应该回到出厂 300，而不是停在 250。
+        val knob = TouchItems.all().first { it.id == TouchItems.PRESS_DELAY }
+            .numericKnobs.first { it.key == "touch_scan_press_time_delay" }
+        val itemId = TouchItems.PRESS_DELAY
+        val originals = mapOf(knob.originalKey(itemId) to "300")
+        val command = knob.command(on = false, offValue = knob.offTarget(itemId, originals), onValue = "250")
+        assertTrue("应恢复 300: $command", command.contains("value:s:'300'"))
+    }
+
+    @Test
+    fun `数值范围都包住预设值`() {
+        // 范围不包住预设值时，界面一打开框里就是红的。
+        TouchItems.all().flatMap { item ->
+            item.numericKnobs.map { item.id to it }
+        }.forEach { (id, knob) ->
+            val range = knob.numberRange!!
+            assertTrue("$id/${knob.key} 的预设 ${knob.onValue} 不在 $range 里", knob.onValue.toInt() in range)
+        }
+    }
 }

@@ -46,6 +46,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
@@ -389,6 +390,55 @@ private fun GeneralSection(state: SettingsUiState, actions: SettingsActions) {
             title = stringResource(R.string.freq_ceiling_title),
             subtitle = stringResource(state.freqRangeMode.labelRes),
             onClick = { ceilingDialog = true },
+        )
+        InsetDivider()
+        // 与"应用方式"并列：一个说什么时候下发，一个说下发什么。
+        // 默认关 —— 实测软硬等效（docs/cpu/facts.md 2026-10-14）。
+        SettingsRow(
+            icon = Icons.Default.Build,
+            iconTint = ToolsIcon,
+            title = stringResource(R.string.freq_hard_limits_title),
+            subtitle = stringResource(
+                if (state.freqHardLimits) R.string.freq_hard_limits_on else R.string.freq_hard_limits_off,
+            ),
+            onClick = { actions.onSetFreqHardLimits(!state.freqHardLimits) },
+        )
+
+        InsetDivider()
+        // 白名单两行：上面一行直接改，下面一行打开系统那一页。
+        //
+        // **为什么两个入口都要。** 直写只覆盖 Doze 白名单这一项，而厂商 ROM 的
+        // 后台管理远不止一项；系统那一页能看到全貌，用户也能自己确认我们改成功了没有。
+        val whitelisted = state.batteryWhitelisted
+        SettingsRow(
+            icon = Icons.Default.Settings,
+            iconTint = NotifyIcon,
+            title = stringResource(R.string.battery_whitelist_title),
+            subtitle = stringResource(R.string.battery_whitelist_sub),
+            // 读不到就只说明"读不到"，不给开关 ——
+            // 拿 false 冒充"未加入"是让用户去拨一个我们并不知道状态的开关。
+            trailingText = if (whitelisted == null) {
+                stringResource(R.string.battery_whitelist_unknown)
+            } else {
+                null
+            },
+            trailing = whitelisted?.let { inWhitelist ->
+                {
+                    Switch(
+                        checked = inWhitelist,
+                        enabled = !state.busy,
+                        onCheckedChange = actions.onSetBatteryWhitelist,
+                    )
+                }
+            },
+        )
+        InsetDivider()
+        SettingsRow(
+            icon = Icons.Default.Settings,
+            iconTint = NotifyIcon,
+            title = stringResource(R.string.battery_whitelist_open),
+            subtitle = stringResource(R.string.battery_whitelist_open_sub),
+            onClick = actions.onOpenBatterySettings,
         )
     }
 }

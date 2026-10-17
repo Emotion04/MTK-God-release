@@ -1,8 +1,10 @@
-package magicau.mtkcontroller.data.diag
+package magicau.mtkcontroller.data.probe
 
 import org.junit.Assert.*
 import org.junit.Test
 import java.io.File
+import magicau.mtkcontroller.data.probe.ProbeProcess
+import magicau.mtkcontroller.data.diag.CameraCollector
 
 /** Real child JVM: portable process tests, no phone or shell dependency. */
 class ProbeProcessTest {

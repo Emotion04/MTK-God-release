@@ -1,6 +1,8 @@
 package magicau.mtkcontroller.data.privilege
 
-import magicau.mtkcontroller.data.diag.DaemonExec
+import magicau.mtkcontroller.R
+import magicau.mtkcontroller.data.Message
+import magicau.mtkcontroller.data.exec.DaemonExec
 
 /**
  * `cmd package compile -m speed-profile` 的进度轮询。
@@ -16,7 +18,8 @@ import magicau.mtkcontroller.data.diag.DaemonExec
  */
 object CompileProgress {
 
-    data class Snapshot(val dex2oatCount: Int, val odexSizeKb: Long?, val note: String)
+    /** [note] 是 `Message` 不是 `String`：给用户看的文案，而这里拿不到 Context。 */
+    data class Snapshot(val dex2oatCount: Int, val odexSizeKb: Long?, val note: Message)
 
     /** @param pkg 目标应用；传空则只报告全系统 dex2oat 数量。 */
     suspend fun snapshot(pkg: String): Snapshot {
@@ -34,10 +37,10 @@ object CompileProgress {
         } else null
 
         val note = when {
-            ps == null -> "命令没能送到用户服务，请确认 Shizuku 已连接"
-            dex2oat < 0 -> "读不到 dex2oat 进程数；进度只按 odex 体积变化判断"
-            dex2oat == 0 -> "当前没有 dex2oat 在跑；可能已结束，也可能还没到编译阶段"
-            else -> "有 $dex2oat 个 dex2oat 在跑"
+            ps == null -> Message(R.string.compile_progress_no_service)
+            dex2oat < 0 -> Message(R.string.compile_progress_no_count)
+            dex2oat == 0 -> Message(R.string.compile_progress_idle)
+            else -> Message(R.string.compile_progress_running, listOf(dex2oat))
         }
         return Snapshot(dex2oat, odexKb, note)
     }

@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import android.os.SystemClock
 import magicau.mtkcontroller.R
 import magicau.mtkcontroller.data.privilege.PrivilegeManager
@@ -99,8 +100,10 @@ class FeatureTrialViewModel(container: AppContainer) : ViewModel() {
     fun apply(feature: VivoFeature, option: String?) {
         if (_state.value.busy) return
         viewModelScope.launch {
-            _state.value = _state.value.copy(busy = true, message = "正在写入…")
-            val gateReason = vivo.probeGate(feature)
+            _state.value = _state.value.copy(busy = true, message = containerContext.getString(R.string.tweaks_trial_msg_writing))
+            // probeGate 里有 getprop，是一次特权往返。viewModelScope 在 Main 上，
+            // 不切线程的话点一下按钮界面就停住几十毫秒。
+            val gateReason = withContext(kotlinx.coroutines.Dispatchers.IO) { vivo.probeGate(feature) }
             val message = FeatureTrial.applyOnce(containerContext, vivo, feature, gateReason, option)
             _state.value = _state.value.copy(busy = false, message = message)
             reload()
@@ -111,7 +114,7 @@ class FeatureTrialViewModel(container: AppContainer) : ViewModel() {
     fun restore(feature: VivoFeature) {
         if (_state.value.busy) return
         viewModelScope.launch {
-            _state.value = _state.value.copy(busy = true, message = "正在恢复…")
+            _state.value = _state.value.copy(busy = true, message = containerContext.getString(R.string.tweaks_trial_msg_restoring))
             val outcome = vivo.apply(feature, restore = true, option = null, force = false)
             _state.value = _state.value.copy(busy = false, message = outcome.message.resolve(containerContext))
             reload()
@@ -137,7 +140,7 @@ class FeatureTrialViewModel(container: AppContainer) : ViewModel() {
     fun backupThenExport() {
         if (_state.value.busy) return
         viewModelScope.launch {
-            _state.value = _state.value.copy(busy = true, message = "正在读取本机配置…")
+            _state.value = _state.value.copy(busy = true, message = containerContext.getString(R.string.tweaks_trial_msg_reading_config))
             val entries = StateBackup.capture()
             val text = StateBackup.encode(
                 entries = entries,
@@ -158,9 +161,9 @@ class FeatureTrialViewModel(container: AppContainer) : ViewModel() {
         val text = _state.value.pendingBackupExport.ifEmpty { return }
         viewModelScope.launch {
             containerContext.contentResolver.openOutputStream(uri, "wt")?.use { it.write(text.toByteArray()) }
-                ?: error("无法写入所选文件")
+                ?: error(containerContext.getString(R.string.tweaks_trial_err_write_failed))
             _state.value = _state.value.copy(pendingBackupExport = "",
-                message = "已导出 ${OwnedKeys.all.size} 个键的当前值")
+                message = containerContext.getString(R.string.tweaks_trial_msg_exported, OwnedKeys.all.size))
         }
     }
 
@@ -173,7 +176,7 @@ class FeatureTrialViewModel(container: AppContainer) : ViewModel() {
     fun importBackup(uri: android.net.Uri) {
         if (_state.value.busy) return
         viewModelScope.launch {
-            _state.value = _state.value.copy(busy = true, message = "正在读取备份…")
+            _state.value = _state.value.copy(busy = true, message = containerContext.getString(R.string.tweaks_trial_msg_reading_backup))
             val text = runCatching {
                 containerContext.contentResolver.openInputStream(uri)?.use {
                     it.readBytes().toString(Charsets.UTF_8)
@@ -220,16 +223,18 @@ class FeatureTrialViewModel(container: AppContainer) : ViewModel() {
             "${it.owned.table} ${it.owned.key}" in state.restoreSelected
         }
         if (chosen.isEmpty()) {
-            _state.value = state.copy(message = "没有勾选任何一项")
+            _state.value = state.copy(message = containerContext.getString(R.string.tweaks_trial_msg_none_selected))
             return
         }
         viewModelScope.launch {
-            _state.value = _state.value.copy(busy = true, message = "正在恢复并核对…")
+            _state.value = _state.value.copy(busy = true, message = containerContext.getString(R.string.tweaks_trial_msg_applying))
             val (ok, failures) = StateBackup.restore(chosen)
             _state.value = _state.value.copy(busy = false, restoreItems = emptyList(),
                 restoreSelected = emptySet(), restoreSource = "",
-                message = if (failures.isEmpty()) "已恢复并核对 $ok 项"
-                else "恢复 $ok 项；${failures.size} 项未写入：${failures.joinToString("、")}")
+                message = if (failures.isEmpty()) containerContext.getString(R.string.tweaks_trial_msg_restored, ok)
+                else containerContext.getString(
+                    R.string.tweaks_trial_msg_restore_partial, ok, failures.size, failures.joinToString("、"),
+                ))
         }
     }
 
@@ -242,7 +247,7 @@ class FeatureTrialViewModel(container: AppContainer) : ViewModel() {
     fun startDrift() {
         if (_state.value.driftRunning) return
         viewModelScope.launch {
-            _state.value = _state.value.copy(driftRunning = true, message = "正在读取当前配置…")
+            _state.value = _state.value.copy(driftRunning = true, message = containerContext.getString(R.string.tweaks_trial_msg_sampling))
             driftBaseline = StateBackup.sample()
             _state.value = _state.value.copy(message = "")
         }
@@ -252,7 +257,7 @@ class FeatureTrialViewModel(container: AppContainer) : ViewModel() {
     fun stopDrift() {
         if (!_state.value.driftRunning) return
         viewModelScope.launch {
-            _state.value = _state.value.copy(message = "正在再次读取…")
+            _state.value = _state.value.copy(message = containerContext.getString(R.string.tweaks_trial_msg_resampling))
             val now = StateBackup.sample()
             val changed = StateBackup.drift(driftBaseline, now)
             driftBaseline = emptyMap()
@@ -274,7 +279,7 @@ class FeatureTrialViewModel(container: AppContainer) : ViewModel() {
     fun viewReport() {
         if (_state.value.busy) return
         viewModelScope.launch {
-            _state.value = _state.value.copy(busy = true, message = "正在收集…")
+            _state.value = _state.value.copy(busy = true, message = containerContext.getString(R.string.tweaks_trial_msg_collecting))
             val report = FeatureTrial.report(containerContext)
             _state.value = _state.value.copy(busy = false, report = report, message = "")
         }
@@ -289,7 +294,7 @@ class FeatureTrialViewModel(container: AppContainer) : ViewModel() {
     fun buildReportThenExport() {
         if (_state.value.busy) return
         viewModelScope.launch {
-            _state.value = _state.value.copy(busy = true, message = "正在收集本机信息…")
+            _state.value = _state.value.copy(busy = true, message = containerContext.getString(R.string.tweaks_trial_msg_collecting_device))
             val report = FeatureTrial.report(containerContext)
             _state.value = _state.value.copy(busy = false, report = report, message = "")
             _pendingExport.value = true
@@ -310,7 +315,11 @@ class FeatureTrialViewModel(container: AppContainer) : ViewModel() {
                     out.write(text.toByteArray())
                 } != null
             }.getOrDefault(false)
-            _state.value = _state.value.copy(message = if (ok) "报告已保存" else "保存失败")
+            _state.value = _state.value.copy(
+                message = containerContext.getString(
+                    if (ok) R.string.tweaks_trial_msg_report_saved else R.string.tweaks_trial_msg_save_failed,
+                ),
+            )
         }
     }
 }

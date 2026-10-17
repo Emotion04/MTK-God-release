@@ -1,6 +1,6 @@
 package magicau.mtkcontroller.data.privilege
 
-import magicau.mtkcontroller.data.diag.ProbeProcess
+import magicau.mtkcontroller.data.probe.ProbeProcess
 
 /**
  * `dumpsys battery set ...` 的假电量 / 假充电。
@@ -12,7 +12,7 @@ import magicau.mtkcontroller.data.diag.ProbeProcess
  * 唯一确定能改到的是**软件层的省电策略**：`low_power=0` 之类。想缓解充电变慢，从那里
  * 入手，不要指望假电量。
  *
- * 副作用：假充电会让 `AxMaintenance` 的充电预热误判为已插电，所以 [isFaked] 会交叉
+ * 副作用：假充电会让 `AppMaintenance` 的充电预热误判为已插电，所以 [isFaked] 会交叉
  * 核对内核电源节点，读不到时才退回"无法分辨"并在调用方提示。
  */
 object FakeBattery {

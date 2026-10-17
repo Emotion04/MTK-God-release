@@ -197,7 +197,7 @@ fun AboutCard(modifier: Modifier = Modifier) {
 
         InsetDivider(startIndent = 16.dp)
         Text(
-            text = "versionCode ${BuildConfig.VERSION_CODE}，${BuildConfig.APPLICATION_ID}",
+            text = stringResource(R.string.about_version_line, BuildConfig.VERSION_CODE, BuildConfig.APPLICATION_ID),
             style = MaterialTheme.typography.bodySmall,
             fontFamily = FontFamily.Monospace,
             color = MaterialTheme.colorScheme.onSurfaceVariant,

@@ -39,7 +39,7 @@ AX `common.sh:2283` 全局请求只有 11 个 int，游戏请求有 14 个。与
 
 ## 亮度：接口语义已进一步明确
 
-从 `28-framework.jar` 用 JADX 单类提取 `vivo.common.ILcmBrightnessInterface`，本地结果 `reference/rom-analysis/lcm-interface.java`：
+从 `28-framework.jar` 用 JADX 单类提取 `vivo.common.ILcmBrightnessInterface`，本地结果 `reference/derived/rom-analysis/lcm-interface.java`：
 
 - 事务 8：`setBrightnessPolicyLimitPercent(float)`，返回 boolean。
 - 事务 10：`getBrightnessPolicyPercent(int brightnessNit, int envLux)`，返回 int。

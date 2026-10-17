@@ -2,13 +2,15 @@ package magicau.mtkcontroller.data.tweaks
 
 import android.content.Context
 import magicau.mtkcontroller.R
+import magicau.mtkcontroller.data.settings.RecoverySnapshot
 import magicau.mtkcontroller.data.Message
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import magicau.mtkcontroller.data.log.AppLog
-import magicau.mtkcontroller.data.diag.SettingChannel
+import magicau.mtkcontroller.data.settings.SettingChannel
 import magicau.mtkcontroller.data.privilege.PrivilegeManager
 
 enum class TouchBackend(val labelRes: Int) {
@@ -39,15 +41,22 @@ enum class TweakLifetime {
  * 写 settings 键几乎总能写进去、也总能读回来 —— 但那只证明"写成功"，不证明系统
  * 真的消费了它。三类分开标，界面上直接挂徽标，不把"写成功"当成"生效"。
  */
+/**
+ * 证据等级，**声明顺序就是强弱顺序**。
+ *
+ * 正式包按 `-PminEvidence=` 卡一个下限，比下限低的项不列（见 `TweaksViewModel.touchItemsById`）。
+ * 所以顺序不能随便调：`LIKELY_USELESS < WRITTEN < CONFIRMED`，
+ * `compareTo` 等于「比谁更有把握」。
+ */
 enum class Evidence(val labelRes: Int) {
-    /** 有系统侧读数，写没写中能直接看出来。 */
-    CONFIRMED(R.string.evidence_confirmed),
+    /** 本机没有对应硬件或接口，预计写了也不起作用。 */
+    LIKELY_USELESS(R.string.evidence_useless),
 
     /** 读回一致，但没有任何读数能证明系统用了它。 */
     WRITTEN(R.string.evidence_written),
 
-    /** 本机没有对应硬件或接口，预计写了也不起作用。 */
-    LIKELY_USELESS(R.string.evidence_useless),
+    /** 有系统侧读数，写没写中能直接看出来。 */
+    CONFIRMED(R.string.evidence_confirmed),
 }
 
 /**
@@ -269,7 +278,26 @@ class VivoTweaks(
      */
     private val onPerformanceModePause: suspend (Boolean) -> Unit = {},
 ) {
-    private val snapshots = context.getSharedPreferences("vivo_tweak_baselines", Context.MODE_PRIVATE)
+    private val baselines = context.getSharedPreferences("vivo_tweak_baselines", Context.MODE_PRIVATE)
+
+    /**
+     * 原值走共享的 [RecoverySnapshot]，和触控用同一套规则、同一套持久化。
+     *
+     * `vivo_tweak_baselines` 现在只留两份**本功能特有**的东西：
+     * `:written`（这次写进去的值，漂移保护拿它比对）和游戏加速的 `active` 标记。
+     * 原值本身 —— 包括"原键不存在"—— 由快照按统一步骤存取，见 [originalOf]。
+     */
+    private val originals = RecoverySnapshot(
+        // 每次读取都从 SharedPreferences 现取：写入方只有本类，读取是每次开关一次，
+        // 不值得为它单独起一条常驻 Flow。
+        store = flow { emit(baselines.all.mapNotNull { (k, v) -> if (v is String) k to v else null }.toMap()) },
+        write = { map ->
+            baselines.edit().apply {
+                baselines.all.keys.forEach { remove(it) }
+                map.forEach { (k, v) -> putString(k, v) }
+            }.commit()
+        },
+    )
     private val mutex = Mutex()
     private val smartPrefs = context.getSharedPreferences("smart_platform_backup", Context.MODE_PRIVATE)
     private val journal = context.getSharedPreferences("tweak_journal", Context.MODE_PRIVATE)
@@ -292,7 +320,7 @@ class VivoTweaks(
             for (feature in VivoFeature.entries) {
                 appendLine("\n${context.getString(feature.labelRes)} · 待恢复=${hasSnapshot(feature)}")
                 for (key in feature.values.keys) {
-                    appendLine("$key 当前=${read(key) ?: "读取失败"} 原值=${snapshots.getString(feature.name + key, null) ?: "未保存"}")
+                    appendLine("$key 当前=${read(key) ?: "读取失败"} 原值=${originalOf(feature, key) ?: "未保存"}")
                 }
             }
             appendLine("\n最近操作（限 24000 字符；过早记录可能已淘汰）")
@@ -311,32 +339,32 @@ class VivoTweaks(
 
     private suspend fun captureSmartInitialLocked(): SmartBackup {
         smartBackup()?.let { return it }
-        check(PrivilegeManager.state.value.mode.canElevate) { "请先授权 Shizuku，再保存初始状态" }
+        check(PrivilegeManager.state.value.mode.canElevate) { context.getString(R.string.tweaks_vivo_need_shizuku_initial) }
         val values = SmartPlatform.inspect().filterKeys { it in SmartPlatform.keys }
-        check(values.isNotEmpty()) { "未读到配置，未生成备份，请重新连接 Shizuku 后重试" }
+        check(values.isNotEmpty()) { context.getString(R.string.tweaks_vivo_no_config_backup) }
         val backup = SmartBackup(device = device, rom = rom, capturedAt = System.currentTimeMillis(),
             values = values, missing = SmartPlatform.keys.filter { it !in values })
-        check(smartPrefs.edit().putString("initial", SmartBackupCodec.encode(backup)).commit()) { "保存初始备份失败" }
+        check(smartPrefs.edit().putString("initial", SmartBackupCodec.encode(backup)).commit()) { context.getString(R.string.tweaks_vivo_save_initial_failed) }
         return backup
     }
 
     suspend fun importSmartBackup(backup: SmartBackup) = mutex.withLock {
         withContext(Dispatchers.IO) {
-            check(smartPrefs.edit().putString("imported", SmartBackupCodec.encode(backup)).commit()) { "保存导入档案失败" }
+            check(smartPrefs.edit().putString("imported", SmartBackupCodec.encode(backup)).commit()) { context.getString(R.string.tweaks_vivo_save_import_failed) }
         }
     }
 
     suspend fun restoreSmartBackup(slot: String): TweakRepository.Outcome = mutex.withLock {
         withContext(Dispatchers.IO + kotlinx.coroutines.NonCancellable) {
-            check(PrivilegeManager.state.value.mode.canElevate) { "恢复需要 Shizuku 授权" }
-            val backup = smartBackup(slot) ?: error("没有可恢复的备份")
-            check(!hasSnapshot(VivoFeature.PRELOAD)) { "请先恢复 AI 预加载，避免覆盖其配置" }
+            check(PrivilegeManager.state.value.mode.canElevate) { context.getString(R.string.tweaks_vivo_restore_need_shizuku) }
+            val backup = smartBackup(slot) ?: error(context.getString(R.string.tweaks_vivo_no_restorable_backup))
+            check(!hasSnapshot(VivoFeature.PRELOAD)) { context.getString(R.string.tweaks_vivo_restore_preload_first) }
             val target = SmartBackupCodec.restoreValue(backup, device, rom)
             // 恢复也保留操作前值；导入文件中的候选键绝不变成写入授权。
             val (ok, rollback) = SmartRestore.run(target, read = { read(SmartBackupCodec.AI_KEY) }, save = { current ->
                 val before = SmartBackup(device = device, rom = rom, capturedAt = System.currentTimeMillis(),
                     values = mapOf(SmartBackupCodec.AI_KEY to current), source = "恢复前 AI 配置")
-                check(smartPrefs.edit().putString("previous", SmartBackupCodec.encode(before)).commit()) { "保存恢复前状态失败" }
+                check(smartPrefs.edit().putString("previous", SmartBackupCodec.encode(before)).commit()) { context.getString(R.string.tweaks_vivo_save_previous_failed) }
             }, write = { write(SmartBackupCodec.AI_KEY, it) })
             val message = if (ok) Message(R.string.vivo_ai_restored)
             else if (rollback) Message(R.string.vivo_rollback_ok)
@@ -389,13 +417,15 @@ class VivoTweaks(
         return if (ok) null else "$key requested=$value readback=${actual ?: "unreadable"}"
     }
 
-    fun describe(feature: VivoFeature, current: Map<String, String?>): String {
+    suspend fun describe(feature: VivoFeature, current: Map<String, String?>): String {
         val values = feature.values.keys.associateWith { current[it] }
         return when {
-            values.values.any { it == null } -> "读取失败，请检查 Shizuku"
-            snapshots.contains(feature.name + ":saved") -> "已保存原值，" + values.values.joinToString(" / ")
-            values.values.any { it == "null" } && !feature.allowMissing -> "本机未提供所需配置"
-            else -> "当前配置：" + values.values.joinToString(" / ")
+            values.values.any { it == null } -> context.getString(R.string.tweaks_vivo_describe_failed)
+            originals.hasEntry(RecoverySnapshot.VIVO, feature.name) ->
+                context.getString(R.string.tweaks_vivo_describe_saved, values.values.joinToString(" / "))
+            values.values.any { it == "null" } && !feature.allowMissing ->
+                context.getString(R.string.tweaks_vivo_describe_missing)
+            else -> context.getString(R.string.tweaks_vivo_describe_current, values.values.joinToString(" / "))
         }
     }
 
@@ -421,11 +451,11 @@ class VivoTweaks(
             val installed = runCatching {
                 context.packageManager.getPackageInfo(pkg, 0); true
             }.getOrDefault(false)
-            if (!installed) return "未安装 $pkg"
+            if (!installed) return context.getString(R.string.tweaks_vivo_gate_pkg_missing, pkg)
         }
         for ((prop, expected) in gate.props) {
             val actual = VivoReply.output(PrivilegeManager.exec("getprop $prop"))?.trim()
-            if (actual != expected) return "$prop=$actual，需要 $expected"
+            if (actual != expected) return context.getString(R.string.tweaks_vivo_gate_prop_mismatch, prop, actual.toString(), expected)
         }
         // 有门禁但没配具体条件时，要求键必须真实存在。
         if (gate.packages.isEmpty() && gate.props.isEmpty()) {
@@ -433,13 +463,47 @@ class VivoTweaks(
                 val v = read(key)
                 v == null || v == "null"
             }
-            if (missing.isNotEmpty()) return "本机没有 ${missing.joinToString("、") { it.substringAfterLast(' ') }}"
+            if (missing.isNotEmpty()) return context.getString(
+                R.string.tweaks_vivo_gate_keys_missing,
+                missing.joinToString("、") { it.substringAfterLast(' ') },
+            )
         }
         return null
     }
 
     private suspend fun gateSatisfied(feature: VivoFeature): Boolean = probeGate(feature) == null
-    fun hasSnapshot(feature: VivoFeature): Boolean = snapshots.contains(feature.name + ":saved")
+    suspend fun hasSnapshot(feature: VivoFeature): Boolean = originals.hasEntry(RecoverySnapshot.VIVO, feature.name)
+
+    /** 全部条目取原值的统一入口：读当前值，`null` 表示本机没有这个键。 */
+    private suspend fun captureOriginals(feature: VivoFeature, keys: Collection<String>) {
+        // 键名形如 `system power_save_type`，整段交给 `settings get` —— 表名和键名之间的
+        // 空格正是 `settings` 命令要的。早先这里只取了空格后面的半截，表名一丢就读错表。
+        originals.capture(RecoverySnapshot.VIVO, feature.name, keys) { spec ->
+            read(spec)?.takeIf { it != "null" }
+        }
+    }
+
+    /** 这个键存下的原值；`null` = 没存过，或原键当时不存在（后者见 [originalPresent]）。 */
+    private suspend fun originalOf(feature: VivoFeature, spec: String): String? =
+        originals.original(RecoverySnapshot.VIVO, feature.name, spec)
+
+    /** 升级迁移用：丢掉这个特性的全部原值，值本身留在系统里当"当前默认"。 */
+    suspend fun releaseOriginals(feature: VivoFeature) {
+        originals.release(RecoverySnapshot.VIVO, feature.name, feature.values.keys)
+        baselines.edit().apply {
+            remove(feature.name + ":saved")
+            feature.values.keys.forEach { remove(feature.name + it + ":written") }
+        }.commit()
+    }
+
+    /** 升级迁移用：清掉游戏加速的存活标记。 */
+    fun clearSnapshotMarkers() {
+        baselines.edit().remove(GAME_ACCEL_MARKER).commit()
+    }
+
+    /** 原键在取快照时是否存在。 */
+    private suspend fun originalPresent(feature: VivoFeature, spec: String): Boolean =
+        originals.isPresent(RecoverySnapshot.VIVO, feature.name, spec)
 
     suspend fun apply(feature: VivoFeature, restore: Boolean, option: String? = null, force: Boolean = false): TweakRepository.Outcome = mutex.withLock {
         withContext(Dispatchers.IO + kotlinx.coroutines.NonCancellable) {
@@ -456,7 +520,7 @@ class VivoTweaks(
                     return@withContext TweakRepository.Outcome(false, Message(R.string.vivo_backup_failed))
             }
             if (!restore) {
-                val conflict = conflictingFeature(feature, VivoFeature.entries.filter(::hasSnapshot).toSet())
+                val conflict = conflictingFeature(feature, VivoFeature.entries.filter { hasSnapshot(it) }.toSet())
                 if (conflict != null) {
                     return@withContext TweakRepository.Outcome(
                         false,
@@ -505,9 +569,10 @@ class VivoTweaks(
                 else -> feature.values
             }
             val marker = feature.name + ":saved"
-            if (!restore && feature.lifetime == TweakLifetime.TIMED && hasSnapshot(feature))
+            if (!restore && feature.lifetime == TweakLifetime.TIMED &&
+                originals.hasEntry(RecoverySnapshot.VIVO, feature.name))
                 return@withContext TweakRepository.Outcome(false, Message(R.string.vivo_pending_snapshot))
-            if (restore && !snapshots.contains(marker)) {
+            if (restore && !originals.hasEntry(RecoverySnapshot.VIVO, feature.name)) {
                 // 这条必须记。早前它静默返回，用户点"恢复原值"没反应，
                 // 而流水里一条记录都没有，只能靠猜走到了哪个分支。
                 record("${feature.name} restore 被拦：没有快照（marker=$marker）")
@@ -516,8 +581,9 @@ class VivoTweaks(
 
             // 持久配置可能已经开了几小时，期间系统自己改过这些键（充电策略、场景切换）。
             // 直接写回快照会覆盖掉系统的选择 —— 先报出来，让用户确认一次。
-            if (restore && !force && feature.lifetime == TweakLifetime.PERSISTENT && snapshots.contains(marker)) {
-                val written = feature.values.keys.associateWith { snapshots.getString(feature.name + it + ":written", null) }
+            if (restore && !force && feature.lifetime == TweakLifetime.PERSISTENT &&
+                originals.hasEntry(RecoverySnapshot.VIVO, feature.name)) {
+                val written = feature.values.keys.associateWith { baselines.getString(feature.name + it + ":written", null) }
                 val drifted = feature.values.keys.filter { key ->
                     val expected = written[key] ?: return@filter false
                     val now = read(key)
@@ -542,14 +608,13 @@ class VivoTweaks(
                 }
             }
 
-            if (!restore && !snapshots.contains(marker)) {
+            if (!restore && !originals.hasEntry(RecoverySnapshot.VIVO, feature.name)) {
+                // 读不到就不取 —— 没有原值就恢复不到原样，宁可这一轮不写。
                 val baseline = feature.values.keys.associateWith { read(it) }
                 if (baseline.values.any { it == null || (!feature.allowMissing && it == "null") }) {
                     return@withContext TweakRepository.Outcome(false, Message(R.string.vivo_config_unreadable))
                 }
-                val editor = snapshots.edit().putBoolean(marker, true)
-                baseline.forEach { (key, value) -> editor.putString(feature.name + key, value) }
-                if (!editor.commit()) return@withContext TweakRepository.Outcome(false, Message(R.string.vivo_save_failed))
+                captureOriginals(feature, feature.values.keys)
             }
             if (!restore) {
                 // **每一次写入都要刷新 `:written`，不是只在第一次。**
@@ -558,7 +623,7 @@ class VivoTweaks(
                 // `:written` 还是第一批的旧值 —— 而恢复时的漂移保护正是拿 `:written`
                 // 和当前值比对，于是它把"我自己后来写进去的值"判成"期间系统改动了"，
                 // 恢复被永久拦下，一条都不写。用户看到的就是"点恢复没反应"。
-                val written = snapshots.edit()
+                val written = baselines.edit()
                 requested.forEach { (key, value) -> written.putString(feature.name + key + ":written", value) }
                 // 这次没写的候选键，旧记录必须清掉：留着等于声称自己写了一个没写的键，
                 // 恢复时的漂移保护会继续拿它当依据。
@@ -571,22 +636,22 @@ class VivoTweaks(
             // 之后这里取到 null 会被判成"恢复快照不完整"而整个拒绝执行 ——
             // 用户一个键都恢复不了。跳过它们，只写这次真正动过的。
             val targets = if (restore) feature.values.keys.mapNotNull { key ->
-                snapshots.getString(feature.name + key, null)?.let { key to it }
+                originalOf(feature, key)?.let { key to it }
             }.toMap() else requested
             if (targets.values.any { it == null }) {
                 return@withContext TweakRepository.Outcome(false, Message(R.string.vivo_snapshot_incomplete))
             }
             if (restore) record("${feature.name} restore=true 写回 targets=$targets")
             if (feature.lifetime == TweakLifetime.TIMED && !restore) {
-                val original = feature.values.keys.associateWith { snapshots.getString(feature.name + it, null)!! }
+                val original = feature.values.keys.associateWith { originalOf(feature, it)!! }
                 if (feature == VivoFeature.GAME_THERMAL && original.values.any { it !in listOf("0", "1") })
                     return@withContext TweakRepository.Outcome(false, Message(R.string.vivo_thermal_unknown))
                 record("${feature.name} 实验开始 targets=$requested original=$original")
                 val raw = PrivilegeManager.exec("timeout 50 sh -c ${VivoReply.quote(SettingExperiment.script(requested, original))}")
                 val restored = original.all { (key, value) -> read(key) == value }
                 val completed = VivoReply.output(raw)?.contains("[experiment-applied]") == true
-                val cleared = restored && snapshots.edit().remove(marker).apply {
-                    feature.values.keys.forEach { remove(feature.name + it); remove(feature.name + it + ":written") }
+                val cleared = restored && baselines.edit().remove(marker).apply {
+                    feature.values.keys.forEach { remove(feature.name + it + ":written") }
                 }.commit()
                 record("${feature.name} completed=$completed restored=$restored snapshotCleared=$cleared output=${raw?.take(6000)}")
                 return@withContext TweakRepository.Outcome(
@@ -626,7 +691,7 @@ class VivoTweaks(
             }
             var message = if (failed.isEmpty()) {
                 if (restore) {
-                    val editor = snapshots.edit().remove(marker)
+                    val editor = baselines.edit().remove(marker)
                     feature.values.keys.forEach { editor.remove(feature.name + it); editor.remove(feature.name + it + ":written") }
                     if (!editor.commit()) Message(R.string.vivo_restored_cleanup_failed)
                     else if (feature == VivoFeature.PERFORMANCE_MODE) Message(R.string.vivo_perf_restored)
@@ -643,7 +708,7 @@ class VivoTweaks(
                 }
             } else Message(R.string.vivo_write_failed_keep_snapshot)
             if (failed.isNotEmpty() && !restore) {
-                val original = feature.values.keys.associateWith { snapshots.getString(feature.name + it, null) }
+                val original = feature.values.keys.associateWith { originalOf(feature, it) }
                 val rollback = SettingBatch.write(original.mapValues { it.value!! }, ::write)
                 val rolledBack = original.values.none { it == null } && rollback.ok
                 message = if (rolledBack) Message(R.string.vivo_rolled_back, listOf(message))
@@ -664,6 +729,9 @@ class VivoTweaks(
     }
 
     companion object {
+        /** 游戏加速自己的存活标记，不归 [RecoverySnapshot] 管（它是布尔不是键值）。 */
+        const val GAME_ACCEL_MARKER = "game_accel:active"
+
         fun conflictingFeature(feature: VivoFeature, saved: Set<VivoFeature>): VivoFeature? = saved.firstOrNull { other ->
             other != feature && other.values.keys.any { it in feature.values }
         }

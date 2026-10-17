@@ -3,6 +3,7 @@ package magicau.mtkcontroller.data.diag
 import androidx.annotation.StringRes
 import magicau.mtkcontroller.R
 import magicau.mtkcontroller.data.Message
+import magicau.mtkcontroller.data.cpu.CpuFreqNodes
 import magicau.mtkcontroller.data.cpu.CpuScanner
 import magicau.mtkcontroller.data.gpu.GpuScanner
 import magicau.mtkcontroller.data.powerhal.PowerHal
@@ -215,10 +216,12 @@ class CapabilityProbe(
     /** Sanity read of the live sysfs values, used to verify a PowerHAL apply landed. */
     suspend fun readAppliedLimits(clusters: List<CpuCluster>): Map<String, Pair<Long?, Long?>> =
         clusters.associate { cluster ->
-            val dir = "${CpuScanner.CPUFREQ_ROOT}/${cluster.policy}"
+            // 路径与解析和 CpuControl 的验证、CpuViewModel 的展示共用一份 ——
+            // 同一个节点在三处各拼一遍字符串，改节点名时漏一处就静默读错。
+            // 这里故意逐条直读、不提权：只想确认"刚写进去的那两个值成了没有"。
             cluster.policy to (
-                Sysfs.read("$dir/scaling_min_freq")?.toLongOrNull() to
-                    Sysfs.read("$dir/scaling_max_freq")?.toLongOrNull()
+                CpuFreqNodes.parseKhz(Sysfs.read(CpuFreqNodes.min(cluster.policy))) to
+                    CpuFreqNodes.parseKhz(Sysfs.read(CpuFreqNodes.max(cluster.policy)))
                 )
         }
 }

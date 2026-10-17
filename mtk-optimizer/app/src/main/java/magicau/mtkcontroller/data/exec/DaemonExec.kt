@@ -1,4 +1,4 @@
-package magicau.mtkcontroller.data.diag
+package magicau.mtkcontroller.data.exec
 
 import magicau.mtkcontroller.data.privilege.PrivilegeManager
 

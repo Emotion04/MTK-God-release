@@ -8,6 +8,7 @@ import android.app.Service
 import android.content.Context
 import magicau.mtkcontroller.R
 import magicau.mtkcontroller.data.Message
+import magicau.mtkcontroller.data.powerhal.RequestOutcome
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
@@ -115,7 +116,7 @@ class CpuReapplyService : Service() {
                     container.cpuControl.reapply(clusters)
                 }.getOrElse {
                     if (it is CancellationException) throw it
-                    CpuControl.Outcome(
+                    RequestOutcome(
                         false,
                         Message(R.string.cpu_poll_exception, listOf("${it.javaClass.simpleName}: ${it.message}")),
                     )

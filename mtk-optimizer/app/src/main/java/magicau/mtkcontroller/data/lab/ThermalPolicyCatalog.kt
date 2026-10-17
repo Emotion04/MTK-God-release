@@ -30,8 +30,10 @@ data class LabChoice(
  *
  * **这个类只回答"设备上有哪些档位"这一个问题**，不回答"每一档是什么意思" ——
  * 那是分析结论，会随 ROM 版本变化，属于文档而不是代码。各档含义见
- * `assets/thermal-policies.md` 与 `docs/thermal/facts.md`；
- * 配置来源见 `docs/thermal/configs/README.md`。
+ * `docs/thermal/facts.md`；配置来源见 `docs/thermal/configs/README.md`。
+ *
+ * 曾经有一份随包的 `assets/thermal-policies.md` 讲各档含义，已删：
+ * 它自己标着"可能已过时"，而设备上的 conf 现读现解才是不过时的那一份。
  */
 object ThermalPolicyCatalog {
 
@@ -73,7 +75,7 @@ object ThermalPolicyCatalog {
      * 换策略它立刻变。
      *
      * 只读数值，不在这里做"这组阈值对应哪份文件"的判断 —— 那是会随 ROM
-     * 变的结论，放在 `assets/thermal-policies.md` 里。
+     * 变的结论，属于 `docs/thermal/facts.md` 而不是代码。
      */
     suspend fun skinThresholdText(): String? = withContext(Dispatchers.IO) {
         val out = PrivilegeManager.exec("dumpsys thermalservice") ?: return@withContext null

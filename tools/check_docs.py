@@ -178,12 +178,19 @@ def source_words() -> set[str]:
     写着 `DataStores` 这个词，只有文件名。不加这一条就会把它误报成"不存在"。
     """
     words: set[str] = set()
-    for path in SOURCE.rglob("*"):
-        if path.suffix in {".kt", ".xml", ".aidl"}:
-            words.add(path.stem)
-            words |= set(
-                re.findall(r"[A-Za-z_][A-Za-z0-9_]*", path.read_text(encoding="utf-8", errors="replace"))
-            )
+    # 测试源码也算。`src/test/` 里的类是真实存在的代码标识符，文档提到它们
+    # （"这个行为由 `XxxTest` 覆盖"）不该被判成"点了一个不存在的名字"。
+    # **只并入词表**，其余检查仍只看 src/main —— 测试里没有要交付的东西。
+    roots = [SOURCE, SOURCE.parent / "test"]
+    for root in roots:
+        if not root.exists():
+            continue
+        for path in root.rglob("*"):
+            if path.suffix in {".kt", ".xml", ".aidl"}:
+                words.add(path.stem)
+                words |= set(
+                    re.findall(r"[A-Za-z_][A-Za-z0-9_]*", path.read_text(encoding="utf-8", errors="replace"))
+                )
     return words
 
 

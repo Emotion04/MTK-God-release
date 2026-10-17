@@ -36,7 +36,8 @@ class CpuScanner {
         if (policies.isEmpty()) return emptyList()
 
         return policies.mapIndexed { index, policy ->
-            val dir = "$CPUFREQ_ROOT/$policy"
+            // 目录走 CpuFreqNodes.dir()，别在这里再拼一遍根路径。
+            val dir = CpuFreqNodes.dir(policy)
             val available = read(dir, "scaling_available_frequencies")
                 ?.split(Regex("\\s+"))
                 ?.mapNotNull { it.toLongOrNull() }
@@ -45,9 +46,11 @@ class CpuScanner {
                 ?.sorted()
                 .orEmpty()
 
-            val minFreq = read(dir, "cpuinfo_min_freq")?.toLongOrNull()
+            // cpuinfo_* = 硬件能力；scaling_cur_freq = 当前频率。两族节点分开问，
+            // 路径都走 CpuFreqNodes，别在这里再拼一遍字符串。
+            val minFreq = CpuFreqNodes.parseKhz(read(dir, "cpuinfo_min_freq"))
                 ?: available.firstOrNull() ?: 0L
-            val maxFreq = read(dir, "cpuinfo_max_freq")?.toLongOrNull()
+            val maxFreq = CpuFreqNodes.parseKhz(read(dir, "cpuinfo_max_freq"))
                 ?: available.lastOrNull() ?: 0L
 
             CpuCluster(
@@ -58,8 +61,8 @@ class CpuScanner {
                     ?.mapNotNull { it.toIntOrNull() }
                     .orEmpty(),
                 availableFreqs = available,
-                currentFreqKhz = read(dir, "scaling_cur_freq")?.toLongOrNull()
-                    ?: read(dir, "cpuinfo_cur_freq")?.toLongOrNull(),
+                currentFreqKhz = CpuFreqNodes.parseKhz(read(dir, "scaling_cur_freq"))
+                    ?: CpuFreqNodes.parseKhz(read(dir, "cpuinfo_cur_freq")),
                 minFreqKhz = minFreq,
                 maxFreqKhz = maxFreq,
                 governors = read(dir, "scaling_available_governors")
@@ -84,7 +87,7 @@ class CpuScanner {
      */
     suspend fun currentFreqs(): Map<String, Long> = withContext(Dispatchers.IO) {
         listPolicies().associateWith { policy ->
-            Sysfs.read("$CPUFREQ_ROOT/$policy/scaling_cur_freq")?.toLongOrNull() ?: 0L
+            CpuFreqNodes.parseKhz(Sysfs.read(CpuFreqNodes.cur(policy))) ?: 0L
         }.filterValues { it > 0L }
     }
 

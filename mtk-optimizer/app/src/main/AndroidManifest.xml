@@ -45,10 +45,10 @@
             </intent-filter>
         </activity>
 
-        <service android:name=".feature.tweaks.AxTaskService" android:exported="false" android:foregroundServiceType="specialUse">
+        <service android:name=".feature.tweaks.MaintenanceService" android:exported="false" android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User initiated bounded application compilation and cache warmup" />
         </service>
-        <service android:name=".feature.tweaks.AxSessionService" android:exported="false" android:foregroundServiceType="specialUse">
+        <service android:name=".feature.tweaks.DisplaySessionService" android:exported="false" android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User requested display and touch session with bounded renewal" />
         </service>
 

@@ -14,13 +14,16 @@ class AxFeaturesTest {
     }
     @Test fun failedRestoreDoesNotSkipOtherKeys() = runBlocking {
         val visited = mutableListOf<String>()
-        val failed = SettingBatch.write(linkedMapOf("first" to "null", "second" to "1", "third" to "0")) { key, _ ->
+        val result = SettingBatch.write(linkedMapOf("first" to "null", "second" to "1", "third" to "0")) { key, _ ->
             visited += key
             if (key == "first") error("permission denied")
-            key == "third"
+            // writer 的约定：null = 写成了，非 null = 没写成的原话。
+            if (key == "third") null else "拒绝"
         }
         assertEquals(listOf("first", "second", "third"), visited)
-        assertEquals(listOf("first", "second"), failed)
+        assertEquals(listOf("first", "second"), result.failures)
+        // 原话也要在，而且和键名同序 —— 界面的"显示更多"靠它。
+        assertEquals(listOf("first", "second"), result.reasons.map { it.substringBefore(" →") })
     }
     @Test fun rmsUsesCurrentRomLayoutAndBoundedLease() {
         val args = DisplayRequest.arguments(120)

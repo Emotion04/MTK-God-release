@@ -39,13 +39,13 @@ fun FeatureOptionEditor(
     when (feature) {
         VivoFeature.DNS -> OutlinedTextField(
             value = currentDeviceValue.orEmpty(), onValueChange = { onOptionChange(it) },
-            enabled = enabled, label = { Text("DNS 主机名") },
+            enabled = enabled, label = { Text(stringResource(R.string.tweaks_dns_host)) },
             placeholder = { Text("dns.example.com") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
         )
         VivoFeature.CHARGE_LIMIT -> OutlinedTextField(
             value = currentDeviceValue.orEmpty(),
             onValueChange = { onOptionChange(it.filter(Char::isDigit).take(3)) },
-            enabled = enabled, label = { Text("充电上限") }, placeholder = { Text("80") },
+            enabled = enabled, label = { Text(stringResource(R.string.vivo_feature_charge_limit)) }, placeholder = { Text("80") },
             singleLine = true, modifier = Modifier.fillMaxWidth(),
         )
         // 默认带出设备当前值 —— 这组数字随机型而不同，让用户凭空猜不合理。
@@ -57,13 +57,16 @@ fun FeatureOptionEditor(
         )
         VivoFeature.ABE -> ChipRow(
             enabled = enabled, selected = currentDeviceValue,
-            options = listOf("off" to "限制调度", "balanced" to "官方均衡"),
+            options = listOf(
+                "off" to stringResource(R.string.tweaks_abe_restrict),
+                "balanced" to stringResource(R.string.tweaks_abe_balanced),
+            ),
             onSelect = onOptionChange,
         )
         // 档位编号来自固件实测，不是公开语义；只列已知的四个，不虚构别的。
         VivoFeature.PERFORMANCE_MODE -> ChipRow(
             enabled = enabled, selected = currentDeviceValue,
-            options = listOf("enhanced" to "增强", "boost_plus" to "BOOST+",
+            options = listOf("enhanced" to stringResource(R.string.tweaks_perf_enhanced), "boost_plus" to "BOOST+",
                 "monster" to "Monster", "monster_plus" to "Monster+"),
             onSelect = onOptionChange,
         )
@@ -74,7 +77,7 @@ fun FeatureOptionEditor(
         )
         VivoFeature.AI -> ChipRow(
             enabled = enabled, selected = currentDeviceValue,
-            options = listOf("1" to "开启", "0" to "关闭"),
+            options = listOf("1" to stringResource(R.string.tweaks_option_on), "0" to stringResource(R.string.tweaks_option_off)),
             onSelect = onOptionChange,
         )
         else -> Unit

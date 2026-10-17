@@ -39,6 +39,13 @@ HARD minimum frequency limit. Separate mechanism from the soft pair; written to 
 HARD maximum frequency limit, node /proc/ppm/policy/hard_userlimit_cpu_freq.
 
 - 取值:kHz; a max >= the cluster hardware max is sent as -1 (no limit). Hard limits survive a soft release.
+  - **这句在本项目怎么读**（2026-10-14 订正）：说的是**软硬分开两次请求时**，放掉软的那个
+    不清掉硬的那个 —— PPM 里两个限制器独立跟踪。不是"任何释放都清不掉它"。
+    实验室原来读成后者，写出"普通释放不会撤销它"，已改。
+    本 App 一次请求里软硬齐发（同一个句柄），所以一次释放全清。
+  - 同页上面那句 "NO-OP if /proc/ppm/… does not exist" 在本机**不成立**：
+    `ls /proc/ppm/` 是 ENOENT（目录真的没有），而单独发这个资源号照样改变
+    `scaling_max_freq`。实测见 [facts.md](facts.md) CPU-006。
 
 **`0x00410000` · PERF_RES_CPUFREQ_CCI_FREQ**  —  `已确认`
 

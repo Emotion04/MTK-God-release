@@ -22,10 +22,20 @@ data class SettingsActions(
     val onSetApplyMode: (magicau.mtkcontroller.domain.model.ApplyMode) -> Unit = {},
     val onSetReapplyInterval: (Long) -> Unit = {},
     val onSetFreqRangeMode: (magicau.mtkcontroller.data.tweaks.TweakCommands.RangeMode) -> Unit = {},
+    val onSetFreqHardLimits: (Boolean) -> Unit = {},
     val onSetTouchBackend: (magicau.mtkcontroller.data.tweaks.TouchBackend) -> Unit = {},
     val onSetBrightnessBackend: (magicau.mtkcontroller.data.tweaks.BrightnessBackend) -> Unit = {},
     /** 频率配合项（调度器搭配），跟着区间一起下发。 */
     val onSetFreqCompanion: (String?) -> Unit = {},
+    /**
+     * 加入 / 移出电池优化白名单。
+     *
+     * 直接改系统（不走系统界面）；改完由 ViewModel 回读，界面显示的是回读结果，
+     * 不是"命令已发出"。
+     */
+    val onSetBatteryWhitelist: (Boolean) -> Unit = {},
+    /** 打开系统自带的电池优化设置页。 */
+    val onOpenBatterySettings: () -> Unit = {},
 
     // --- 外观与行为 ---
     val onSetThemeMode: (magicau.mtkcontroller.domain.model.ThemeMode) -> Unit = {},

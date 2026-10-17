@@ -8,7 +8,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import magicau.mtkcontroller.R
 import magicau.mtkcontroller.data.Message
-import magicau.mtkcontroller.data.diag.DaemonExec
+import magicau.mtkcontroller.data.exec.DaemonExec
 import magicau.mtkcontroller.data.privilege.PrivilegeManager
 
 /**
@@ -50,15 +50,15 @@ class GameBoost(private val context: Context) {
 
     suspend fun status(): String {
         val pkg = selected
-        if (pkg.isBlank()) return "未选择应用"
+        if (pkg.isBlank()) return context.getString(R.string.tweaks_game_boost_status_no_app)
         val bucket = run(listOf("/system/bin/cmd", "activity", "get-standby-bucket", pkg))
         val whitelisted = run(listOf("/system/bin/cmd", "deviceidle", "whitelist")).output.contains(pkg)
         val drivers = run(listOf("/system/bin/settings", "get", "global", "game_driver_opt_in_apps"))
         val driverListed = drivers.output.trim().let { it.isNotBlank() && it != "null" }
         return buildString {
-            append("待机分桶=").append(bucket.output.trim().ifBlank { "读不到" })
-            append(" · Doze 白名单=").append(if (whitelisted) "已加入" else "未加入")
-            append(" · Game Driver=").append(if (driverListed) "已在列表" else "未在列表")
+            append(context.getString(R.string.tweaks_game_boost_standby_bucket)).append(bucket.output.trim().ifBlank { context.getString(R.string.tweaks_game_boost_unreadable) })
+            append(context.getString(R.string.tweaks_game_boost_doze_prefix)).append(if (whitelisted) context.getString(R.string.tweaks_game_boost_doze_in) else context.getString(R.string.tweaks_game_boost_doze_out))
+            append(context.getString(R.string.tweaks_game_boost_driver_prefix)).append(if (driverListed) context.getString(R.string.tweaks_game_boost_driver_in) else context.getString(R.string.tweaks_game_boost_driver_out))
             // 这一项在天玑上预计不产生任何效果，别让用户以为叠了一层 buff。
             append("\n").append(context.getString(R.string.game_boost_driver_caveat))
         }
@@ -90,7 +90,7 @@ class GameBoost(private val context: Context) {
             val unreadable = buildList {
                 if (appopsBg == null) add("appops RUN_IN_BACKGROUND")
                 if (appopsAny == null) add("appops RUN_ANY_IN_BACKGROUND")
-                if (bucket == null) add("待机分桶")
+                if (bucket == null) add(context.getString(R.string.tweaks_game_boost_step_bucket))
             }
             if (unreadable.isNotEmpty()) {
                 return@withContext TweakRepository.Outcome(
@@ -112,18 +112,18 @@ class GameBoost(private val context: Context) {
                 if (result.ok) return
                 failures += name
                 // 服务端原话是判断"该去哪儿修"的唯一依据，只给一个布尔等于把现场丢了。
-                reasons += "$name → ${result.output.trim().ifBlank { "无输出" }}"
+                reasons += "$name → ${result.output.trim().ifBlank { context.getString(R.string.tweaks_game_boost_no_output) }}"
             }
             step("appops RUN_IN_BACKGROUND", run(listOf("/system/bin/cmd", "appops", "set", pkg, "RUN_IN_BACKGROUND", "allow")))
             step("appops RUN_ANY_IN_BACKGROUND", run(listOf("/system/bin/cmd", "appops", "set", pkg, "RUN_ANY_IN_BACKGROUND", "allow")))
-            step("deviceidle 白名单", run(listOf("/system/bin/cmd", "deviceidle", "whitelist", "+$pkg")))
-            step("待机分桶", run(listOf("/system/bin/cmd", "activity", "set-standby-bucket", pkg, "active")))
+            step(context.getString(R.string.tweaks_game_boost_step_doze), run(listOf("/system/bin/cmd", "deviceidle", "whitelist", "+$pkg")))
+            step(context.getString(R.string.tweaks_game_boost_step_bucket), run(listOf("/system/bin/cmd", "activity", "set-standby-bucket", pkg, "active")))
             if (driversValue != null) step("Game Driver", setGameDrivers(driversValue, pkg, add = true))
 
             if (failures.isNotEmpty()) {
                 restoreLocked(pkg)
                 editor.remove("active")
-                if (!editor.commit()) failures += "恢复快照清理"
+                if (!editor.commit()) failures += context.getString(R.string.tweaks_game_boost_step_cleanup)
                 return@withContext TweakRepository.Outcome(
                     false,
                     Message(R.string.game_boost_partial, listOf(failures.joinToString("、"))),
@@ -181,7 +181,7 @@ class GameBoost(private val context: Context) {
         fun step(name: String, result: Run) {
             if (result.ok) return
             failures += name
-            reasons += "$name → ${result.output.trim().ifBlank { "无输出" }}"
+            reasons += "$name → ${result.output.trim().ifBlank { context.getString(R.string.tweaks_game_boost_no_output) }}"
         }
 
         val bg = prefs.getString("appops_bg", null)
@@ -190,12 +190,12 @@ class GameBoost(private val context: Context) {
         if (any != null) step("appops RUN_ANY_IN_BACKGROUND", run(listOf("/system/bin/cmd", "appops", "set", pkg, "RUN_ANY_IN_BACKGROUND", any)))
 
         val wasWhitelisted = prefs.getBoolean("whitelisted", false)
-        step("deviceidle 白名单",
+        step(context.getString(R.string.tweaks_game_boost_step_doze),
             run(listOf("/system/bin/cmd", "deviceidle", "whitelist", if (wasWhitelisted) "+$pkg" else "-$pkg")))
 
         val bucket = prefs.getString("bucket", null)
         if (bucket != null && bucket.isNotBlank())
-            step("待机分桶", run(listOf("/system/bin/cmd", "activity", "set-standby-bucket", pkg, bucket)))
+            step(context.getString(R.string.tweaks_game_boost_step_bucket), run(listOf("/system/bin/cmd", "activity", "set-standby-bucket", pkg, bucket)))
 
         val drivers = prefs.getString("game_drivers", null)
         if (drivers != null && drivers.isNotBlank()) step("Game Driver", setGameDrivers(drivers, pkg, add = false))
@@ -250,7 +250,7 @@ class GameBoost(private val context: Context) {
      */
     private suspend fun run(argv: List<String>): Run {
         val out = DaemonExec.runArgv(argv)
-            ?: return Run("命令没能送到用户服务，请确认 Shizuku 已连接", false)
+            ?: return Run(context.getString(R.string.tweaks_game_boost_no_service), false)
         val ok = out.exit == 0 && out.stderr.isBlank()
         return Run(if (out.stdout.isNotBlank()) out.stdout else out.stderr, ok)
     }

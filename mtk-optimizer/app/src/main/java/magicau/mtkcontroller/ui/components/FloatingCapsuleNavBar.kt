@@ -1,7 +1,5 @@
 package magicau.mtkcontroller.ui.components
 
-import androidx.compose.animation.core.animate
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -20,11 +18,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -42,8 +39,6 @@ import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 import magicau.mtkcontroller.domain.model.NavBarStyle
 import magicau.mtkcontroller.ui.navigation.Destination
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.runtime.mutableLongStateOf
 import magicau.mtkcontroller.ui.navigation.TabSwipeMode
 
 /**
@@ -56,15 +51,13 @@ import magicau.mtkcontroller.ui.navigation.TabSwipeMode
 private const val MOVE_EPSILON_PX = 38f
 
 /**
- * Floating pill-shaped bottom bar.
+ * 悬浮胶囊底栏。
  *
- * The selected item is marked by a filled capsule that can be dragged
- * horizontally; releasing it snaps to the nearest tab and selects it, so the
- * bar doubles as a slider between destinations.
+ * 选中的那一项由一个实心胶囊标出，胶囊可以横向拖 —— 松手后由调用方决定吸附到
+ * 哪一页（见 [onSettle]），所以底栏同时是几个顶层标签之间的滑块。
  *
- * The whole bar shares one pill outline — background, shadow and the moving
- * indicator all use the same rounded shape, so no rectangular edges show
- * through under the bar.
+ * 整条底栏共用同一个胶囊外形：背景、阴影和会动的指示器都是同一个圆角形状，
+ * 底栏底下不会露出直角边。
  */
 @Composable
 fun FloatingCapsuleNavBar(
@@ -92,12 +85,12 @@ fun FloatingCapsuleNavBar(
     /** 拖动：报告**页面单位**的变化量（0.1 表示往前 0.1 页）。 */
     onDragBy: ((Float) -> Unit)? = null,
     /**
-     * 松手：报告应吸附到第几页，以及**是否停够了一秒**。
+     * 松手：报告手指最后停在**哪一页附近**，以及**是否停够了 [TabSwipeMode.HOLD_MS]**。
      *
-     * 第二个参数交给调用方判断 —— 底栏只负责测时间，要不要因此换页是策略，
-     * 由设置决定，不写在这里。
+     * 第一个参数只是"离哪一页近"，不是最终决定 —— 「停留后切换」模式下没停够要
+     * 弹回拖动起点，那是调用方的策略。底栏只负责测时间和报告位置。
      */
-    onSettle: ((target: Int, heldStill: Boolean) -> Unit)? = null,
+    onSettle: ((nearestPage: Int, heldStill: Boolean) -> Unit)? = null,
     style: NavBarStyle = NavBarStyle.COLORFUL,
     customColor: Color = MaterialTheme.colorScheme.primary,
     modifier: Modifier = Modifier,
@@ -117,7 +110,6 @@ fun FloatingCapsuleNavBar(
     }
     val selectedIndex = destinations.indexOfFirst { it.route == selectedRoute }.coerceAtLeast(0)
     val itemWidthPx = if (barWidthPx > 0) barWidthPx.toFloat() / destinations.size else 0f
-    val maxOffsetPx = (destinations.size - 1) * itemWidthPx
 
     // 胶囊位置直接由 pageOffset 算出来，没有本地状态、没有自己的动画 ——
     // 动画由 Pager 那边统一驱动，两者天然同帧。

@@ -34,7 +34,7 @@ fun PerformanceScreen(
                 if (page == 0) {
                     val vm: CpuViewModel = viewModel(factory = containerViewModelFactory { CpuViewModel(container) })
                     val state by vm.state.collectAsStateWithLifecycle()
-                    CpuScreen(state = state, onGovernorChange = vm::setGovernor, onRange = vm::setRange,
+                    CpuScreen(state = state, onRange = vm::setRange,
                         onApply = vm::apply, onRelease = vm::release, onEmergencyRestore = vm::emergencyRestore,
                         onToggleLoad = vm::toggleLoad,
                         onSaveProfile = vm::saveAsProfile, onReadCaps = vm::readCaps,

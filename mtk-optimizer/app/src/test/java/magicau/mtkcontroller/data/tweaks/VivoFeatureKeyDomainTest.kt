@@ -75,12 +75,30 @@ class VivoFeatureKeyDomainTest {
     }
 
     @Test
-    fun `一键开关包不含空取值`() {
-        // 回归：这个包原来把 device_name / icon_blacklist 等以空串写进去，
-        // 结果是把设备名和状态栏图标黑名单清空。现在它们只在智算平台只读展示。
-        assertTrue(VivoFeature.QUICK_SWITCHES.values.values.none { it.isEmpty() })
-        listOf("system flash_charge_animation_style", "system device_name", "secure icon_blacklist")
-            .forEach { assertFalse(it, it in VivoFeature.QUICK_SWITCHES.values) }
+    fun `任何开关都不含会把设备名或图标黑名单清空的键`() {
+        // 回归：这些键曾经以空串写进去，结果是把设备名和状态栏图标黑名单清空。
+        // 现在它们只在智算平台只读展示，不进任何可写集合。
+        //
+        // 原来这条测试查的是一个叫 QUICK_SWITCHES 的分组常量，**那个常量在生产代码里
+        // 从来不存在** —— 于是这条回归测试从初版提交起就没编译过，一次都没跑。
+        // 改成查全部开关：不变量本来就应该对每一个成立，而不是只对某一个分组。
+        val wipeOut = listOf(
+            "system flash_charge_animation_style",
+            "system device_name",
+            "secure icon_blacklist",
+        )
+        VivoFeature.entries.forEach { feature ->
+            wipeOut.forEach { key ->
+                assertFalse("${feature.name} 不该写 $key", key in feature.values)
+            }
+            // 预设空串只允许出现在 allowMissing 的项上 —— 那是"由用户按本机语义填"，
+            // 不是"替用户清空"。其余项出现空值就是 bug。
+            feature.values.forEach { (key, value) ->
+                if (value.isEmpty()) {
+                    assertTrue("${feature.name} 的 $key 是空预设，必须 allowMissing", feature.allowMissing)
+                }
+            }
+        }
     }
 
     @Test

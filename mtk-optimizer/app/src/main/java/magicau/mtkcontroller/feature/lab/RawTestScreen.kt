@@ -23,8 +23,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import magicau.mtkcontroller.R
 import magicau.mtkcontroller.data.lab.LabController
 
 /**
@@ -68,8 +70,7 @@ fun RawTestScreen(
     ) {
         item {
             Text(
-                "逐个 ID 单独下发，看系统怎么回应。" +
-                    "之前的解释都是推测,而且都错了。",
+                stringResource(R.string.lab_raw_intro),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -81,21 +82,26 @@ fun RawTestScreen(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    Text("簇", style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.lab_raw_cluster), style = MaterialTheme.typography.titleMedium)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         state.clusters.forEach { cluster ->
                             FilterChip(
                                 selected = state.policy == cluster.policy,
                                 onClick = { onPolicy(cluster.policy) },
-                                label = { Text("${cluster.policy}，${cluster.cpus.size}核") },
+                                label = { Text(stringResource(R.string.lab_raw_cluster_chip, cluster.policy, cluster.cpus.size)) },
                             )
                         }
                     }
                     state.cluster?.let { cluster ->
                         // ui-check:ignore 实验室页就该显示集群与索引
                         Text(
-                            "index=${cluster.index}，可用 ${cluster.availableFreqs.size} 档，" +
-                                "范围 ${cluster.minFreqKhz / 1000}-${cluster.maxFreqKhz / 1000}MHz",
+                            stringResource(
+                                R.string.lab_raw_cluster_info,
+                                cluster.index,
+                                cluster.availableFreqs.size,
+                                cluster.minFreqKhz / 1000,
+                                cluster.maxFreqKhz / 1000,
+                            ),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -116,7 +122,7 @@ fun RawTestScreen(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    Text("要发送的 ID", style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.lab_raw_send_ids), style = MaterialTheme.typography.titleMedium)
                     state.rows.forEachIndexed { index, row ->
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -128,7 +134,7 @@ fun RawTestScreen(
                                 onCheckedChange = { onRow(index, it, null) },
                             )
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(row.label, style = MaterialTheme.typography.bodyMedium)
+                                Text(stringResource(row.labelRes), style = MaterialTheme.typography.bodyMedium)
                                 Text(
                                     state.cluster?.let { row.idFor(it.index) } ?: "",
                                     style = MaterialTheme.typography.labelSmall,
@@ -147,7 +153,7 @@ fun RawTestScreen(
                         }
                     }
                     Text(
-                        "单位 kHz。先只勾一个,单独测出每个 ID 的作用,再组合。",
+                        stringResource(R.string.lab_raw_units_hint),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -163,10 +169,9 @@ fun RawTestScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("长期保持", style = MaterialTheme.typography.bodyMedium)
+                        Text(stringResource(R.string.lab_hold_long), style = MaterialTheme.typography.bodyMedium)
                         Text(
-                            if (state.hold) "永久有效,必须手动撤销"
-                            else "20 秒后自动失效",
+                            stringResource(if (state.hold) R.string.lab_raw_hold_on else R.string.lab_raw_hold_off),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -178,10 +183,10 @@ fun RawTestScreen(
                     onClick = onSend,
                     enabled = !state.busy,
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text(if (state.busy) "发送中…" else "发送并读回") }
+                ) { Text(stringResource(if (state.busy) R.string.lab_raw_sending else R.string.lab_raw_send)) }
 
                 FilledTonalButton(onClick = onReset, modifier = Modifier.fillMaxWidth()) {
-                    Text("释放(撤销本次下发)")
+                    Text(stringResource(R.string.lab_raw_release))
                 }
 
                 state.verdict?.let { verdict ->
@@ -204,7 +209,7 @@ private fun VerdictLine(verdict: LabController.Verdict) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                AssistChip(onClick = {}, label = { Text(state.label) })
+                AssistChip(onClick = {}, label = { Text(stringResource(state.labelRes)) })
             }
             Text(verdict.detail, style = MaterialTheme.typography.bodyMedium)
         }

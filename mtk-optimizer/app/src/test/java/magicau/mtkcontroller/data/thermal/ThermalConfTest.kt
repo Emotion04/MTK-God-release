@@ -158,8 +158,13 @@ class ThermalConfTest {
         val summary = ThermalPolicySummary.brief(ThermalPolicyParser.parse(0, plain00))
         assertTrue(summary.contains("37°C→2.6G"))
         assertTrue(summary.contains("51°C→1.2G"))
-        assertTrue(summary.contains("稳态温度目标"))
-        // 不许出现评价性措辞 —— 那是我当初写死档位含义的老毛病
+        // 产品侧早就把"稳态温度目标"改成了"目标温度"（稳态是控制论词汇，理由写在
+        // ThermalPolicySummary.brief 的注释里），而这里一直断言旧说法 ——
+        // 测试套件从初版提交起就没编译过，所以这个反向断言错了很久没人发现。
+        assertTrue(summary.contains("目标温度"))
+        // 不许出现评价性措辞 —— 那是我当初写死档位含义的老毛病。
+        // **只保留这一份通用清单**：别为某个具体词再单开一条反向断言，
+        // 那是在提醒别人去用它（此地无银三百两）。
         listOf("建议", "推荐", "最好", "较好", "适合", "不要用", "首选").forEach { word ->
             assertFalse("摘要不该出现评价：$word", summary.contains(word))
         }

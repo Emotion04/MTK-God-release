@@ -20,9 +20,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import magicau.mtkcontroller.R
 import magicau.mtkcontroller.data.lab.LabProbe
 import magicau.mtkcontroller.ui.components.InsetDivider
 import magicau.mtkcontroller.ui.theme.adaptiveAccent
@@ -62,7 +64,7 @@ fun LabPanelScreen(
         item {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
-                    "系统实际在执行的限制。这个页面不做任何写入。",
+                    stringResource(R.string.lab_panel_intro),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -72,23 +74,22 @@ fun LabPanelScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        "读到 ${state.readingsFound}/${state.readingsTotal} 项",
+                        stringResource(R.string.lab_panel_readings, state.readingsFound, state.readingsTotal),
                         style = MaterialTheme.typography.labelLarge,
                         modifier = Modifier.weight(1f),
                     )
-                    FilledTonalButton(onClick = onRefresh) { Text("刷新") }
+                    FilledTonalButton(onClick = onRefresh) { Text(stringResource(R.string.lab_refresh)) }
                 }
             }
         }
 
         state.sections.forEach { section ->
-            item(key = section.title) { SectionCard(section) }
+            item(key = section.titleRes) { SectionCard(section) }
         }
 
         item {
             Text(
-                "读不到是正常结果，各机型可读的项不同。" +
-                    "所以本应用靠现场读取判断功能是否可用，而不是靠一张机型表。",
+                stringResource(R.string.lab_panel_footer),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -101,10 +102,10 @@ private fun SectionCard(section: LabProbe.Section) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column {
             Column(modifier = Modifier.padding(16.dp, 14.dp, 16.dp, 6.dp)) {
-                Text(section.title, style = MaterialTheme.typography.titleMedium)
-                section.note?.let {
+                Text(stringResource(section.titleRes), style = MaterialTheme.typography.titleMedium)
+                if (section.noteRes != 0) {
                     Text(
-                        it,
+                        stringResource(section.noteRes),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -143,9 +144,9 @@ private fun ReadingRow(reading: LabProbe.Reading) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Top,
             ) {
-                Text(reading.label, style = MaterialTheme.typography.bodyMedium)
+                Text(stringResource(reading.labelRes, *reading.labelArgs.toTypedArray()), style = MaterialTheme.typography.bodyMedium)
                 Text(
-                    text = reading.value ?: "不存在",
+                    text = reading.value ?: stringResource(R.string.lab_absent),
                     style = MaterialTheme.typography.bodyMedium,
                     fontFamily = FontFamily.Monospace,
                     fontWeight = if (reading.exists) FontWeight.Medium else FontWeight.Normal,
@@ -162,9 +163,9 @@ private fun ReadingRow(reading: LabProbe.Reading) {
                 fontFamily = FontFamily.Monospace,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            reading.note?.let {
+            if (reading.noteRes != 0) {
                 Text(
-                    it,
+                    stringResource(reading.noteRes, *reading.noteArgs.toTypedArray()),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

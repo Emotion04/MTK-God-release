@@ -29,6 +29,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import magicau.mtkcontroller.R
+import magicau.mtkcontroller.ui.components.FailureNote
 
 /**
  * 按应用温控。
@@ -75,7 +76,7 @@ fun AppThermalScreen(
                         Switch(checked = state.running, onCheckedChange = onSetRunning)
                     }
                     Text(
-                        "当前前台：${state.foreground}",
+                        stringResource(R.string.app_thermal_foreground, state.foreground),
                         style = MaterialTheme.typography.labelSmall,
                         fontFamily = FontFamily.Monospace,
                     )
@@ -90,7 +91,11 @@ fun AppThermalScreen(
 
         item {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("规则表", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                Text(
+                    stringResource(R.string.app_thermal_rules_title),
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.weight(1f),
+                )
                 FilledTonalButton(onClick = onShowAdd) { Text(stringResource(R.string.app_thermal_add)) }
             }
         }
@@ -119,7 +124,7 @@ fun AppThermalScreen(
 
         state.message?.let { msg ->
             item {
-                Text(msg, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                FailureNote(failure = msg)
             }
         }
     }
@@ -151,14 +156,14 @@ fun AppThermalScreen(
                         Text(
                             // 指路要指到**真在那儿的东西**。曾经写"见温控策略索引卡片"，
                             // 而那张卡片早搬到了 CPU → 高级设置，这句话于是指向不存在的位置。
-                            "还有 ${state.availableIndices.size - 6} 个编号，含义见「性能 → 高级设置 → 温控档位」。",
+                            stringResource(R.string.app_thermal_more_indices, state.availableIndices.size - 6),
                             style = MaterialTheme.typography.labelSmall,
                         )
                     }
                 }
             },
-            confirmButton = { Button(onClick = onAdd) { Text("添加") } },
-            dismissButton = { TextButton(onClick = onHideAdd) { Text("取消") } },
+            confirmButton = { Button(onClick = onAdd) { Text(stringResource(R.string.app_thermal_add_confirm)) } },
+            dismissButton = { TextButton(onClick = onHideAdd) { Text(stringResource(R.string.action_cancel)) } },
         )
     }
 }

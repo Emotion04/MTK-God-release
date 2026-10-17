@@ -36,6 +36,20 @@ interface IRuntimeService {
     /** 0 探测，正数请求 Hz，-1 释放。 */
     String vivoDisplayRequest(int fps);
     String vivoTouchRequest(int level);
+    /**
+     * 应用维护：编译 / 预热。kind ∈ compile | warm。
+     *
+     * **名字里的 `ax` 是被替换掉的旧称**，改为 `appMaintenance`。旧方法**必须留着**：
+     * 事务码由 AIDL 方法顺序决定，从中间抽掉或改名会把后面所有事务码平移，
+     * 而 Shizuku 会按 version 留着上次的服务进程 —— 表现是"新调用打到旧方法上"
+     * 而且**不报错**。所以这里是"加新的、旧的转发"，不是"改一个名字"。
+     */
+    String appMaintenance(String kind, String pkg);
+
+    /**
+     * @deprecated 旧名，留着只为兼容可能还活着的旧服务进程。
+     *   新代码一律用 [appMaintenance]。
+     */
     String axMaintenance(String kind, String pkg);
 
     /**

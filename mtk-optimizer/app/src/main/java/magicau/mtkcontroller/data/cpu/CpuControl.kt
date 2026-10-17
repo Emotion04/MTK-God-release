@@ -11,9 +11,10 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import magicau.mtkcontroller.data.diag.SettingChannel
+import magicau.mtkcontroller.data.settings.SettingChannel
 import magicau.mtkcontroller.data.log.AppLog
 import magicau.mtkcontroller.data.powerhal.PerfLockController
+import magicau.mtkcontroller.data.powerhal.RequestOutcome
 import magicau.mtkcontroller.data.privilege.PrivilegeManager
 import magicau.mtkcontroller.data.powerhal.PowerHal
 import magicau.mtkcontroller.data.sysfs.Sysfs
@@ -53,8 +54,6 @@ class CpuControl(
     private val readNodes: suspend (List<String>) -> Map<String, String?> = Sysfs::readMany,
     private val waitForSample: suspend (Long) -> Unit = { delay(it) },
     private val createProbeLoad: () -> AutoCloseable = { CpuProbeLoad() },
-    private val vivoRequest: suspend (Boolean) -> String = PrivilegeManager::vivoCpuLimitProbe,
-    private val vivoPolicyRequest: suspend (Boolean, Int) -> String = PrivilegeManager::vivoPolicyProbe,
     /**
      * 频率请求要附带的调度器配合项。默认空 = 不带。
      *
@@ -70,6 +69,21 @@ class CpuControl(
      * [TweakCommands.RangeMode]。
      */
     private val rangeMode: () -> TweakCommands.RangeMode = { TweakCommands.RangeMode.RANGE },
+    /**
+     * true = 除了软上下限，还发硬的那一对（MIN_HL / MAX_HL）。
+     *
+     * **默认 false，因为实测软硬等效。** 2026-10-14 在 policy7 上逐个单独发：
+     * 软 MAX 和硬 MAX_HL 给同一个值，`scaling_max_freq` 都被压到那个值；
+     * 软 MIN 和硬 MIN_HL 同样都能把下限抬上去。四个单独发都生效，释放都干净。
+     *
+     * 早先这里是**无条件软硬齐发**，理由是 2026-09-24 那次实测里
+     * 「只在软族里发下限，请求完全暴露在常驻上限之下」。那一例的真正原因是
+     * 请求值超出了系统包络（本机约 2000–2300），换成硬的下限同样过不去 ——
+     * 不是软硬之分。多两个资源号只多两趟 binder 和两个可能失败的释放点。
+     *
+     * 留这个开关：换机型时若固件只认硬的那一对，用户不用等新版本。
+     */
+    private val hardLimits: () -> Boolean = { false },
 ) {
 
     private companion object {
@@ -94,20 +108,31 @@ class CpuControl(
     }
 
     /** success acknowledges the request operation; effectiveness lives in Status.verification. */
-    data class Outcome(
-        val success: Boolean,
-        val message: Message,
-        /** 原始错误，默认收起、可复制。界面用 `FailureNote` 展示。 */
-        val detail: String? = null,
-    )
 
+    /**
+     * 供界面与诊断读取的当前状态。
+     *
+     * 曾在这里放过 `baseline` 和 `releaseIncomplete` 两个字段，都已删除：
+     *
+     * - `baseline` 是 [CpuControlStore.baseline] 的内存镜像，没有任何读者；
+     *   而那份持久值当年存的还是**硬件能力**（`cpuinfo_*`），不是"我们动手之前的
+     *   当前限制"（`scaling_*`）—— 注释写的却是后者。2026-10-14 已修正
+     *   [captureBaselineIfClean]，但它仍未参与任何判断。
+     * - `releaseIncomplete` 想表达"释放后内核没回到基线"，但它只能跟上面那个
+     *   基线比 —— **拿两个不同的量相比，永远不可能诚实地为真**，所以三处全写
+     *   `false`，注释描述的状态不存在。真要实现这个检查，得先让基线记录的是
+     *   请求发出前的 `scaling_*`，那是另一件事。
+     */
     data class Status(
         val handler: Int = 0,
-        val baseline: String? = null,
         val applied: List<ClusterSetting> = emptyList(),
+        /**
+         * 上一次应用或释放之后，内核实际持久的上下限（人话形式）。
+         *
+         * 由 [DiagReport] 和 `DeviceSnapshot` 读出去 —— 它回答的是
+         * "我们以为发了什么、内核 actually 是什么"，和 `verification` 是两件事。
+         */
         val observedLimits: String? = null,
-        /** True when the kernel does not match the baseline after a release. */
-        val releaseIncomplete: Boolean = false,
         val verification: CpuVerification = CpuVerification.UNVERIFIED,
         val verificationDetail: String? = null,
     )
@@ -120,9 +145,8 @@ class CpuControl(
     /** Pull persisted state into memory. Safe to call more than once. */
     suspend fun load() = operationMutex.withLock {
         val handler = lock.handler()
-        val baseline = store.baseline()
         val applied = store.lastApplied()
-        _status.value = _status.value.copy(handler = handler, baseline = baseline, applied = applied)
+        _status.value = _status.value.copy(handler = handler, applied = applied)
         AppLog.i(TAG, "载入状态: handler=$handler, 已应用 ${applied.size} 组设置")
     }
 
@@ -132,56 +156,9 @@ class CpuControl(
     suspend fun probe(
         clusters: List<CpuCluster>, policy: String, low: Long, high: Long,
         mode: CpuProbeMode, emit: (String) -> Unit,
-    ): Outcome = operationMutex.withLock {
-        if (mode == CpuProbeMode.VIVO_LIMIT || mode == CpuProbeMode.VIVO_POLICY_9 || mode == CpuProbeMode.VIVO_POLICY_71 || mode == CpuProbeMode.VIVO_SOURCE_MAX) {
-            val profile = when (mode) {
-                CpuProbeMode.VIVO_POLICY_9 -> 9
-                CpuProbeMode.VIVO_POLICY_71 -> 71
-                CpuProbeMode.VIVO_SOURCE_MAX -> 100
-                else -> 0
-            }
-            val duration = when (profile) { 0 -> 8000; 100 -> 5000; else -> 2000 }
-            suspend fun request(start: Boolean) = if (profile == 0) vivoRequest(start) else vivoPolicyRequest(start, profile)
-            check(store.lastApplied().isEmpty() && lock.handler() <= 0) { "请先释放现有 CPU 请求" }
-            emit(if (mode == CpuProbeMode.VIVO_SOURCE_MAX)
-                "ROM CPUFreqPolicy.BOOST_CPU_MAX_FREQ 候选；三簇 MAX=4095、5 秒、不加负载；用于判断能否解除其他请求的上限"
-                else "Vivo 独立资源验证；不使用滑条、不加负载、可能影响全部簇；非范围成功测试")
-            suspend fun snapshot(label: String) {
-                val begin = System.nanoTime()
-                val readings = readSnapshot(clusters)
-                emit("$label readMs=${(System.nanoTime() - begin) / 1_000_000} ${readings.joinToString { it.describe() }}")
-            }
-            repeat(3) { snapshot("Vivo 写前 $it"); waitForSample(1000) }
-            val start = System.nanoTime()
-            var returnedAt = start
-            try {
-                val result = withContext(NonCancellable) { request(true) }
-                returnedAt = System.nanoTime()
-                emit(result)
-                if (!result.contains("ACCEPTED")) {
-                    return@withLock Outcome(false, Message(R.string.cpu_vivo_rejected))
-                }
-                repeat(if (profile == 100) 7 else 5) {
-                    waitForSample(when (profile) { 0 -> 700; 100 -> 700; else -> 200 })
-                    val elapsed = (System.nanoTime() - start) / 1_000_000
-                    snapshot("Vivo 写后 elapsed=${elapsed}ms duration=${duration}ms ${if (elapsed >= duration) "已过名义期限，不用于效果判定" else "名义期限内，仍需结合读取耗时"}")
-                }
-            } finally {
-                withContext(NonCancellable) {
-                    val release = runCatching { request(false) }
-                    emit(release.getOrElse { "Vivo 释放异常：${it.message}；等待有限请求到期" })
-                    val elapsed = (System.nanoTime() - returnedAt) / 1_000_000
-                    waitForSample((duration + 1000 - elapsed).coerceAtLeast(1000))
-                    repeat(3) { snapshot("Vivo 释放并等待到期后 $it"); waitForSample(500) }
-                }
-            }
-            return@withLock Outcome(true, Message(R.string.cpu_probe_accepted))
-        }
-        if (mode == CpuProbeMode.CAMERA || mode == CpuProbeMode.ROM) {
-            return@withLock Outcome(false, Message(R.string.cpu_probe_external))
-        }
+    ): RequestOutcome = operationMutex.withLock {
         val cluster = clusters.firstOrNull { it.policy == policy }
-            ?: return@withLock Outcome(false, Message(R.string.cpu_probe_no_cluster))
+            ?: return@withLock RequestOutcome(false, Message(R.string.cpu_probe_no_cluster))
         val lo = minOf(cluster.nearest(low), cluster.nearest(high))
         val hi = maxOf(cluster.nearest(low), cluster.nearest(high))
         val pairs = mode.pairs(cluster.index, lo, hi)
@@ -194,14 +171,14 @@ class CpuControl(
             emit("$label elapsed=${(System.nanoTime() - started) / 1_000_000}ms " +
                 readings.joinToString { it.describe() } + " busy=[$utilization]（分次读取）")
         }
-        emit("模式=${mode.label} policy=$policy 请求=$lo-$hi kHz 原设置=$saved")
+        emit("模式=${mode.name} policy=$policy 请求=$lo-$hi kHz 原设置=$saved")
         sample("开始")
         if (mode == CpuProbeMode.OBSERVE) {
             repeat(30) { waitForSample(1000); sample("观察 ${it + 1}/30") }
-            return@withLock Outcome(true, Message(R.string.cpu_probe_observe_done))
+            return@withLock RequestOutcome(true, Message(R.string.cpu_probe_observe_done))
         }
         if (lock.handler() > 0 && saved.isEmpty())
-            return@withLock Outcome(false, Message(R.string.cpu_probe_handler_no_settings))
+            return@withLock RequestOutcome(false, Message(R.string.cpu_probe_handler_no_settings))
         var touched = false
         var restored = true
         var load: AutoCloseable? = null
@@ -240,7 +217,7 @@ class CpuControl(
                 val released = if (lock.handler() > 0) {
                     lock.release()
                 } else {
-                    PerfLockController.Outcome(true, Message(R.string.lock_no_test_handler))
+                    RequestOutcome(true, Message(R.string.lock_no_test_handler))
                 }
                 emit("测试释放=${released.success} ${AppLog.text(released.message)}")
                 if (released.success) {
@@ -258,24 +235,40 @@ class CpuControl(
                 }
             }
         }
-        Outcome(
+        RequestOutcome(
             restored,
             Message(if (restored) R.string.cpu_probe_done else R.string.cpu_probe_restore_failed),
         )
     }
 
     /**
-     * Remember the untouched limits while nothing of ours is applied.
+     * 在**我们没有下发任何请求**的时候，记下内核此刻的限制。
      *
-     * This is what lets a later release be checked: "did the kernel go back to
-     * where it started", which a oneway release call cannot tell us.
+     * 有了它，将来才能回答"释放之后内核回到出发点了吗"—— 一次 oneway 释放的
+     * 返回值证明不了这件事。
+     *
+     * **记的是 `scaling_min/max_freq`（当前限制），不是 `cpuinfo_*`（硬件能力）。**
+     * 两者是不同的量：前者是系统此刻给的，后者是芯片做得到的。早先这里存的是
+     * 硬件能力，于是任何"和基线比"的判断都在比两个不同的量。
+     *
+     * 注意调用时机：只在确认没有本项目的请求时调（见 `CpuViewModel.refresh`）。
      */
     suspend fun captureBaselineIfClean(clusters: List<CpuCluster>) {
         if (store.baseline() != null) return
-        val limits = hardwareRange(clusters) ?: return
+        // **记的是请求发出前的当前限制（`scaling_*`），不是硬件能力（`cpuinfo_*`）。**
+        //
+        // 原来这里存 `hardwareRange()`，而注释写的是"Remember the untouched limits"——
+        // 存的不是那个东西。这个错误让下游一切"和基线比"的判断都失去意义：
+        // 拿硬件能力比当前限制，两个不同的量，比出来的差说明不了任何事。
+        // `Status.releaseIncomplete` 当年就是这么变成永远为 false 的。
+        //
+        // 读法用批量 + 提权补读（[readSnapshot]）：要看到的是"系统此刻实际给的
+        // 限制"，直读写不到就不知道该记什么。
+        val rows = readSnapshot(clusters)
+        if (rows.none { it.min != null || it.max != null }) return
+        val limits = rows.joinToString(", ") { it.limitsText() }
         store.setBaseline(limits)
-        _status.value = _status.value.copy(baseline = limits)
-        AppLog.i(TAG, "记录硬件范围: $limits")
+        AppLog.i(TAG, "记录请求前的当前限制: $limits")
     }
 
     /**
@@ -294,19 +287,19 @@ class CpuControl(
      *
      * Ceiling is written before floor so `min <= max` holds at every moment.
      */
-    suspend fun emergencyRestore(clusters: List<CpuCluster>): Outcome = operationMutex.withLock {
+    suspend fun emergencyRestore(clusters: List<CpuCluster>): RequestOutcome = operationMutex.withLock {
         withContext(NonCancellable) { emergencyRestoreLocked(clusters) }
     }
 
-    private suspend fun emergencyRestoreLocked(clusters: List<CpuCluster>): Outcome {
-        if (clusters.isEmpty()) return Outcome(false, Message(R.string.cpu_no_clusters))
+    private suspend fun emergencyRestoreLocked(clusters: List<CpuCluster>): RequestOutcome {
+        if (clusters.isEmpty()) return RequestOutcome(false, Message(R.string.cpu_no_clusters))
 
         val before = readLimits(clusters)
         AppLog.i(TAG, "紧急恢复开始,当前: ${before ?: "读取失败"}")
 
         if (lock.handler() > 0) {
             val released = lock.release()
-            if (!released.success) return Outcome(false, released.message, detail = released.detail)
+            if (!released.success) return RequestOutcome(false, released.message, detail = released.detail)
         }
         store.setLastApplied(emptyList())
         _status.value = _status.value.copy(handler = 0, applied = emptyList(),
@@ -321,17 +314,17 @@ class CpuControl(
         val failures = mutableListOf<String>()
         val reasons = mutableListOf<String>()
         clusters.forEach { cluster ->
-            val dir = "${CpuScanner.CPUFREQ_ROOT}/${cluster.policy}"
-            val hardwareMax = Sysfs.read("$dir/cpuinfo_max_freq")
-            val hardwareMin = Sysfs.read("$dir/cpuinfo_min_freq")
+            val dir = CpuFreqNodes.dir(cluster.policy)
+            val hardwareMax = Sysfs.read(CpuFreqNodes.hardwareMax(cluster.policy))
+            val hardwareMin = Sysfs.read(CpuFreqNodes.hardwareMin(cluster.policy))
             if (hardwareMax == null || hardwareMin == null) {
                 failures += cluster.policy
-                reasons += "$dir/cpuinfo_{min,max}_freq 读不到"
+                reasons += "${CpuFreqNodes.hardwareMin(cluster.policy)} / ${CpuFreqNodes.hardwareMax(cluster.policy)} 读不到"
                 return@forEach
             }
             // Ceiling first so min <= max holds at every moment.
-            val maxError = Sysfs.writeOrNull("$dir/scaling_max_freq", hardwareMax)
-            val minError = Sysfs.writeOrNull("$dir/scaling_min_freq", hardwareMin)
+            val maxError = Sysfs.writeOrNull(CpuFreqNodes.max(cluster.policy), hardwareMax)
+            val minError = Sysfs.writeOrNull(CpuFreqNodes.min(cluster.policy), hardwareMin)
             AppLog.i(
                 TAG,
                 "紧急恢复[直接写] ${cluster.policy}: max=$hardwareMax(${if (maxError == null) "成功" else "失败"}) " +
@@ -340,8 +333,10 @@ class CpuControl(
             if (maxError != null || minError != null) {
                 failures += cluster.policy
                 reasons += buildList {
-                    maxError?.let { add("$dir/scaling_max_freq → $it") }
-                    minError?.let { add("$dir/scaling_min_freq → $it") }
+                    // 报的是**真正去写的那条路径**，不是照字符串再拼一个 ——
+                    // 拼错了用户拿着路径去查，查到的却是另一个节点。
+                    maxError?.let { add("${CpuFreqNodes.max(cluster.policy)} → $it") }
+                    minError?.let { add("${CpuFreqNodes.min(cluster.policy)} → $it") }
                 }.joinToString("\n")
             }
         }
@@ -350,7 +345,7 @@ class CpuControl(
         val afterDirect = readLimits(clusters)
         if (afterDirect != null && afterDirect != before) {
             _status.value = _status.value.copy(handler = 0, applied = emptyList(), observedLimits = afterDirect)
-            return Outcome(true, Message(R.string.cpu_direct_write, listOf(afterDirect)))
+            return RequestOutcome(true, Message(R.string.cpu_direct_write, listOf(afterDirect)))
         }
 
         // Route 2 — make the platform rewrite the limits itself by cycling
@@ -374,11 +369,11 @@ class CpuControl(
 
         return when {
             afterCycle != null && afterCycle != before ->
-                Outcome(true, Message(R.string.cpu_cycle_applied, listOf(afterCycle)))
+                RequestOutcome(true, Message(R.string.cpu_cycle_applied, listOf(afterCycle)))
             failures.size == clusters.size ->
-                Outcome(false, Message(R.string.cpu_both_failed), detail = directWriteDetail)
+                RequestOutcome(false, Message(R.string.cpu_both_failed), detail = directWriteDetail)
             else ->
-                Outcome(
+                RequestOutcome(
                     false,
                     Message(
                         R.string.cpu_restore_failed,
@@ -390,60 +385,39 @@ class CpuControl(
     }
 
     /**
-     * `cpuinfo_min_freq`/`cpuinfo_max_freq` — the silicon's own range.
-     *
-     * The reference for "did the kernel come back" has to be something that was
-     * never ours to move. An earlier version snapshotted `scaling_min_freq` at
-     * whatever moment the screen first opened, which on an already-clamped
-     * device records the *clamped* value as normal and then never notices that
-     * releases do nothing.
-     */
-    suspend fun hardwareRange(clusters: List<CpuCluster>): String? {
-        if (clusters.isEmpty()) return null
-        val parts = clusters.mapNotNull { cluster ->
-            val dir = "${CpuScanner.CPUFREQ_ROOT}/${cluster.policy}"
-            val lo = Sysfs.read("$dir/cpuinfo_min_freq")?.toLongOrNull()
-            val hi = Sysfs.read("$dir/cpuinfo_max_freq")?.toLongOrNull()
-            if (lo == null || hi == null) null
-            else "${cluster.policy} ${lo / 1000}-${hi / 1000}MHz"
-        }
-        return parts.takeIf { it.isNotEmpty() }?.joinToString(", ")
-    }
-
-    /**
      * Apply [settings], replacing whatever we were holding.
      *
      * The previous request is released first and the whole sequence aborts if
      * that release fails, because acquiring on top of a live request is what
      * makes a cluster appear locked at a value nobody asked for.
      */
-    suspend fun apply(clusters: List<CpuCluster>, settings: List<ClusterSetting>): Outcome = operationMutex.withLock {
+    suspend fun apply(clusters: List<CpuCluster>, settings: List<ClusterSetting>): RequestOutcome = operationMutex.withLock {
         applyLocked(clusters, settings)
     }
 
     /** Read replay state only after entering the same transaction as apply/release. */
-    suspend fun reapply(clusters: List<CpuCluster>): Outcome = operationMutex.withLock {
+    suspend fun reapply(clusters: List<CpuCluster>): RequestOutcome = operationMutex.withLock {
         val settings = store.lastApplied()
-        if (settings.isEmpty()) return@withLock Outcome(true, Message(R.string.cpu_no_replay_settings))
+        if (settings.isEmpty()) return@withLock RequestOutcome(true, Message(R.string.cpu_no_replay_settings))
         if (settings.any { setting -> clusters.none { it.policy == setting.policy } }) {
-            return@withLock Outcome(false, Message(R.string.cpu_replay_cluster_gone))
+            return@withLock RequestOutcome(false, Message(R.string.cpu_replay_cluster_gone))
         }
         val observed = readSnapshot(clusters)
         val checks = settings.map { setting -> observed.first { it.policy == setting.policy }.verify(setting) }
         if (lock.handler() > 0 && checks.all { it == CpuVerification.VERIFIED || it == CpuVerification.CONSTRAINED }) {
             updateVerification(settings, observed)
-            return@withLock Outcome(true, Message(R.string.cpu_limit_still_in_range))
+            return@withLock RequestOutcome(true, Message(R.string.cpu_limit_still_in_range))
         }
         applyLocked(clusters, settings)
     }
 
-    private suspend fun applyLocked(clusters: List<CpuCluster>, settings: List<ClusterSetting>): Outcome {
-        if (clusters.isEmpty()) return Outcome(false, Message(R.string.cpu_no_clusters))
-        if (settings.isEmpty()) return Outcome(false, Message(R.string.cpu_no_cluster_selected))
+    private suspend fun applyLocked(clusters: List<CpuCluster>, settings: List<ClusterSetting>): RequestOutcome {
+        if (clusters.isEmpty()) return RequestOutcome(false, Message(R.string.cpu_no_clusters))
+        if (settings.isEmpty()) return RequestOutcome(false, Message(R.string.cpu_no_cluster_selected))
 
         val byPolicy = clusters.associateBy { it.policy }
         if (settings.map { it.policy }.distinct().size != settings.size || settings.any { it.policy !in byPolicy }) {
-            return Outcome(false, Message(R.string.cpu_duplicate_cluster))
+            return RequestOutcome(false, Message(R.string.cpu_duplicate_cluster))
         }
         val normalized = mutableListOf<ClusterSetting>()
         val pairs = mutableListOf<Pair<String, String>>()
@@ -454,7 +428,7 @@ class CpuControl(
             val floor = minOf(low, high)
             val ceiling = maxOf(low, high)
             if (floor <= 0 || ceiling > Int.MAX_VALUE) {
-                return Outcome(false, Message(R.string.cpu_freq_out_of_range))
+                return RequestOutcome(false, Message(R.string.cpu_freq_out_of_range))
             }
             normalized += setting.copy(minFreqKhz = floor, maxFreqKhz = ceiling)
 
@@ -483,17 +457,20 @@ class CpuControl(
             // 早前这里刻意不给区间发硬下限，理由是"硬上下限凑齐就等于定点锁"——
             // 那个判断只在超出包络时成立，在包络内是错的。已改。
             // 只压上限时不发下限 —— 低频段交给系统自己调度。
-            if (rangeMode() != TweakCommands.RangeMode.CEILING_ONLY) {
-                pairs += PowerHal.commandId(PowerHal.BASE_HARD_MIN, cluster.index) to floor.toString()
-            }
-            if (rangeMode() != TweakCommands.RangeMode.FLOOR_ONLY) {
-                pairs += PowerHal.commandId(PowerHal.BASE_HARD_MAX, cluster.index) to ceiling.toString()
+            // 硬的那一对默认不发 —— 实测与软的等效，见 [hardLimits]。
+            if (hardLimits()) {
+                if (rangeMode() != TweakCommands.RangeMode.CEILING_ONLY) {
+                    pairs += PowerHal.commandId(PowerHal.BASE_HARD_MIN, cluster.index) to floor.toString()
+                }
+                if (rangeMode() != TweakCommands.RangeMode.FLOOR_ONLY) {
+                    pairs += PowerHal.commandId(PowerHal.BASE_HARD_MAX, cluster.index) to ceiling.toString()
+                }
             }
             AppLog.i(TAG, "${cluster.policy} " + if (floor == ceiling) {
                 "单值请求 ${floor / 1000}MHz"
             } else {
                 "频率范围 ${floor / 1000}-${ceiling / 1000}MHz"
-            } + "（${rangeMode().name}）")
+            } + "（${rangeMode().name}${if (hardLimits()) " +硬限" else ""}）")
         }
         // 附带下发调度器配合项（用户显式开启时才非空）。
         // 单独一组，不掺进 pairs 的归一化逻辑 —— 它们没有 floor/ceiling 语义，
@@ -505,7 +482,7 @@ class CpuControl(
         if (companion.isNotEmpty()) {
             AppLog.i(TAG, "附带调度器配合项 ${companion.size} 条: $companion")
         }
-        if (all.isEmpty()) return Outcome(false, Message(R.string.cpu_no_matching_cluster))
+        if (all.isEmpty()) return RequestOutcome(false, Message(R.string.cpu_no_matching_cluster))
 
         // duration 0: a limit the user asked for should stay until released.
         // Once Binder has accepted an acquire, cancellation must not lose its handle or replay state.
@@ -514,7 +491,7 @@ class CpuControl(
                 if (result.success) {
                     store.setLastApplied(normalized)
                     _status.value = _status.value.copy(handler = lock.handler(), applied = normalized,
-                        observedLimits = null, verification = CpuVerification.UNVERIFIED, releaseIncomplete = false)
+                        observedLimits = null, verification = CpuVerification.UNVERIFIED)
                 } else {
                     val remaining = lock.handler()
                     if (remaining <= 0) {
@@ -527,24 +504,27 @@ class CpuControl(
                 }
             }
         }
-        if (!applied.success) return Outcome(false, applied.message)
+        if (!applied.success) return RequestOutcome(false, applied.message)
 
         val governorNote = applyGovernors(clusters, normalized)
 
         val observed = sampleSnapshot(clusters, "应用 handler=${lock.handler()}")
-        val detail = updateVerification(normalized, observed)
+        val verification = updateVerification(normalized, observed)
 
         _status.value = _status.value.copy(
             handler = lock.handler(),
             applied = normalized,
             observedLimits = observed.joinToString(", ") { it.describe() },
-            releaseIncomplete = false,
         )
 
-        return Outcome(
+        return RequestOutcome(
             success = true,
-            // 调速器提示可有可无；两段都是资源，拼接交给带占位符的模板。
-            message = governorNote?.let { Message(R.string.cpu_outcome_join, listOf(detail, it)) } ?: detail,
+            // 结论归结论。调速器提示可有可无，有就并进结论那一句里。
+            // 逐簇读数走 detail —— 界面里默认收起、点"显示更多"才看。
+            message = governorNote?.let {
+                Message(R.string.cpu_outcome_join, listOf(verification.summary, it))
+            } ?: verification.summary,
+            detail = verification.detail,
         )
     }
 
@@ -555,14 +535,14 @@ class CpuControl(
      * by reading the limits back against the baseline recorded before we ever
      * touched anything.
      */
-    suspend fun release(clusters: List<CpuCluster>): Outcome = operationMutex.withLock {
+    suspend fun release(clusters: List<CpuCluster>): RequestOutcome = operationMutex.withLock {
         releaseLocked(clusters)
     }
 
-    private suspend fun releaseLocked(clusters: List<CpuCluster>): Outcome {
+    private suspend fun releaseLocked(clusters: List<CpuCluster>): RequestOutcome {
         val released = withContext(NonCancellable) {
             val result = if (lock.handler() <= 0) {
-                PerfLockController.Outcome(true, Message(R.string.lock_no_recorded_request))
+                RequestOutcome(true, Message(R.string.lock_no_recorded_request))
             } else {
                 lock.release()
             }
@@ -574,7 +554,7 @@ class CpuControl(
                 }
             }
         }
-        if (!released.success) return Outcome(false, released.message)
+        if (!released.success) return RequestOutcome(false, released.message)
 
         val after = sampleLimits(clusters, "释放")
 
@@ -585,10 +565,9 @@ class CpuControl(
             handler = 0,
             applied = emptyList(),
             observedLimits = after,
-            releaseIncomplete = false,
         )
 
-        return Outcome(
+        return RequestOutcome(
             success = true,
             message = if (after != null) Message(R.string.cpu_release_done_current, listOf(after))
             else Message(R.string.cpu_release_done),
@@ -631,20 +610,36 @@ class CpuControl(
     }
 
     private suspend fun readSnapshot(clusters: List<CpuCluster>): List<CpuLimitReading> {
-        val paths = clusters.flatMap { cluster ->
-            listOf("scaling_min_freq", "scaling_max_freq", "scaling_cur_freq").map {
-                "${CpuScanner.CPUFREQ_ROOT}/${cluster.policy}/$it"
-            }
-        }
+        // 路径来自 CpuFreqNodes，和展示那条路同一份 —— 节点改名只改一处。
+        //
+        // **读法必须和展示不同**：这里批量读、读不到再提权补读，因为要看到系统
+        // 真正生效的值。展示那条路只按 App 身份直读，读不到就显示未知。
+        // 两条路读到的可能不一样，那是事实，不是 bug。
+        val paths = clusters.flatMap { CpuFreqNodes.limits(it.policy) }
         val values = readNodes(paths)
         return clusters.map { cluster ->
-            val dir = "${CpuScanner.CPUFREQ_ROOT}/${cluster.policy}"
-            CpuLimitReading(cluster.policy, values["$dir/scaling_min_freq"]?.toLongOrNull(),
-                values["$dir/scaling_max_freq"]?.toLongOrNull(), values["$dir/scaling_cur_freq"]?.toLongOrNull())
+            CpuLimitReading(
+                policy = cluster.policy,
+                min = CpuFreqNodes.parseKhz(values[CpuFreqNodes.min(cluster.policy)]),
+                max = CpuFreqNodes.parseKhz(values[CpuFreqNodes.max(cluster.policy)]),
+                current = CpuFreqNodes.parseKhz(values[CpuFreqNodes.cur(cluster.policy)]),
+            )
         }
     }
 
-    private fun updateVerification(settings: List<ClusterSetting>, observed: List<CpuLimitReading>): Message {
+    /**
+     * 结论与证据分两份返回。
+     *
+     * **以前这里只返回一个 `Message`，把两者用 `cpu_outcome_join` 拼在了一句里**
+     * （"请求已发送，部分簇无法验证 · policy0 ?-?MHz cur=400MHz 请求=300-2000MHz
+     * 上下限读回不完整; policy4 …; policy7 …"）。那直接违反了 [Failure] 写在类头
+     * 的契约：summary 是**给用户看的一句结论**，detail 是**给排错看的原始读数**、
+     * 默认收起。拼在一起的结果是首页底部横着三行原始读数，用户既读不懂、
+     * 又看不见自己真正要的那句"成没成"。
+     */
+    private data class Verification(val summary: Message, val detail: String?)
+
+    private fun updateVerification(settings: List<ClusterSetting>, observed: List<CpuLimitReading>): Verification {
         val rows = settings.map { setting ->
             val reading = observed.firstOrNull { it.policy == setting.policy }
                 ?: CpuLimitReading(setting.policy, null, null, null)
@@ -657,7 +652,7 @@ class CpuControl(
             CpuVerification.CONSTRAINED in checks -> CpuVerification.CONSTRAINED
             else -> CpuVerification.VERIFIED
         }
-        // 逐簇的读数行**既是报告字段也是给用户看的结论**，所以用资源拼。
+        // 逐簇的读数行是**证据**，不是结论。
         val detail = rows.joinToString("; ") { (setting, reading) ->
             val reason = when (reading.verify(setting)) {
                 CpuVerification.UNREADABLE -> context.getString(R.string.cpu_verify_unreadable)
@@ -691,7 +686,7 @@ class CpuControl(
         lastVerificationKey = key
         _status.value = _status.value.copy(verification = verification, verificationDetail = detail,
             observedLimits = observed.joinToString { it.describe() })
-        return Message(R.string.cpu_outcome_join, listOf(summary, detail))
+        return Verification(Message(summaryRes), detail)
     }
 
     /**
@@ -708,7 +703,7 @@ class CpuControl(
         for (setting in settings) {
             val governor = setting.governor ?: continue
             val cluster = byPolicy[setting.policy] ?: continue
-            val node = "${CpuScanner.CPUFREQ_ROOT}/${cluster.policy}/scaling_governor"
+            val node = "${CpuFreqNodes.dir(cluster.policy)}/scaling_governor"
             val ok = Sysfs.write(node, governor)
             results[cluster.policy] = ok
             if (ok) AppLog.i(TAG, "${cluster.policy} 调速器 -> $governor")

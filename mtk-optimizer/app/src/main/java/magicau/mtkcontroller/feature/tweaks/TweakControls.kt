@@ -81,7 +81,7 @@ fun AnimationSetting(feature: VivoFeature, state: TweaksUiState, onVivo: (VivoFe
     val label = feature.labelText()
     val badge = feature.evidenceOrNull()
     SettingsRow(Icons.Default.Refresh, MaterialTheme.colorScheme.primary, label,
-        current?.let { if (it == "null") "系统默认，未设置" else "当前 $it×" } ?: "未读取",
+        current?.let { if (it == "null") stringResource(R.string.tweaks_anim_system_default) else stringResource(R.string.tweaks_anim_current, it) } ?: stringResource(R.string.tweaks_value_not_read),
         onClick = { if (state.canRun) { ticks = ((current?.toFloatOrNull() ?: 1f) * 10).roundToInt().coerceIn(0, 100); opened = true } },
         trailing = { RowTrailing(badge, label, feature.detailText()) })
     if (opened) AlertDialog(onDismissRequest = { opened = false }, title = { Text(label) },
@@ -90,13 +90,13 @@ fun AnimationSetting(feature: VivoFeature, state: TweaksUiState, onVivo: (VivoFe
             Slider(value = ticks.toFloat(), onValueChange = { ticks = it.roundToInt() }, valueRange = 0f..100f, steps = 99)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(enabled = ticks > 0, onClick = { ticks-- }) { Text("−0.1") }
-                TextButton(onClick = { ticks = 10 }) { Text("标准 1×") }
+                TextButton(onClick = { ticks = 10 }) { Text(stringResource(R.string.tweaks_anim_standard)) }
                 TextButton(enabled = ticks < 100, onClick = { ticks++ }) { Text("+0.1") }
             }
-            if (feature in state.vivoSnapshots) TextButton(enabled = state.canRun, onClick = { opened = false; onVivo(feature, true, null, false) }) { Text("恢复原值") }
+            if (feature in state.vivoSnapshots) TextButton(enabled = state.canRun, onClick = { opened = false; onVivo(feature, true, null, false) }) { Text(stringResource(R.string.action_restore_original)) }
         } },
-        confirmButton = { TextButton(enabled = state.canRun && feature in state.vivoSupported, onClick = { opened = false; onVivo(feature, false, "${ticks / 10}.${ticks % 10}", false) }) { Text("应用") } },
-        dismissButton = { TextButton(onClick = { opened = false }) { Text("取消") } })
+        confirmButton = { TextButton(enabled = state.canRun && feature in state.vivoSupported, onClick = { opened = false; onVivo(feature, false, "${ticks / 10}.${ticks % 10}", false) }) { Text(stringResource(R.string.action_apply)) } },
+        dismissButton = { TextButton(onClick = { opened = false }) { Text(stringResource(R.string.action_cancel)) } })
 }
 
 @Composable
@@ -107,36 +107,40 @@ fun ExperimentalSetting(feature: VivoFeature, state: TweaksUiState, onVivo: (Viv
         val label = feature.labelText()
         val badge = feature.evidenceOrNull()
         SettingsRow(Icons.Default.Build, MaterialTheme.colorScheme.tertiary, label,
-            state.vivoStatus[feature] ?: "尚未检测", trailing = { RowTrailing(badge, label, feature.detailText()) },
+            state.vivoStatus[feature] ?: stringResource(R.string.tweaks_not_detected), trailing = { RowTrailing(badge, label, feature.detailText()) },
             onClick = { if (state.canRun && feature in state.vivoSupported) opened = true })
         if (state.experimentFeature == feature) Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             if (state.experimentRunning) {
                 LinearProgressIndicator(Modifier.fillMaxWidth())
-                Text("已等待 ${state.experimentSeconds} 秒，含写入和恢复核对", style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.tweaks_experiment_waiting, state.experimentSeconds), style = MaterialTheme.typography.bodySmall)
             }
             state.experimentMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall,
                 color = if (state.experimentSuccess) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error) }
-            if (!state.experimentRunning && state.busy) Text("结果已返回，正在刷新配置并保存报告…", style = MaterialTheme.typography.bodySmall)
+            if (!state.experimentRunning && state.busy) Text(stringResource(R.string.tweaks_experiment_returned), style = MaterialTheme.typography.bodySmall)
         }
         Row(Modifier.padding(start = 54.dp, end = 16.dp)) {
-            TextButton(enabled = state.canRun && feature in state.vivoSupported && feature !in state.vivoSnapshots, onClick = { opened = true }) { Text("测试 20 秒") }
-            if (feature in state.vivoSnapshots) TextButton(enabled = state.canRun, onClick = { onVivo(feature, true, null, false) }) { Text("恢复原值") }
+            TextButton(enabled = state.canRun && feature in state.vivoSupported && feature !in state.vivoSnapshots, onClick = { opened = true }) { Text(stringResource(R.string.tweaks_experiment_start)) }
+            if (feature in state.vivoSnapshots) TextButton(enabled = state.canRun, onClick = { onVivo(feature, true, null, false) }) { Text(stringResource(R.string.action_restore_original)) }
         }
     }
     if (opened) AlertDialog(onDismissRequest = { opened = false }, title = { Text(feature.labelText()) },
         text = { Column {
             Text(feature.detailText())
-            if (feature == VivoFeature.HTP) listOf("low" to "预设 0，50°C", "medium" to "预设 1，48°C", "high" to "预设 2，43°C").forEach { (value, label) ->
+            if (feature == VivoFeature.HTP) listOf(
+                "low" to stringResource(R.string.tweaks_htp_preset_low),
+                "medium" to stringResource(R.string.tweaks_htp_preset_medium),
+                "high" to stringResource(R.string.tweaks_htp_preset_high),
+            ).forEach { (value, label) ->
                 FilterChip(selected = value == preset, onClick = { preset = value }, label = { Text(label) })
             }
         } },
-        confirmButton = { TextButton(enabled = state.canRun, onClick = { opened = false; onVivo(feature, false, if (feature == VivoFeature.HTP) preset else null, false) }) { Text("备份并测试") } },
-        dismissButton = { TextButton(onClick = { opened = false }) { Text("取消") } })
+        confirmButton = { TextButton(enabled = state.canRun, onClick = { opened = false; onVivo(feature, false, if (feature == VivoFeature.HTP) preset else null, false) }) { Text(stringResource(R.string.tweaks_htp_backup_test)) } },
+        dismissButton = { TextButton(onClick = { opened = false }) { Text(stringResource(R.string.action_cancel)) } })
 }
 
 @Composable
 fun UnavailableSetting(title: String, reason: String) {
-    SettingsRow(Icons.Default.Info, MaterialTheme.colorScheme.onSurfaceVariant, title, "暂不可控制",
+    SettingsRow(Icons.Default.Info, MaterialTheme.colorScheme.onSurfaceVariant, title, stringResource(R.string.tweaks_unavailable_status),
         trailing = { FeatureInfo(title, reason) })
 }
 
@@ -145,13 +149,14 @@ fun TweakReportActions(state: TweaksUiState, collect: () -> Unit, export: (Uri) 
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { it?.let(export) }
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
-    SectionLabel("诊断报告")
+    val clipLabel = stringResource(R.string.tweaks_clip_label)
+    SectionLabel(stringResource(R.string.tweaks_report_section))
     SettingsCard {
-        SettingsRow(Icons.Default.List, MaterialTheme.colorScheme.primary, "生成报告", "当前配置、恢复快照、操作记录及服务摘要",
-            onClick = { if (state.canRun) collect() }, trailing = { FeatureInfo("诊断报告", "生成后自动保存在应用内，复制和导出用最近一次生成的内容。") })
+        SettingsRow(Icons.Default.List, MaterialTheme.colorScheme.primary, stringResource(R.string.tweaks_report_generate), stringResource(R.string.tweaks_report_generate_sub),
+            onClick = { if (state.canRun) collect() }, trailing = { FeatureInfo(stringResource(R.string.tweaks_report_section), stringResource(R.string.tweaks_report_info)) })
         Row(Modifier.padding(start = 54.dp, end = 16.dp)) {
-            TextButton(enabled = !state.busy && state.tweakReport.isNotBlank(), onClick = { scope.launch { clipboard.setClipEntry(ClipEntry(android.content.ClipData.newPlainText("调校报告", state.tweakReport))) } }) { Text("复制") }
-            TextButton(enabled = !state.busy && state.tweakReport.isNotBlank(), onClick = { launcher.launch("tweak-report-${System.currentTimeMillis()}.txt") }) { Text("导出文件") }
+            TextButton(enabled = !state.busy && state.tweakReport.isNotBlank(), onClick = { scope.launch { clipboard.setClipEntry(ClipEntry(android.content.ClipData.newPlainText(clipLabel, state.tweakReport))) } }) { Text(stringResource(R.string.action_copy)) }
+            TextButton(enabled = !state.busy && state.tweakReport.isNotBlank(), onClick = { launcher.launch("tweak-report-${System.currentTimeMillis()}.txt") }) { Text(stringResource(R.string.action_export_file)) }
         }
     }
 }

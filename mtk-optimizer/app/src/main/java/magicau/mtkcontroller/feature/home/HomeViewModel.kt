@@ -25,7 +25,6 @@ import magicau.mtkcontroller.domain.model.GpuInfo
 import magicau.mtkcontroller.domain.model.HomeCard
 import magicau.mtkcontroller.domain.model.HomeCardType
 import magicau.mtkcontroller.domain.model.Profile
-import magicau.mtkcontroller.feature.cpu.CpuReapplyService
 import magicau.mtkcontroller.feature.thermal.ThermalBrightnessService
 
 /** One cluster's rolling frequency history, used by the chart. */
@@ -73,7 +72,14 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
     init {
         // 进首页先把开关的本地记录换成设备真实状态。首页和调校页共用同一份
         // DataStore，两处任一同步过，另一处就是对的。
-        viewModelScope.launch { container.tweakRepository.syncSwitchStateFromDevice() }
+        //
+        // **必须切 IO。** viewModelScope 挂在 Main 上，而这一步是四次
+        // `PrivilegeManager.exec`（每次都是一趟 Shizuku 往返 + 起进程读 settings）。
+        // 在 Main 上跑实测把首帧拖到 119 ms —— 切标签会"卡一下"就是它。
+        // 首次进某个标签时才组合它的内容，所以这一下全落在切换动画的头几帧里。
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { container.tweakRepository.syncSwitchStateFromDevice() }
+        }
         viewModelScope.launch {
             container.settingsRepository.homeCards.collect { cards ->
                 _state.value = _state.value.copy(loading = false, cards = cards)
@@ -159,8 +165,14 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
             _state.value = _state.value.copy(busy = true, message = null)
             val outcome = container.tweakRepository.setThermalBrightnessWatch(enabled)
             if (outcome.success) {
-                if (enabled) ThermalBrightnessService.start(container.context)
-                else ThermalBrightnessService.stop(container.context)
+                // 起停判据只有一份，见 TweakRepository.brightnessGuardShouldRun()。
+                // 这里原来无条件起 —— 后端是 VIVO 时根因已被掐掉，服务纯属白跑，
+                // 而工具页同一个开关只在 LEGACY 后端才起，两个页面行为互相矛盾。
+                if (container.tweakRepository.brightnessGuardShouldRun()) {
+                    ThermalBrightnessService.start(container.context)
+                } else {
+                    ThermalBrightnessService.stop(container.context)
+                }
             }
             _state.value = _state.value.copy(busy = false, message = Failure(outcome.message, outcome.detail))
         }
@@ -260,13 +272,17 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    /**
+     * 一键释放全部。
+     *
+     * 这里原来只放频率、停轮询服务，**漏了温控档位、按应用温控和实验室那一把**。
+     * 现在是 `AppContainer.releaseAllRequests()` 一份实现，和 CPU 页「释放」同一条路。
+     */
     fun release() {
         viewModelScope.launch {
             _state.value = _state.value.copy(busy = true, message = null)
-            val outcome = container.cpuControl.release(_state.value.clusters)
+            val outcome = container.releaseAllRequests(_state.value.clusters)
             if (outcome.success) container.profileRepository.setActiveProfile(null)
-            // Polling would just re-acquire what we released.
-            CpuReapplyService.stop(container.context)
             _state.value = _state.value.copy(busy = false, message = Failure(outcome.message, outcome.detail))
         }
     }

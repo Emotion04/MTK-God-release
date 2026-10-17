@@ -89,7 +89,7 @@ class AppThermalService : Service() {
     override fun onCreate() {
         super.onCreate()
         createChannel()
-        startForeground(NOTIFICATION_ID, buildNotification("启动中"))
+        startForeground(NOTIFICATION_ID, buildNotification(getString(R.string.app_thermal_notification_starting)))
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -163,7 +163,7 @@ class AppThermalService : Service() {
         val outcome = ThermalPolicyController.applyAppRule(index)
         currentPkg = pkg?.takeIf { outcome.success }
         if (!outcome.success) AppLog.w(TAG, "按应用温控下发失败")
-        updateNotification(currentPkg, index)
+        updateNotification()
     }
 
     override fun onDestroy() {
@@ -179,9 +179,24 @@ class AppThermalService : Service() {
         super.onDestroy()
     }
 
-    private fun updateNotification(pkg: String?, index: Int?) {
-        val text = if (pkg == null || index == null) "未应用策略"
-        else "$pkg，温控策略 $index"
+    /**
+     * 通知里写**实际生效的那一档**，不是本条规则想要的那一档。
+     *
+     * 曾经直接把 `rule.policyIndex` 写进通知。但控制器的优先级是
+     * 「用户刚做的决定 > 按应用规则」，用户那一档生效时本条规则会被让位 ——
+     * 通知却照旧印规则里的编号，用户对着一个并没有生效的编号排查。
+     * 反过来离开这个应用时也印过"未应用策略"，而用户那一档明明还在生效。
+     *
+     * 生效值只有一个来源：`ThermalPolicyController.state`。这里只是读它。
+     */
+    private fun updateNotification() {
+        val applied = ThermalPolicyController.state.value.appliedIndex
+        val pkg = currentPkg
+        val text = when {
+            pkg == null -> getString(R.string.app_thermal_notification_none)
+            applied == null -> getString(R.string.app_thermal_notification_none)
+            else -> getString(R.string.app_thermal_notification_applied, pkg, applied)
+        }
         runCatching { getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, buildNotification(text)) }
     }
 

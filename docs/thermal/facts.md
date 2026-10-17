@@ -146,3 +146,46 @@ TPCB 目标以及 thermal HAL 阈值；不同策略的段和 mode 并不相同�
 多份配置共享同一组阈值，相符或不符都不能单独唯一指认加载文件。
 此命令通过 ADB shell 读取，不代表普通 App 无需权限就能访问同样信息。
 依据：两次 `dumpsys` 与基线明文比较；差异原因待查。
+
+<a id="therm-013"></a>
+## THERM-013 SKIN 阈值能反指"当前加载了哪份策略"（已实测）
+
+`ThermalPolicyCatalog.skinThresholdText()` 解析 `dumpsys thermalservice` 里
+`mName=SKIN` 那一行的 `mHotThrottlingThresholds`。2026-10-14 实测输出：
+
+```
+Temperature{mValue=44.638, mType=3, mName=SKIN, mStatus=2}
+TemperatureThreshold{mType=3, mName=SKIN,
+    mHotThrottlingThresholds=[NaN, 40.0, 42.0, 45.0, 48.0, 60.0, 80.0], ...}
+→ "40/42/45/48/60/80 °C"
+```
+
+**它回答的问题是"现在生效的是哪一组阈值"，而每份 `thermal_policy_NN.conf` 的
+`[thermalhal-threshold]` 段各不相同** —— 所以这组数字能反指当前加载了哪份策略。
+这是无 root 时唯一能做到这件事的通道，`ThermalPolicySummary` 读的是"这一档是什么"，
+两者不重复。
+
+同一行里还有 `mValue`（实时皮温）和 `mStatus`（当前处于哪一档），
+上面那次采样皮温 44.6 °C、status 2，正落在 42–45 这一档。
+
+依据：2026-10-14 ADB `dumpsys thermalservice`。
+
+<a id="therm-012"></a>
+## THERM-012 不要用"设一档测一档"反推每一档干什么
+
+已删除的实验室「自动扫档」是这么做的：把温控策略索引一个一个发下去，每档停 8 秒读
+`scaling_max_freq`，和"无请求基线"比峰值，高过基线就算这一档有用。
+
+**它回答的问题，配置文件已经答了，而且答得更准。** 每份 `thermal_policy_NN.conf` 里
+就写着 `[mtk-cpu-table-mapping]` 的温度→频率阶梯（见 [配置索引](configs/README.md)
+与 [字段参考](configs/field-reference.md)），界面上的"各档位摘要"读的就是它。
+阶梯是**声明值**，扫档采到的是**空载下的观测值**，两者不是一回事。
+
+**而扫档的观测值本身不可信，代码里自己承认**：温控噪声在空载时就能让上限在
+1800000–2600000 kHz 之间跳，所以阈值只能取"高于基线峰值"，判据是概率而不是事实。
+同一条理由也写在上面的 THERM-010：文件里的 enabled 是配置值，不能代替逐项运行效果验证
+—— 但那是说"不能只读文件就断言生效"，**不等于说空载采样比文件更可靠**。
+
+结论：要知道某一档干什么，读那一份配置文件。要确认它真的生效了，带上负载做一次
+有针对性的测试，不要扫全表。2026-10-12 删除该功能，`LabFeature.sweepValues`
+及其后的整套 `sweep()` 调用链、结果表和两个扫档按钮一并移除。

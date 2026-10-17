@@ -1,52 +1,69 @@
 package magicau.mtkcontroller.ui.navigation
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import magicau.mtkcontroller.R
 import magicau.mtkcontroller.data.log.AppLog
 import magicau.mtkcontroller.di.AppContainer
+import magicau.mtkcontroller.di.containerViewModelFactory
 import magicau.mtkcontroller.domain.model.NavBarStyle
 import magicau.mtkcontroller.domain.model.NavBarVisibility
 import magicau.mtkcontroller.domain.model.TabRestoreMode
-import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
-import androidx.compose.ui.input.nestedscroll.NestedScrollSource
-import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.foundation.layout.offset
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.runtime.CompositionLocalProvider
-import magicau.mtkcontroller.di.containerViewModelFactory
-import magicau.mtkcontroller.feature.cpu.CpuScreen
 import magicau.mtkcontroller.feature.cpu.CpuViewModel
 import magicau.mtkcontroller.feature.diag.DiagScreen
 import magicau.mtkcontroller.feature.diag.DiagViewModel
-import magicau.mtkcontroller.feature.gpu.GpuScreen
-import magicau.mtkcontroller.feature.gpu.GpuViewModel
 import magicau.mtkcontroller.feature.home.HomeScreen
 import magicau.mtkcontroller.feature.home.HomeViewModel
+import magicau.mtkcontroller.feature.lab.LabDetailScreen
 import magicau.mtkcontroller.feature.lab.LabPanelScreen
 import magicau.mtkcontroller.feature.lab.LabPanelViewModel
 import magicau.mtkcontroller.feature.lab.LabScreen
@@ -54,27 +71,19 @@ import magicau.mtkcontroller.feature.lab.LabViewModel
 import magicau.mtkcontroller.feature.lab.RawTestScreen
 import magicau.mtkcontroller.feature.lab.RawTestViewModel
 import magicau.mtkcontroller.feature.notifications.NotificationScreen
+import magicau.mtkcontroller.feature.settings.ArchiveScreen
 import magicau.mtkcontroller.feature.settings.LogScreen
 import magicau.mtkcontroller.feature.settings.SettingsScreen
 import magicau.mtkcontroller.feature.settings.SettingsViewModel
-import magicau.mtkcontroller.feature.tweaks.StatusToolsScreen
 import magicau.mtkcontroller.feature.thermal.AppThermalScreen
 import magicau.mtkcontroller.feature.thermal.AppThermalViewModel
+import magicau.mtkcontroller.feature.tweaks.StatusToolsScreen
 import magicau.mtkcontroller.feature.tweaks.TweaksScreen
 import magicau.mtkcontroller.feature.tweaks.TweaksViewModel
 import magicau.mtkcontroller.ui.components.FloatingCapsuleNavBar
 import magicau.mtkcontroller.ui.components.SubScreenScaffold
 import magicau.mtkcontroller.ui.theme.AppPalette
-import androidx.compose.ui.res.stringResource
-import magicau.mtkcontroller.R
-import magicau.mtkcontroller.feature.settings.ArchiveScreen
 import magicau.mtkcontroller.ui.theme.LocalMotion
-import androidx.compose.runtime.rememberCoroutineScope
-import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableFloatStateOf
 
 @Composable
 fun AppNavHost(container: AppContainer, modifier: Modifier = Modifier) {
@@ -99,7 +108,7 @@ fun AppNavHost(container: AppContainer, modifier: Modifier = Modifier) {
     var draggedFromPage by remember { mutableIntStateOf(0) }
     /** 贯穿一次拖动的滚动会话；null 表示当前没在拖。 */
     var dragSession by remember { mutableStateOf<kotlinx.coroutines.channels.Channel<Float>?>(null) }
-    /** 拖动中的绝对页位置（0.0 到 3.0）。拖动期间它才是真源，不是 Pager 的 currentPage。 */
+    /** 拖动中的绝对页位置（0.0 到 tabs.lastIndex）。拖动期间它才是真源，不是 Pager 的 currentPage。 */
     var dragPosition by remember { mutableFloatStateOf(0f) }
     LaunchedEffect(Unit) {
         val configured = container.settingsRepository.defaultTabRoute.first()
@@ -135,9 +144,10 @@ fun AppNavHost(container: AppContainer, modifier: Modifier = Modifier) {
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
     /** 切回标签时保留原二级页面，还是回到标签主页。 */
+    // 只收名字，不在这里推导成枚举：switchTab 每次都现推（见那里的注释），
+    // 这里再存一份就成了同一个设置的第二个真相。
     val tabRestoreName by container.settingsRepository.tabRestoreMode
         .collectAsStateWithLifecycle(initialValue = TabRestoreMode.KEEP.name)
-    val tabRestoreMode = TabRestoreMode.fromName(tabRestoreName)
 
     /**
      * 每个标签最后停住的**整条**子页链（`tabs` 之下的每一层，含参数）。
@@ -263,12 +273,29 @@ fun AppNavHost(container: AppContainer, modifier: Modifier = Modifier) {
         }
     }
 
+    /**
+     * 标签层的 ViewModelStoreOwner，就是 `TABS_ROUTE` 那个返回栈条目。
+     *
+     * **标签层挪到 NavHost 外面之后才需要它。** 放在 NavHost 里时
+     * `viewModel()` 自动拿到所在目的地的条目；挪到外面就只剩 Activity 了，
+     * 而「高级设置」二级页要复用的正是标签那一份 `CpuViewModel`
+     * （它读的选中档位、要写的调速器都在那份状态里）。所以显式把条目取出来，
+     * 用 `CompositionLocalProvider` 指回 `LocalViewModelStoreOwner` ——
+     * 标签层拿到的和以前完全是同一个 store。
+     *
+     * 图是 `NavHost` 第一次组合时才建好的，所以要先等它上栈。
+     */
+    var tabsOwner by remember { mutableStateOf<androidx.lifecycle.ViewModelStoreOwner?>(null) }
+    LaunchedEffect(navController) {
+        navController.currentBackStack.first { stack -> stack.any { it.destination.route == TABS_ROUTE } }
+        tabsOwner = runCatching { navController.getBackStackEntry(TABS_ROUTE) }.getOrNull()
+    }
+
     // 停在标签主页 = 用户手动退出了一层。这时那个标签记住的位置作废。
     LaunchedEffect(currentRoute) {
         if (currentRoute == TABS_ROUTE) tabStacks = tabStacks - selectedTab
     }
 
-    // The diagnostics screen lives under Settings, so the bar keeps Settings lit.
     // 进子页时底栏仍高亮它所属的标签；回到 tabs 时用 selectedTab。
     //
     // **子页永远不改变高亮：它是压在**当前标签**之上的，不是另一个标签。**
@@ -328,35 +355,36 @@ fun AppNavHost(container: AppContainer, modifier: Modifier = Modifier) {
         // 所以在这里取一次再捕获进去。
         val motion = LocalMotion.current
 
-        NavHost(
-            navController = navController,
-            startDestination = TABS_ROUTE,
-            // Edge-to-edge is enabled, so keep content clear of the status bar.
-            modifier = Modifier.fillMaxSize().statusBarsPadding(),
-            // 同级标签切换走横向推移，子页进出也走横向平移（见 NavMotion）。
-            // 风格由用户选：SYSTEM 时只用淡入淡出，APP 时按层级选推移方向。
-            enterTransition = { NavMotion.enter(this, motion) },
-            exitTransition = { NavMotion.exit(this, motion) },
-            popEnterTransition = { NavMotion.popEnter(this, motion) },
-            popExitTransition = { NavMotion.popExit(this, motion) },
-        ) {
-
-
-            // 四个顶层标签装在一个横向容器里：左右滑动即可切换，底栏跟着走。
-            // 子页面仍然各自是独立的导航目的地，压在它之上 ——
-            // "平移到隔壁"和"进入下一层"是两种关系，返回语义也不同。
-            composable(TABS_ROUTE) {
+        // 四个顶层标签装在**导航之外**的一层里：左右滑动即可切换，底栏跟着走。
+        // 子页面是 NavHost 里的独立目的地，压在它之上 —— "平移到隔壁"和
+        // "进入下一层"是两种关系，返回语义也不同。
+        //
+        // **标签层必须在 NavHost 外面。** 曾经它是 `composable(TABS_ROUTE)` 的内容，
+        // 于是一进二级页它就离开组合、返回时整套重新组合加重新布局。实测返回一帧
+        // 要 233 ms，其中 228 ms 全花在 measure/layout/draw 上（gfxinfo framestats
+        // 逐帧量的），用户看到的是"按了返回要停半秒动画才开始"。
+        // 挪到外面之后标签层永不销毁，进出子页只剩子页自己那一层过渡。
+        //
+        // NavHost 覆盖在它上面，但停在标签主页时那个目的地是**空的**，
+        // 而 NavHost 全栈没有任何 pointerInput 节点 —— 触摸会穿过空层落到标签上。
+        // 子页压着时子页自己有滚动手势，触摸自然归它，标签不再响应，正是想要的。
+        val owner = tabsOwner
+        if (owner != null) {
+            CompositionLocalProvider(
+                androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner provides owner,
+            ) {
                 androidx.compose.foundation.layout.Box(
-                    Modifier.fillMaxSize().onSizeChanged { pageWidthPx = it.width },
+                    Modifier.fillMaxSize().statusBarsPadding()
+                        .onSizeChanged { pageWidthPx = it.width },
                 ) {
-                TabsPager(
-                    tabs = tabs,
-                    selected = selected,
-                    // 滑动和点击同一条路。曾经滑动只改 selectedTab、不收记忆也不还原，
-                    // 于是"滑走再滑回来"丢位置，而点一下却不会 —— 同一个动作两种结果。
-                    onTabChange = { switchTab(it) },
-                    pagerState = tabPagerState,
-                ) { tab, isSelected ->
+                    TabsPager(
+                        tabs = tabs,
+                        selected = selected,
+                        // 滑动和点击同一条路。曾经滑动只改 selectedTab、不收记忆也不还原，
+                        // 于是"滑走再滑回来"丢位置，而点一下却不会 —— 同一个动作两种结果。
+                        onTabChange = { switchTab(it) },
+                        pagerState = tabPagerState,
+                    ) { tab, isSelected ->
                     when (tab) {
                         Destination.HOME -> {
                             val vm: HomeViewModel = viewModel(
@@ -393,9 +421,30 @@ fun AppNavHost(container: AppContainer, modifier: Modifier = Modifier) {
                         Destination.TOOLS -> magicau.mtkcontroller.feature.tweaks.TuningScreen { navController.navigate(it) }
                         else -> SettingsTab(container, navController)
                     }
-                }
+                    }
                 }
             }
+        }
+
+        NavHost(
+            navController = navController,
+            startDestination = TABS_ROUTE,
+            // Edge-to-edge is enabled, so keep content clear of the status bar.
+            modifier = Modifier.fillMaxSize().statusBarsPadding(),
+            // 这里只剩子页进出一种转场（见 NavMotion）。顶层标签在 NavHost 外面
+            // 那一层，切标签由 Pager 自己滚，不经过这些 transition。
+            enterTransition = { NavMotion.enter(this, motion) },
+            exitTransition = { NavMotion.exit(this, motion) },
+            popEnterTransition = { NavMotion.popEnter(this, motion) },
+            popExitTransition = { NavMotion.popExit(this, motion) },
+        ) {
+
+            // **标签主页本身是空的。** 四个标签在 NavHost 外面那一层（见上文），
+            // 这里只是图的起点，也是 `popUpTo(TABS_ROUTE)` 的落点。
+            //
+            // 空是有意的：不空的话这一层会盖住标签、把触摸吃掉。
+            // NavHost 自己没有 pointerInput 节点，所以空目的地上触摸会穿过去。
+            composable(TABS_ROUTE) { }
 
             composable("gpu") {
                 magicau.mtkcontroller.feature.cpu.PerformanceScreen(container, initialPage = 1)
@@ -450,7 +499,7 @@ fun AppNavHost(container: AppContainer, modifier: Modifier = Modifier) {
                     magicau.mtkcontroller.feature.settings.SettingsCategoryScreen(
                         category = category,
                         state = state,
-                        actions = settingsActions(vm, navController),
+                        actions = settingsActions(vm, navController, androidx.compose.ui.platform.LocalContext.current),
                     )
                 }
             }
@@ -481,7 +530,7 @@ fun AppNavHost(container: AppContainer, modifier: Modifier = Modifier) {
             }
         }
 
-            listOf(SubRoutes.TWEAKS, SubRoutes.CONFIG, SubRoutes.MAINTENANCE, SubRoutes.GAME, SubRoutes.UNAVAILABLE).forEach { toolsRoute -> composable(toolsRoute) {
+            listOf(SubRoutes.TWEAKS, SubRoutes.CONFIG, SubRoutes.MAINTENANCE, SubRoutes.GAME).forEach { toolsRoute -> composable(toolsRoute) {
                 val vm: TweaksViewModel = viewModel(
                     factory = containerViewModelFactory { TweaksViewModel(container) },
                 )
@@ -490,7 +539,6 @@ fun AppNavHost(container: AppContainer, modifier: Modifier = Modifier) {
                     SubRoutes.CONFIG -> R.string.sub_config to "config"
                     SubRoutes.MAINTENANCE -> R.string.sub_maintenance to "maintenance"
                     SubRoutes.GAME -> R.string.sub_game to "game"
-                    SubRoutes.UNAVAILABLE -> R.string.sub_unavailable to "unavailable"
                     else -> R.string.sub_display to "display"
                 }
                 SubScreenScaffold(stringResource(title), onBack = navController::popBackStack) {
@@ -516,6 +564,8 @@ fun AppNavHost(container: AppContainer, modifier: Modifier = Modifier) {
                         onEnterGame = if (group == "game") ({ vm.snapshotPhaseOffsets(); vm.refreshGameBoostStatus() }) else null,
                         onTouchRate = vm::setTouchRate,
                         onTouchItem = vm::setTouchItem,
+                        onEnterDisplay = vm::probeTouchItems,
+                        onTouchNumber = vm::setTouchNumber,
                         onVivoUnsupported = vm::reportPerfUnsupported,
                         onFrameInterpolation = vm::setFrameInterpolation,
                         onFrameInterpolationSr = vm::setFrameInterpolationSr,
@@ -567,17 +617,106 @@ fun AppNavHost(container: AppContainer, modifier: Modifier = Modifier) {
                     factory = containerViewModelFactory { LabViewModel(container) },
                 )
                 val state by vm.state.collectAsStateWithLifecycle()
-                SubScreenScaffold(stringResource(R.string.sub_lab), onBack = navController::popBackStack) {
+                // 编辑中按返回/×：先问一句。草稿只在内存里，退出就没了，
+                // 而用户点了十几下才标完，不该因为一次误触全丢。
+                var confirmExit by remember { mutableStateOf(false) }
+                SubScreenScaffold(
+                    title = stringResource(R.string.sub_lab),
+                    onBack = { if (state.editing) confirmExit = true else navController.popBackStack() },
+                    // 编辑态：左边 ×（放弃），右边 √（保存）。
+                    // 两个动作分列两端，**不能都堆在右边** —— 挨着放很容易点错，
+                    // 而这两个的结果正好相反（一个丢、一个存）。
+                    leadingIcon = if (state.editing) Icons.Filled.Close else null,
+                    leadingDescription = if (state.editing) {
+                        stringResource(R.string.lab_edit_discard)
+                    } else {
+                        null
+                    },
+                    actions = {
+                        IconButton(
+                            onClick = {
+                                if (state.editing) vm.commitEditing() else vm.setEditing(true)
+                            },
+                        ) {
+                            Icon(
+                                imageVector = if (state.editing) Icons.Filled.Check else Icons.Filled.Edit,
+                                contentDescription = stringResource(
+                                    if (state.editing) R.string.lab_edit_done else R.string.lab_edit,
+                                ),
+                            )
+                        }
+                    },
+                ) {
                     LabScreen(
                         state = state,
+                        onOpenFeature = { entry -> navController.navigate(SubRoutes.labDetail(entry)) },
                         onOpenPanel = { navController.navigate(SubRoutes.LAB_PANEL) },
                         onOpenRawTest = { navController.navigate(SubRoutes.LAB_RAW) },
                         onValueChange = vm::setValue,
                         onHoldChange = vm::setHold,
                         onTest = vm::test,
-                        onSweep = { feature, stop -> vm.sweep(feature, stop) },
                         onResetAll = vm::resetAll,
                         onClearObservations = vm::clearObservations,
+                        onEditModeChange = vm::setEditing,
+                        onMark = vm::mark,
+                    )
+                }
+
+                if (confirmExit) {
+                    AlertDialog(
+                        onDismissRequest = { confirmExit = false },
+                        title = { Text(stringResource(R.string.lab_edit_exit_title)) },
+                        text = { Text(stringResource(R.string.lab_edit_exit_body)) },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                confirmExit = false
+                                vm.commitEditing()
+                            }) { Text(stringResource(R.string.lab_edit_save)) }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = {
+                                confirmExit = false
+                                vm.discardEditing()
+                            }) { Text(stringResource(R.string.lab_edit_discard)) }
+                        },
+                    )
+                }
+            }
+
+            composable(
+                route = SubRoutes.LAB_DETAIL,
+                arguments = listOf(navArgument("entry") { type = NavType.StringType }),
+            ) { backStackEntry ->
+                // 一级页的 ViewModel 提供状态，二级页只读它 —— 判定、读数、句柄
+                // 都归一处，两个页面才不会各显示各的。
+                val labEntry = backStackEntry.arguments?.getString("entry").orEmpty()
+                val vm: LabViewModel = viewModel(
+                    factory = containerViewModelFactory { LabViewModel(container) },
+                )
+                val state by vm.state.collectAsStateWithLifecycle()
+                // 入口可能对应多项（mergeKey），所以按一级列表用的同一个键反查。
+                // 先落到 val 再取下标：`链式调用` 换行后紧跟 `[key]` 会被 Kotlin
+                // 当成集合字面量，报一个和真实原因无关的错。
+                val byEntry = state.groups
+                    .flatMap { it.second }
+                    .groupBy { it.feature.mergeKey ?: it.feature.key }
+                val items = byEntry[labEntry].orEmpty()
+                SubScreenScaffold(
+                    title = items.firstOrNull()?.feature?.labelRes
+                        ?.let { stringResource(it) } ?: stringResource(R.string.sub_lab),
+                    onBack = navController::popBackStack,
+                ) {
+                    LabDetailScreen(
+                        items = items,
+                        clusters = state.clusters.map { it.policy },
+                        liveThermal = state.thermalAppliedIndex
+                            ?.takeIf { state.thermalAppliedSource != null }
+                            ?.let { it to state.thermalAppliedSource!! },
+                        onValueChange = { feature, policy, value ->
+                            vm.setValue(feature, policy, value)
+                        },
+                        onHoldChange = { feature, hold -> vm.setHold(feature, hold) },
+                        onTest = { feature -> vm.test(feature) },
                     )
                 }
             }
@@ -714,7 +853,10 @@ fun AppNavHost(container: AppContainer, modifier: Modifier = Modifier) {
         }
 
         FloatingCapsuleNavBar(
-            destinations = Destination.entries,
+            // 和 Pager 用**同一个** [tabs]，不是各排一次。两处各列一遍的话，
+            // 将来加一个标签时漏改一处，底栏和页面的顺序就错开 —— 而这种错
+            // 在桌面上看不出来，只会觉得"滑动方向反了"。
+            destinations = tabs,
             selectedRoute = selected.route,
             style = NavBarStyle.fromName(navStyleName),
             customColor = AppPalette.fromName(navCustomName).accent,
@@ -766,17 +908,40 @@ fun AppNavHost(container: AppContainer, modifier: Modifier = Modifier) {
                     dragSession?.trySend(pageDelta * pageWidthPx)
                 }
             },
-            onSettle = { _, heldStill ->
+            onSettle = { nearest, heldStill ->
                 dragSession?.close()
                 dragSession = null
-                val nearest = dragPosition.roundToInt().coerceIn(0, tabs.lastIndex)
-                val destination = when (swipeMode) {
+                // nearest 是底栏按手指最后的位置算出来的"离哪一页近"，已经夹过范围。
+                // 这里不再按 dragPosition 重算一遍 —— 两处各夹一次，将来改夹取规则
+                // 时只改一处，另一处就悄悄给出不同的页。
+                val page = when (swipeMode) {
                     TabSwipeMode.NEAREST -> nearest
                     // 停留后切换：没停够就弹回**拖动起点**，不是当前位置 ——
                     // 否则拖一半松手会停在中间那页。
                     TabSwipeMode.HOLD -> if (heldStill) nearest else draggedFromPage
                 }
-                scope.launch { tabPagerState.animateScrollToPage(destination) }
+                val destination = tabs.getOrNull(page) ?: selectedTab
+                // 三条手势（点底栏、滑页面、拖底栏）汇到同一个入口。
+                //
+                // 曾经滑动这条路只调 `animateScrollToPage`，指望 Pager 停住后由
+                // `settledPage` 回调 `onTabChange` 再来切 —— 二级页压在标签层之上时
+                // 那个收集器没在跑，`selectedTab` 和导航栈都不更新：胶囊动了，页面没动。
+                switchTab(destination)
+                // 只有"标签没变"时才需要自己归位。
+                //
+                // 标签变了的话 `selectedTab` 一变，`TabsPager` 里那个
+                // `LaunchedEffect(selectedIndex)` 就会滑过去 —— 这里再滑一次是重复劳动。
+                //
+                // 而标签没变时那个 effect 的 key 不变、不会重跑，拖动却可能把 Pager
+                // 丢在两页中间，所以这一种必须自己归位。
+                //
+                // **"变了他会滑"这件事依赖那个 effect 的判到位条件是对的**：
+                // 它必须同时看页码和偏移（见 TabsPager）。只判 currentPage 会漏 ——
+                // 拖过中线松手时 Pager 的 currentPage 已经跳到目标页，判等成立，
+                // 归位动画被整段跳过，页面停在两页中间，要用户再碰一下才好。
+                if (destination == selectedTab) {
+                    scope.launch { tabPagerState.animateScrollToPage(tabs.indexOf(destination)) }
+                }
             },
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -813,11 +978,13 @@ private val tabs: List<Destination> = Destination.entries
 private fun settingsActions(
     vm: SettingsViewModel,
     navController: androidx.navigation.NavHostController,
+    context: android.content.Context,
 ) = magicau.mtkcontroller.feature.settings.SettingsActions(
     onSetDefaultTab = vm::setDefaultTab,
     onSetApplyMode = vm::setApplyMode,
     onSetReapplyInterval = vm::setReapplyIntervalMs,
     onSetFreqRangeMode = vm::setFreqRangeMode,
+    onSetFreqHardLimits = vm::setFreqHardLimits,
     onSetTouchBackend = vm::setTouchBackend,
     onSetBrightnessBackend = vm::setBrightnessBackend,
     onSetThemeMode = vm::setThemeMode,
@@ -833,6 +1000,13 @@ private fun settingsActions(
     onSetTabRestoreMode = vm::setTabRestoreMode,
     onSetCustomHue = vm::setCustomHue,
     onSetCustomConcentration = vm::setCustomConcentration,
+    onSetBatteryWhitelist = vm::setBatteryWhitelist,
+    // 打开系统界面要 Context，而设置页只拿得到 navController ——
+    // 导航层有 Context，所以这一步在导航层做，ViewModel 仍然不碰 Android 的界面类。
+    onOpenBatterySettings = {
+        val opened = magicau.mtkcontroller.data.power.BatteryWhitelist.openSystemSettings(context)
+        if (!opened) AppLog.w("Nav", "打不开系统电池设置页")
+    },
     onOpenDisplayTweaks = { navController.navigate(SubRoutes.TWEAKS) },
     onOpenLab = { navController.navigate(SubRoutes.LAB) },
     onOpenAppThermal = { navController.navigate(SubRoutes.APP_THERMAL) },
@@ -865,7 +1039,7 @@ private fun SettingsTab(
     val state by vm.state.collectAsStateWithLifecycle()
     SettingsScreen(
         state = state,
-        actions = settingsActions(vm, navController),
+        actions = settingsActions(vm, navController, androidx.compose.ui.platform.LocalContext.current),
         onOpenCategory = { category ->
             navController.navigate(SubRoutes.settingsCategory(category))
         },

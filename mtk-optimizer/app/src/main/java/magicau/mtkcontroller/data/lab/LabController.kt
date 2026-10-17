@@ -1,6 +1,7 @@
 package magicau.mtkcontroller.data.lab
 
 import android.content.Context
+import androidx.annotation.StringRes
 import magicau.mtkcontroller.R
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -11,6 +12,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import magicau.mtkcontroller.data.Message
+import magicau.mtkcontroller.data.powerhal.RequestOutcome
 import magicau.mtkcontroller.data.log.AppLog
 import magicau.mtkcontroller.data.powerhal.PerfLockController
 import magicau.mtkcontroller.data.powerhal.PowerHal
@@ -63,21 +65,33 @@ class LabController(
         const val SETTLE_MS = 400L
     }
 
-    enum class State(val label: String) {
+    enum class State(@StringRes val labelRes: Int) {
         /** Never tried, or the observation was cleared. */
-        UNTESTED("未测试"),
+        UNTESTED(R.string.lab_state_untested),
 
         /** The node moved as expected. */
-        WORKING("生效"),
+        WORKING(R.string.lab_state_working),
 
         /** The request was accepted but the node did not move. */
-        NO_EFFECT("未见效"),
+        NO_EFFECT(R.string.lab_state_no_effect),
 
         /** The feature's node is absent, so this device does not have it. */
-        UNSUPPORTED("本机不支持"),
+        UNSUPPORTED(R.string.lab_state_unsupported),
 
         /** Accepted, but there is no node to judge by. */
-        UNKNOWN("无法判断"),
+        UNKNOWN(R.string.lab_state_unknown),
+
+        /**
+         * 用户自己标的能力。
+         *
+         * 判据节点在 shell 身份下大多读不到（`/proc/perfmgr` 进不去、`/dev/cpuctl`
+         * 是 `0660 system`），所以自动判定对这台机器上的大部分项根本不成立。
+         * 而**效果本来就是体感**：能不能用，用户比任何节点读数更有发言权。
+         */
+        MANUAL_USABLE(R.string.lab_state_manual_usable),
+
+        /** 用户自己标"没用"。与 [UNTESTED] 是两件事：那是没试过。 */
+        MANUAL_UNUSABLE(R.string.lab_state_manual_unusable),
     }
 
     @Serializable
@@ -97,6 +111,22 @@ class LabController(
         context.profileStore.data.first()[verdictsKey]
             ?.let { raw -> runCatching { json.decodeFromString<Map<String, Verdict>>(raw) }.getOrNull() }
             ?: emptyMap()
+    }
+
+    /**
+     * 用户手动标一条：能用 / 没用 / 清除标记。
+     *
+     * 和自动判定写同一张表 —— 界面上只有"这一项行不行"一个结论，
+     * 分两张表就会出现"自动说 A、手动说 B，界面显示哪个"的问题。
+     */
+    suspend fun markManually(key: String, state: State?) {
+        if (state == null) {
+            val current = verdicts().toMutableMap()
+            current.remove(key)
+            context.profileStore.edit { it[verdictsKey] = json.encodeToString(current) }
+            return
+        }
+        record(key, Verdict(state = state.name, detail = "", atMs = System.currentTimeMillis()))
     }
 
     private suspend fun record(key: String, verdict: Verdict) {
@@ -144,7 +174,7 @@ class LabController(
         if (missing != null) {
             val verdict = Verdict(
                 state = State.UNSUPPORTED.name,
-                detail = "节点不存在: $missing —— 本机没有这个功能,或节点名/ID 已随 BSP 变更",
+                detail = context.getString(R.string.lab_verdict_node_absent, missing),
                 atMs = System.currentTimeMillis(),
             )
             AppLog.w(TAG, "[${feature.key}] ${verdict.detail}")
@@ -154,10 +184,31 @@ class LabController(
 
         val before = readAll(nodes)
 
+        // 1b. 读不到就**别下发**。
+        //
+        // 节点的作用就是判据：读不到它，这次下发就没有任何办法判断结果。
+        // 那还写进去干什么？只是白白改一次设备状态，换来界面上"读回失败"四个字。
+        //
+        // 走到这里说明节点**存在过**（步骤 1 只拦了确认不存在的），只是这台机器上
+        // 读不动 —— `/proc/perfmgr/**` 就是这一族：目录在，SELinux 拒掉搜索，
+        // 里层文件报 ENOENT，父目录报 EACCES。按 `Sysfs.absenceIsProven` 那套判定，
+        // 这属于"读不到"而不是"不存在"，所以不该判 UNSUPPORTED；
+        // 但"读不到"和"没有它"对用户是同一件事：**看不见，就判不了**。
+        if (before == null) {
+            val verdict = Verdict(
+                state = State.UNKNOWN.name,
+                detail = context.getString(R.string.lab_verdict_unreadable_no_write),
+                atMs = System.currentTimeMillis(),
+            )
+            AppLog.w(TAG, "[${feature.key}] ${verdict.detail}")
+            record(feature.key, verdict)
+            return verdict
+        }
+
         // 2. Build the request.
         val pairs = buildPairs(feature, clusters, values)
         if (pairs.isEmpty()) {
-            return Verdict(State.NO_EFFECT.name, "没有可下发的资源(缺少簇信息?)").also {
+            return Verdict(State.NO_EFFECT.name, context.getString(R.string.lab_verdict_no_resources)).also {
                 record(feature.key, it)
             }
         }
@@ -181,16 +232,16 @@ class LabController(
         val outcome = if (feature.baseId == THERMAL_POLICY_RESOURCE) {
             val index = values.values.firstOrNull()
             if (index == null) {
-                PerfLockController.Outcome(false, Message(R.string.lock_no_resources))
+                RequestOutcome(false, Message(R.string.lock_no_resources))
             } else {
                 val thermal = ThermalPolicyController.requestLab(index, duration)
-                PerfLockController.Outcome(thermal.success, thermal.message, thermal.detail)
+                RequestOutcome(thermal.success, thermal.message, thermal.detail)
             }
         } else {
             lock.apply(pairs, duration)
         }
         if (!outcome.success) {
-            val verdict = Verdict(State.NO_EFFECT.name, "下发被拒绝: ${AppLog.text(outcome.message)}")
+            val verdict = Verdict(State.NO_EFFECT.name, context.getString(R.string.lab_verdict_rejected, AppLog.text(outcome.message)))
             AppLog.w(TAG, "[${feature.key}] ${verdict.detail}")
             record(feature.key, verdict)
             return verdict
@@ -200,8 +251,7 @@ class LabController(
         if (nodes.isEmpty()) {
             val verdict = Verdict(
                 state = State.UNKNOWN.name,
-                detail = "已下发,但这个功能没有可读回的节点,无法自动判断是否生效。" +
-                    "请靠体感或帧率判断。",
+                detail = context.getString(R.string.lab_verdict_no_readback),
                 atMs = System.currentTimeMillis(),
             )
             AppLog.i(TAG, "[${feature.key}] ${verdict.detail}")
@@ -214,17 +264,17 @@ class LabController(
         val target = values.values.firstOrNull()?.toString()
 
         val verdict = when {
-            after == null -> Verdict(State.UNKNOWN.name, "读回失败")
+            after == null -> Verdict(State.UNKNOWN.name, context.getString(R.string.lab_verdict_readback_failed))
             after == before && target != null && after == target ->
-                Verdict(State.WORKING.name, "节点已是目标值($after)", System.currentTimeMillis())
+                Verdict(State.WORKING.name, context.getString(R.string.lab_verdict_already_target, after.toString()), System.currentTimeMillis())
             after == before -> Verdict(
                 State.NO_EFFECT.name,
-                "节点无变化,仍是 \"$before\"。ID 可能在本机不同,或该功能需要 root。",
+                context.getString(R.string.lab_verdict_unchanged, before.toString()),
                 System.currentTimeMillis(),
             )
             else -> Verdict(
                 State.WORKING.name,
-                "节点 \"$before\" → \"$after\",已生效",
+                context.getString(R.string.lab_verdict_working, before.toString(), after.toString()),
                 System.currentTimeMillis(),
             )
         }
@@ -252,9 +302,16 @@ class LabController(
         readNodes: List<Pair<String, String>>,
         hold: Boolean,
     ): Verdict {
-        if (pairs.isEmpty()) return Verdict(State.NO_EFFECT.name, "没有勾选任何 ID")
+        if (pairs.isEmpty()) return Verdict(State.NO_EFFECT.name, context.getString(R.string.lab_verdict_no_ids))
 
         val before = readAll(readNodes)
+        // 同 [apply]：读不到判据就别写。逐 ID 测试是给排错用的，写一个自己看不见
+        // 结果的资源号，只会让"读回失败"多一条记录。
+        if (before == null) {
+            val verdict = Verdict(State.UNKNOWN.name, context.getString(R.string.lab_verdict_unreadable_no_write))
+            AppLog.w(TAG, "[手动] ${verdict.detail}")
+            return verdict
+        }
         val duration = if (hold) 0 else TEST_DURATION_MS
         AppLog.i(
             TAG,
@@ -264,7 +321,7 @@ class LabController(
 
         val outcome = lock.apply(pairs, duration)
         if (!outcome.success) {
-            val verdict = Verdict(State.NO_EFFECT.name, "下发被拒绝: ${AppLog.text(outcome.message)}")
+            val verdict = Verdict(State.NO_EFFECT.name, context.getString(R.string.lab_verdict_rejected, AppLog.text(outcome.message)))
             AppLog.w(TAG, "[手动] ${verdict.detail}")
             return verdict
         }
@@ -272,47 +329,39 @@ class LabController(
         delay(SETTLE_MS)
         val after = readAll(readNodes)
         val verdict = when {
-            after == null -> Verdict(State.UNKNOWN.name, "读回失败")
+            after == null -> Verdict(State.UNKNOWN.name, context.getString(R.string.lab_verdict_readback_failed))
             after == before -> Verdict(
                 State.NO_EFFECT.name,
-                "${pairs.size} 个 ID 全部无效 —— 节点仍是 \"$before\"",
+                context.getString(R.string.lab_verdict_all_invalid, pairs.size, before.toString()),
                 System.currentTimeMillis(),
             )
             else -> Verdict(
                 State.WORKING.name,
-                "节点 \"$before\" → \"$after\"",
+                context.getString(R.string.lab_verdict_changed, before.toString(), after.toString()),
                 System.currentTimeMillis(),
             )
         }
-        AppLog.i(TAG, "[手动] ${verdict.stateEnum().label}: ${verdict.detail}")
+        AppLog.i(TAG, "[手动] ${verdict.stateEnum().name}: ${verdict.detail}")
         return verdict
     }
 
-    /** Drop every lab request and mark that the observations are now stale. */
     /**
-     * 只释放实验室的请求，不动观测记录。
+     * 放掉实验室持有的一切，回到常驻意图。
      *
-     * 自动扫档必须用它：上一档的请求如果还没过期就发下一档，两把锁会叠在一起，
-     * 到时看到的 cap 分不清是哪一档的功劳。
+     * 返回 [RequestOutcome] 而不是一句拼好的 `String`：**结论要带证据等级**，
+     * 而 `String` 只有一句话。界面上"哪一样没放掉"和"服务端原话"分两级展示，
+     * 靠的就是这里的 `message` + `detail`。原来这里直接 `resolve(context)`
+     * 把中文焊死，调用方连"成功了没有"都判断不出。
      */
-    suspend fun releaseRequests() {
-        val outcome = lock.release()
-        AppLog.i(TAG, "释放实验室请求: ${AppLog.text(outcome.message)}")
-        // 温控档位是另一条路进来的，lock 管不到它。
-        // releaseLab 只在实验室正持有时动作，不会碰用户选的那一档。
-        val thermal = ThermalPolicyController.releaseLab()
-        AppLog.i(TAG, "释放实验室温控档位: ${AppLog.text(thermal.message)}")
-    }
-
-    suspend fun reset(): String {
+    suspend fun reset(): RequestOutcome {
         val outcome = lock.release()
         AppLog.i(TAG, "实验室全部恢复: ${AppLog.text(outcome.message)}")
         val thermal = ThermalPolicyController.releaseLab()
         AppLog.i(TAG, "实验室温控档位恢复: ${AppLog.text(thermal.message)}")
         return when {
-            !outcome.success -> outcome.message.resolve(context)
-            !thermal.success -> thermal.message.resolve(context)
-            else -> context.getString(R.string.lab_released_all)
+            !outcome.success -> outcome
+            !thermal.success -> thermal
+            else -> RequestOutcome(true, Message(R.string.lab_released_all))
         }
     }
 
@@ -371,7 +420,4 @@ class LabController(
         }
         return parts.takeIf { it.isNotEmpty() }?.joinToString("  ")
     }
-
-    /** Existence check used by the UI to grey out what this device lacks. */
-    suspend fun nodeExists(node: String): Boolean = nodeValue(node) != null
 }

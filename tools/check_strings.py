@@ -88,7 +88,13 @@ CJK = re.compile(r"[一-鿿]")
 # 按**调用名**判定，不按"附近有没有出现在几行内"—— 旧版那么做会把
 # `Outcome(true, "无测试句柄")` 也算成日志，只因为上面几行有个 `emit(`。
 # 判据是"这个字面量是谁的实参"，那就得真的找到那个调用。
-LOG_CALLS = ("AppLog.", "emit", "appendLine", "append", "record")
+# 参数进日志/报告的调用。判据是"这个字面量最后到哪儿去了"，不是"附近有没有日志"。
+#
+# `sample` / `sampleLimits` 是 `CpuControl` 里的探针采样器：它们的 label 实参
+# 原封不动拼进 `emit(...)` 的报告行（`emit("$label elapsed=…")`），所以传进去的
+# 中文是报告原文，跟直接写在 `emit(...)` 里是一回事。之前只列了 `emit`，
+# 于是这些 label 被当成界面文案报了 38 处 —— 是名单漏了，不是代码有问题。
+LOG_CALLS = ("AppLog.", "emit", "appendLine", "append", "record", "sampleLimits", "sample", "section")
 # 显式豁免：确实要展示给用户的设备原文、协议标识。
 #
 # 只在逐条看展示路径后使用，不是通配符 —— 一行豁免意味着"这条中文要么是数据、
@@ -227,9 +233,17 @@ def is_log_context(masked_source: str, offset: int) -> bool:
     return call is not None and any(mark in call for mark in LOG_CALLS)
 
 
-def is_ignored(lines: list[str], line_no: int) -> bool:
+def is_ignored(raw_lines: list[str], line_no: int) -> bool:
+    """这一行（或往上 [IGNORE_WINDOW] 行）有没有 `ui-check:ignore`。
+
+    **必须传原始行，不能传 strip_comments 之后的行** —— 标记本身写在注释里，
+    剥掉注释就把它一起剥了，于是 `is_ignored` 永远返回 False。
+    这个 bug 之前一直看不出来：仓库里既有的几处忽略标记恰好都挂在
+    纯 ASCII 字面量上，本来就不会被统计。行号和原始文件一致
+    （strip_comments 用等量换行保持行号），所以直接用同一个 line_no。
+    """
     lo = max(0, line_no - 1 - IGNORE_WINDOW)
-    return IGNORE_MARK in "\n".join(lines[lo:line_no])
+    return IGNORE_MARK in "\n".join(raw_lines[lo:line_no])
 
 
 class Hit:
@@ -251,7 +265,8 @@ def audit() -> list[Hit]:
     for f in sorted(JAVA.rglob("*.kt")):
         raw = f.read_text(encoding="utf-8")
         clean = strip_comments(raw)
-        lines = clean.splitlines()
+        # 忽略标记写在注释里，剥注释之后就没了 —— 判定要用原始行。
+        lines = raw.splitlines()
         masked_src = masked(clean)
         rel = f.relative_to(ROOT).as_posix()
         layer = layer_of(f)
@@ -343,9 +358,10 @@ def shape_hints() -> dict[str, list[tuple[str, str]]]:
     out: dict[str, list[tuple[str, str]]] = {}
     for base in ("feature", "ui"):
         for f in (PKG / base).rglob("*.kt"):
-            text = strip_comments(f.read_text(encoding="utf-8"))
+            raw = f.read_text(encoding="utf-8")
+            text = strip_comments(raw)
             masked_src = masked(text)
-            lines = text.splitlines()
+            lines = raw.splitlines()
             hits: list[tuple[str, str]] = []
             for label, pat in (("标点分隔状态", SEPARATOR),
                                ("内部标识符", INTERNAL),

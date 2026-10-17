@@ -117,3 +117,27 @@ Kotlin suspend 状态机和内联 lambda 的重建可能有损。Java 搜不到�
 **佐证父目录的那次判词必须和产生 ENOENT 的同源**（都是提权 shell），
 不能拿 App 进程的 `File.canRead()` —— SELinux 按域授权，两边可以完全不同。
 “未知”也不自动证明控件可用，支持判断还需实际接口证据。
+
+### 16b. 哪些节点在 shell 身份下真读得到（2026-10-16 逐条实测）
+
+实验室要拿节点当"写入有没有生效"的判据，先把可读性摸清。uid 2000（App 经 Shizuku
+也是这个身份）逐个 `cat`：
+
+| 节点 | 结果 | 说明 |
+|---|---|---|
+| `/dev/cpuctl/top-app/cpu.uclamp.min` | `Permission denied` | `-rw-rw---- system:system`，shell 不在组里 |
+| `/dev/cpuctl/foreground/cpu.uclamp.min` | `Permission denied` | 同上 |
+| `/proc/perfmgr/tchbst/user/usrtch` | `No such file or directory` | 父目录进不去，见上一条 |
+| `/proc/perfmgr/syslimiter/syslimiter_limit_freq` | `No such file or directory` | 同上 |
+| `/proc/perfmgr/boost_ctrl/eas_ctrl/perf_ta_uclamp_min` | `No such file or directory` | 同上 |
+| `/sys/devices/system/cpu/*/affected_cpus` | ✅ `0 1 2 3` | **只有这一族读得到** |
+| `/sys/devices/system/cpu/*/scaling_max_freq` | ✅ 有值 | cpufreq 一族都正常 |
+
+**这些路径没有写错。** `reference/rom/PD2430D_A_16.1.12.0.W10` 里的
+`vendor.mediatek.hardware.mtkpower@1.0-init.rc` 明确给它们 `chown`/`chmod`
+（`/dev/cpuctl/*` 是 0660、`/proc/perfmgr/*` 是 0664）—— init 不会给不存在的文件设权，
+所以节点**存在**，是权限与 SELinux 域拦着。
+
+本机无 root（`su` 是 `inaccessible or not found`），Shizuku 拉起的就是 shell 身份，
+**没有更高的路可走**。后果：把 `/proc/perfmgr/**` 和 `/dev/cpuctl/**` 当判据的功能，
+在这台机器上只能报"读不到"，测不出结果。

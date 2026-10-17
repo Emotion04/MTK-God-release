@@ -36,6 +36,30 @@ content insert --uri content://settings/system --bind name:s:pointer_speed --bin
 目标已经为空时可以跳过写入并核对读回；需要清空已设置的属性时保留空字符串参数：
 `setprop <key> ""`。支持情况仍以执行器回读为准。
 
+## 电池优化白名单
+
+依据：2026-10-14，uid 2000（ADB shell，与 Shizuku 同一身份）**可以直接改** Doze 白名单，
+不需要 root，也不弹系统对话框：
+
+```text
+$ adb shell "dumpsys deviceidle whitelist" | grep -c magicau.mtkcontroller
+0
+$ adb shell "dumpsys deviceidle whitelist +magicau.mtkcontroller"
+Added: magicau.mtkcontroller
+$ adb shell "dumpsys deviceidle whitelist" | grep -c magicau.mtkcontroller
+1
+```
+
+读和写都通，`-` 号移出。所以 `BatteryWhitelist` 的直写路径是可用的，
+开关显示的状态与系统事实一致。
+
+**但厂商 ROM 的后台管理不止这一项。** 本机上
+`ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS` 落到的是
+`com.iqoo.powersaving/.BackgroundHighUsageActivity`，管的范围比 Doze 宽；
+安卓原生的授权弹窗是 `ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` + `package:` 数据，
+本机解析到 `com.android.settings/.fuelgauge.RequestIgnoreBatteryOptimizations`。
+要用户自己确认全貌，走后者。
+
 ## 触控
 
 依据：2026-09-23，在实体触屏上采集 `SYN_REPORT`：

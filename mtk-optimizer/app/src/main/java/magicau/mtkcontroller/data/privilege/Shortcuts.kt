@@ -5,7 +5,7 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import magicau.mtkcontroller.R
 import magicau.mtkcontroller.data.diag.BatteryReportParser
-import magicau.mtkcontroller.data.diag.DaemonExec
+import magicau.mtkcontroller.data.exec.DaemonExec
 
 /**
  * 拉起系统页面与拨号盘。
@@ -22,7 +22,7 @@ object Shortcuts {
         }
         val target = if (cls.isEmpty()) pkg else "$pkg.$cls"
         val out = DaemonExec.runArgv(listOf("/system/bin/am", "start", "-n", "$pkg/$target"))
-            ?: return context.getString(R.string.shortcut_no_service, "系统页面")
+            ?: return context.getString(R.string.shortcut_no_service, context.getString(R.string.priv_shortcut_page))
         if (out.exit != 0) {
             val reason = (out.stderr.ifBlank { out.stdout }).lineSequence()
                 .firstOrNull { it.contains("Error", true) || it.contains("Exception", true) }
@@ -38,7 +38,7 @@ object Shortcuts {
     suspend fun dialCode(context: Context, code: String): String? {
         val encoded = code.map { if (it == '*') "%2A" else if (it == '#') "%23" else "$it" }.joinToString("")
         val out = DaemonExec.runArgv(listOf("/system/bin/am", "start", "-a", "android.intent.action.DIAL", "-d", "tel:$encoded"))
-            ?: return context.getString(R.string.shortcut_no_service, "拨号盘")
+            ?: return context.getString(R.string.shortcut_no_service, context.getString(R.string.priv_shortcut_dialer))
         if (out.exit != 0) {
             val reason = (out.stderr.ifBlank { out.stdout }).lineSequence().firstOrNull()
             return context.getString(
@@ -57,15 +57,19 @@ object FilePicker {
     fun pickAndParse(context: Context, uri: Uri): String {
         val name = queryName(context, uri) ?: context.getString(R.string.picker_unknown_file)
         // 直接读 content:// 流，不要求先复制到本机 —— bugreport 可能有几十 MB。
-        val text = runCatching {
+        val parsed = runCatching {
             context.contentResolver.openInputStream(uri)?.use { input ->
                 // bugreport 是 zip；用 File 接口的解析器需要真实路径，所以改成流式取最大 txt。
                 BatteryReportParser.parseStream(input, name)
             }
         }.getOrElse {
-            context.getString(R.string.picker_parse_failed, it.javaClass.simpleName, it.message.orEmpty())
-        }
-        return text ?: context.getString(R.string.picker_unreadable)
+            return context.getString(R.string.picker_parse_failed, it.javaClass.simpleName, it.message.orEmpty())
+        } ?: return context.getString(R.string.picker_unreadable)
+        // 成没成由解析器说了算，不去猜拼出来的文字里是什么。
+        val head = parsed.message.resolve(context)
+        val body = if (parsed.present) parsed.body else ""
+        return listOf(name, head, body).filter { it.isNotEmpty() }.joinToString("\n")
+
     }
 
     private fun queryName(context: Context, uri: Uri): String? = runCatching {

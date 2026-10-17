@@ -2,7 +2,11 @@ package magicau.mtkcontroller.data.tweaks
 
 import org.junit.Assert.*
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 
+@RunWith(RobolectricTestRunner::class)
 class SmartPlatformTest {
     @Test fun overlappingAiControlsRequireRestoreInBothDirections() {
         assertEquals(VivoFeature.PRELOAD, VivoTweaks.conflictingFeature(VivoFeature.AI, setOf(VivoFeature.PRELOAD)))
@@ -20,7 +24,8 @@ class SmartPlatformTest {
         assertTrue(SmartPlatform.parse("K|0|0|1\n[exit] 124").isEmpty())
         assertTrue(SmartPlatform.parse(null).isEmpty())
         assertEquals("null", SmartPlatform.parse("K|0|0|null\n[exit] 0")["system ai_turbo_enabled"])
-        assertTrue(SmartPlatform.report(emptyMap()).contains("未读到"))
+        // report 要 Context 解析资源文案；Robolectric 给的是能读 strings.xml 的真 Context。
+        assertTrue(SmartPlatform.report(RuntimeEnvironment.getApplication(), emptyMap()).contains("未读到"))
     }
     @Test fun serviceDumpKeepsMultilineErrorsAndMarksMissingExit() {
         val raw = "first\nPermission denied\n[dump-exit] 1\n[exit] 0"

@@ -180,6 +180,17 @@ private fun ThermalCard(
 
             val shown = state.thermalIndexEdit ?: state.thermalPolicyIndex
                 ?: state.thermalIndices.firstOrNull()
+            // 当前**实际生效**的皮肤阈值。上面那些摘要是"这一档是什么阶梯"，
+            // 这一行是"现在加载的是哪一档" —— 无 root 时唯一能看出后者的通道
+            // （THERM-013）。读不到就留空，不用历史值顶替。
+            state.thermalSkinThreshold?.let { skin ->
+                Text(
+                    stringResource(R.string.cpu_thermal_skin, skin),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp),
+                )
+            }
             val policy: ThermalPolicy? = shown?.let { state.thermalPolicies[it] }
             if (policy != null && policy.decodeError == null) {
                 ThermalLadderTable(

@@ -1,7 +1,7 @@
 package magicau.mtkcontroller.data.tweaks
 
 import magicau.mtkcontroller.R
-import magicau.mtkcontroller.data.diag.SettingChannel
+import magicau.mtkcontroller.data.settings.SettingChannel
 import java.math.BigDecimal
 
 /** 验证固定白名单参数；不将自由输入拼进 shell。 */

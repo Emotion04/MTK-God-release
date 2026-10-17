@@ -44,6 +44,14 @@ object DeviceSnapshot {
         context: Context,
         report: CapabilityReport?,
         cpuStatus: CpuControl.Status?,
+        /**
+         * ROM 控制接口的只读快照原文。null = 这次没采。
+         *
+         * 放进来是为了让**一份适配报告就够用**：它回答"这台 ROM 用什么实现做到了"，
+         * 而下面那些节回答"这台机器支持什么"。少了它，适配新机型时得另外再导一次。
+         * 只在调用方显式传入时才采 —— 它要跑几条 shell，不是免费的。
+         */
+        romProbe: String? = null,
     ): JSONObject = JSONObject().apply {
         put("captured_at", iso.format(Date()))
         put("captured_at_ms", System.currentTimeMillis())
@@ -59,6 +67,9 @@ object DeviceSnapshot {
         put("gpu", gpu(report))
         put("features", features(context, report))
         put("environment", environment(context))
+        // ROM 实现快照。原文整段放进去，不在这里解析 ——
+        // 解析规则会随 ROM 变，报告只负责把证据留住。
+        romProbe?.let { put("rom_implementation", it) }
     }
 
     // --- sections ----------------------------------------------------------
@@ -209,6 +220,7 @@ object DeviceSnapshot {
                 })
                 put("verification", s.verification.name)
                 put("verification_detail", s.verificationDetail ?: JSONObject.NULL)
+                put("observed_limits", s.observedLimits ?: JSONObject.NULL)
             })
         }
     }

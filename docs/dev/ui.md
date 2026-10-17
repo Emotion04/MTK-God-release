@@ -45,8 +45,62 @@
 `LaunchedEffect` 的 key 只有 `pagerState`，重组不重启它，否则协程里一直是旧 lambda
 —— 里面算出来的普通 `val` 全是第一次组合时的值。
 
+**滑动松手那一刀必须自己调 `switchTab()`，不能只滑 Pager。** 曾经 `onSettle` 里只有
+`animateScrollToPage()`，指望 Pager 停住后由 `settledPage` 回调 `onTabChange` 来切。
+但二级/三级页压在 `TabsPager` 之上时，`TabsPager` 根本没被组合，那个收集器没在跑 ——
+于是 `selectedTab` 和导航栈都不更新：胶囊跟着滑过去了，页面还停在原地。
+点击走 `onSelect → switchTab` 所以一直是好的，滑动这条路漏了它，两条手势就此分叉。
+
+**归位必须无条件做。** 曾经判 `destination == selectedTab` 才归位，理由是"变了他会滑"，
+而那个"他"是 `TabsPager` 里 `currentPage != selectedIndex` 这个 guard —— 它恰恰会漏：
+**拖过中线松手时 Pager 的 `currentPage` 已经跳到目标页**，guard 判等成立，归位动画被整段
+跳过，页面停在两页中间，用户要再碰一下才好。所以 `TabsPager` 的 guard 必须同时看页码和
+偏移：`currentPage == selectedIndex && currentPageOffsetFraction == 0f` 才算真的到位。
+
+`onSettle` 里归位是**有条件**的：只有标签没变时才自己滑。标签变了的话
+`selectedTab` 一变，`TabsPager` 那个 `LaunchedEffect(selectedIndex)` 就会滑过去，
+这里再滑一次是重复劳动。这个分工成立的前提就是上面那个 guard 是对的 ——
+两边判"到位"必须是同一个条件，否则一定有一边漏。
+
 页面可见性与生命周期共同控制采样；预加载页面也要通过 `isSelected` 门控设备工作。
 动画持续时间取共享 Motion 配置。
+
+### 标签层必须常驻，而且必须在 NavHost 外面
+
+两条，都是实测出来的，缺一条就卡：
+
+**一、`HorizontalPager` 的 `beyondViewportPageCount` 给页数减一，四个标签全部常驻组合。**
+Pager 按"离当前滚动位置多远"决定组合哪些页，滑动一开始边界就往外扩一页，那一页此刻才
+第一次组合。实测每一跳都有**一帧**卡在 130 ms，其中 92 ms 在主线程的 Compose 帧里，
+而它落在动画中段 —— 用户说的是"点一下卡一下"，跨两页的切换要连造两页，掉帧更多。
+常驻之后切换是纯动画，没有组合也没有布局。冷启动那一帧仍然只造当前标签，
+`withFrameNanos` 等一帧再补齐，别把另外三个塞进用户等得最久的那一帧。
+
+**二、标签层渲染在 NavHost 之外，`composable(TABS_ROUTE)` 是空的。**
+放进 `composable(TABS_ROUTE)` 的话，一进二级页它就离开组合、返回时整套重新组合加重新
+布局。实测返回一帧要 233 ms，其中 228 ms 全在 measure/layout/draw 上 —— 用户说的是
+"按了返回要停半秒动画才开始"。挪到外面之后标签层永不销毁，进出子页只剩子页自己那一层
+过渡：返回最差帧 300 ms → 38 ms。
+
+两个必须一起做的配套：
+
+- **ViewModel 作用域要显式指回去。** 挪到 NavHost 外面之后 `viewModel()` 取不到
+  NavBackStackEntry，会一路落到 Activity 上；而「高级设置」二级页要复用的正是标签那一份
+  `CpuViewModel`。所以用 `CompositionLocalProvider(LocalViewModelStoreOwner provides …)`
+  把 `TABS_ROUTE` 条目指回去，标签层拿到的和以前完全是同一个 store。
+- **`TABS_ROUTE` 空着是有意的。** 不空的话那一层会盖住标签、把触摸吃掉。NavHost 全栈
+  没有任何 `pointerInput` 节点，所以空目的地上触摸会穿过去落到标签上；子页压着时子页
+  自己有滚动手势，触摸自然归它。
+
+代价是四个标签的界面同时活着，所以**周期读取必须按 `isSelected` 门控**
+（见 [architecture.md](architecture.md) 的轮询一节）：没选中的那一页只是"组合着"，
+不读任何节点、不发任何请求。
+
+内存上这笔账是这么记的：标签层只在 NavHost 里时装当前页时，冷启动静置后
+`dumpsys meminfo` 的 TOTAL PSS 在 145 MB 上下；改成常驻之后同一测法落在 185 MB 左右。
+**这两个数不是同一次对照实验量出来的**（中间还隔着一轮别的改动），只当数量级看：
+四个标签的界面常驻大约值几十兆，换的是主交互不掉帧。真要抠这个数，
+得把 `beyondViewportPageCount` 单独 A/B 一轮。
 
 底栏避让读 `LocalNavBarClearance`；子页按 `SubScreenScaffold` 的布局处理，
 由共享布局统一避让。留白随 `NavBarVisibility` 的固定或自动隐藏模式变化，页面使用该值。
@@ -191,7 +245,16 @@ GPU 选项依据实际能力与取值表展示，未知读数与零值分开。
 `RangeSlider`。别把它读成「项目不用 Slider」：连续值（色相、浓度、间隔）用 `Slider` 是对的。
 自定义主题色的两个滑杆就是这么用的。
 
-温控页面从设备配置解析可用策略。读取或解析失败时说明失败；
+**数值项用滑杆加输入框。** 触控里按下防抖、指针速度这类背后是数的项，
+每个键一条滑杆加一个框：滑杆粗调（手感驱动、边拖边试），框精调（知道自己要哪个数）。
+框下写明可填范围，旁边一行「设备现在：X」—— 与框里的数不同就说明还没写进去。
+框里不是合法数时滑杆停在上一个有效值；同一个旋钮的现有值合成一行列出，不一个键占一行；超出范围时不写、标红、保留原输入，不悄悄夹取成边界值。
+
+温控策略的档位说明**以 CPU 高级页为准**：芯片只写编号，选中档的规则摘要在芯片下面，
+全部档位的表和备注在弹层里；实验室卡片只写"第 NN 档的规则"再跟同一份摘要。
+三处都现读现解设备上的配置，代码里没有"索引 → 含义"的固定文案表，
+所以某档在另一个 ROM 上的含义与这里不同时，说明跟着变而不是说谎。
+读取或解析失败时说明失败；
 “某配置没有 CPU 限频表”只描述该配置，不等于全部温控机制已关闭。
 传感器原始名称可以用于诊断，不凭名称推定其物理位置。
 

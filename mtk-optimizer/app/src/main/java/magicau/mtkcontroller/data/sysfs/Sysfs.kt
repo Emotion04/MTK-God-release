@@ -2,7 +2,7 @@ package magicau.mtkcontroller.data.sysfs
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import magicau.mtkcontroller.data.diag.DaemonExec
+import magicau.mtkcontroller.data.exec.DaemonExec
 import magicau.mtkcontroller.data.privilege.PrivilegeManager
 import java.io.File
 
@@ -42,6 +42,38 @@ object Sysfs {
 
     /** Announces each file in a batched read. */
     private const val MARKER = "@@@node "
+
+    /**
+     * 把一轮 shell 的输出按 [MARKER] 切成一块一块，每块 = 一个路径 + 它后面所有行。
+     *
+     * ## 为什么要有它
+     *
+     * 一次读 N 个节点只跑一段 shell（每个 `cat` 前先 `echo` 一行标记），
+     * 输出要靠这个骨架切回"哪几行属于哪个节点"。这个状态机原来在
+     * [readMany] 和 [states] 里各写一遍，而两份的换行处理还不一样
+     * （`appendLine()` vs `append('\n')`）—— 那种分叉没有任何理由，只会漂。
+     *
+     * **块内怎么解释由调用方决定**：[readMany] 把整块当原文，
+     * [states] 先看第一行是不是退出码、剩下的才是输出。
+     * 统一的是切块，不是语义。
+     *
+     * 不用局部 fun（inline 函数里不允许），所以收尾那块重复了两次。
+     */
+    private inline fun markerBlocks(payload: String, onBlock: (path: String, lines: List<String>) -> Unit) {
+        var current: String? = null
+        val buffer = StringBuilder()
+        for (line in payload.lines()) {
+            if (line.startsWith(MARKER)) {
+                current?.let { onBlock(it, buffer.toString().split('\n')) }
+                buffer.clear()
+                current = line.removePrefix(MARKER).trim()
+            } else if (current != null) {
+                if (buffer.isNotEmpty()) buffer.append('\n')
+                buffer.append(line)
+            }
+        }
+        current?.let { onBlock(it, buffer.toString().split('\n')) }
+    }
 
     /** Per-node exit status in a batched [states] call. */
     private const val STATE = "@@@status "
@@ -86,23 +118,9 @@ object Sysfs {
         val out = PrivilegeManager.exec(script) ?: return@withContext result
         val payload = body(out) ?: return@withContext result
 
-        var current: String? = null
-        val buffer = StringBuilder()
-        fun flush() {
-            val key = current ?: return
-            result[key] = buffer.toString().trim().ifBlank { null }
-            buffer.clear()
+        markerBlocks(payload) { path, lines ->
+            result[path] = lines.joinToString("\n").trim().ifBlank { null }
         }
-        payload.lines().forEach { line ->
-            if (line.startsWith(MARKER)) {
-                flush()
-                current = line.removePrefix(MARKER).trim()
-            } else if (current != null) {
-                if (buffer.isNotEmpty()) buffer.appendLine()
-                buffer.append(line)
-            }
-        }
-        flush()
         result
     }
 
@@ -236,29 +254,17 @@ object Sysfs {
                 shellStates[it] = NodeState.UNREADABLE
             }
         } else {
-            var current: String? = null
-            var status: Int? = null
-            val buffer = StringBuilder()
-            fun flush() {
-                val key = current ?: return
-                val state = if (status == 0) NodeState.PRESENT else classifyCatFailure(buffer.toString())
-                result[key] = state
-                shellStates[key] = state
-                current = null; status = null; buffer.clear()
-            }
-            payload.lines().forEach { line ->
-                when {
-                    line.startsWith(MARKER) -> {
-                        flush(); current = line.removePrefix(MARKER).trim()
-                    }
-                    line.startsWith(STATE) -> status = line.removePrefix(STATE).trim().toIntOrNull()
-                    else -> current?.let {
-                        if (buffer.isNotEmpty()) buffer.append('\n')
-                        buffer.append(line)
-                    }
+            // 同一套切块骨架，和 [readMany] 共用 [markerBlocks]。
+            // 区别只在这一块多一个退出码行，且翻译成 NodeState 而不是原文。
+            markerBlocks(payload) { path, lines ->
+                val state = if (lines.firstOrNull()?.removePrefix(STATE)?.trim()?.toIntOrNull() == 0) {
+                    NodeState.PRESENT
+                } else {
+                    classifyCatFailure(lines.drop(1).joinToString("\n"))
                 }
+                result[path] = state
+                shellStates[path] = state
             }
-            flush()
         }
 
         // 父目录顺带被探出来了：先用它判子文件的 ENOENT 作不作数，再丢掉这些额外条目。

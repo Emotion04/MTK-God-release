@@ -46,27 +46,18 @@ object Motion {
     /** 常规出现、展开。 */
     const val BASE = 220
 
-    /** 页面转场。比 [BASE] 略长，因为整屏变化需要更多时间读懂。 */
-    const val NAVIGATION = 260
-
     /**
      * 进出子页（平移）。
      *
-     * 比标签切换长：标签是"平移到隔壁"，用户知道自己在哪；进出子页是层级变化，
-     * 需要多一点时间看清"从哪来到哪去"。380ms 是 iOS 导航转场的量级。
+     *  NavHost 里只有这一种转场：顶层标签不再是导航目的地，切标签由 Pager 自己滚，
+     *  所以没有"同级标签切换"那一档距离了（见 `NavMotion`）。
+     *
+     * 380ms 是 iOS 导航转场的量级：层级变化需要多一点时间看清"从哪来到哪去"。
      */
     const val DRILL = 380
 
     /** 状态色这类值得注意的变化。慢到能看清"从什么变成了什么"。 */
     const val SLOW = 420
-
-    /**
-     * 页面转场的位移距离，占屏宽的比例。
-     *
-     * 取四分之一而不是整屏：整屏位移观感太重，而且两页会在短时间内同时占据
-     * 视野，看不出谁是谁。标签切换用这个比例；子页平移用整屏，因为那更像翻页。
-     */
-    const val SLIDE_FRACTION = 0.25f
 }
 
 /**
@@ -111,23 +102,17 @@ data class MotionSpec(val speed: MotionSpeed = MotionSpeed.SYSTEM) {
 
     val fast: Int get() = scaled(Motion.FAST)
     val base: Int get() = scaled(Motion.BASE)
-    val navigation: Int get() = scaled(Motion.NAVIGATION)
     val drill: Int get() = scaled(Motion.DRILL)
     val slow: Int get() = scaled(Motion.SLOW)
 
     fun <T> fastSpec(): FiniteAnimationSpec<T> = tween(fast, easing = LinearOutSlowInEasing)
     fun <T> baseSpec(): FiniteAnimationSpec<T> = tween(base, easing = LinearOutSlowInEasing)
-    fun <T> navigationSpec(): FiniteAnimationSpec<T> =
-        tween(navigation, easing = LinearOutSlowInEasing)
 
     fun <T> drillSpec(): FiniteAnimationSpec<T> =
         tween(drill, easing = LinearOutSlowInEasing)
     fun <T> slowSpec(): FiniteAnimationSpec<T> = tween(slow, easing = LinearOutSlowInEasing)
 
     fun floatBase(): FiniteAnimationSpec<Float> = tween(base, easing = LinearOutSlowInEasing)
-
-    fun offsetNavigation(): FiniteAnimationSpec<IntOffset> =
-        tween(navigation, easing = LinearOutSlowInEasing)
 
     fun offsetDrill(): FiniteAnimationSpec<IntOffset> =
         tween(drill, easing = LinearOutSlowInEasing)

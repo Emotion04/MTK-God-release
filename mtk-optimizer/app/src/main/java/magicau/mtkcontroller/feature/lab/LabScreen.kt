@@ -16,16 +16,26 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.SegmentedButton
@@ -44,6 +54,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
+import magicau.mtkcontroller.data.lab.LabPlacement
+import magicau.mtkcontroller.ui.components.FailureNote
 import magicau.mtkcontroller.data.lab.LabCategory
 import magicau.mtkcontroller.data.lab.LabChoice
 import magicau.mtkcontroller.data.lab.LabControl
@@ -78,14 +90,17 @@ private val StateNeutral = Color(0xFF6B6B68)
 @Composable
 fun LabScreen(
     state: LabUiState,
+    /** 点某一条入口。参数是 mergeKey（有合并时）或 feature key。 */
+    onOpenFeature: (String) -> Unit,
     onOpenPanel: () -> Unit,
     onOpenRawTest: () -> Unit,
     onValueChange: (LabFeature, String, Int) -> Unit,
     onHoldChange: (LabFeature, Boolean) -> Unit,
     onTest: (LabFeature) -> Unit,
-    onSweep: (LabFeature, Boolean) -> Unit,
     onResetAll: () -> Unit,
     onClearObservations: () -> Unit,
+    onEditModeChange: (Boolean) -> Unit,
+    onMark: (LabFeature, LabController.State?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (state.loading) {
@@ -106,52 +121,67 @@ fun LabScreen(
         item {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    "协议上成立，但没在你这台机器上验证过。每张卡片都会读回系统状态，" +
-                        "直接告诉你有没有生效 —— 测出来能用就可以移出实验室。",
+                    stringResource(R.string.lab_intro),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 if (!state.powerHalReady) {
                     Text(
-                        "调频服务当前不可用，写入不会成功。",
+                        stringResource(R.string.lab_freq_unavailable),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
                     )
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilledTonalButton(onClick = onOpenPanel, modifier = Modifier.weight(1f)) {
-                        Text(stringResource(R.string.lab_readonly_panel))
+                // **按内容宽，不搞等分。** 三个词长短不一（4/5/2 字），
+                // 等分会让最短的那个两边空一大片，而且内容一悬殊就白等 ——
+                // 「保存并退出登录」和「好」放在一起，等分后前者照样断行。
+                //
+                // 原来坏在**混用**：前两个有 weight、第三个没有，于是前两个各分一半，
+                // 而一半放不下四个字，就断成两行，三个按钮高度还不一样。
+                // 同一行里要么全按内容、要么全等分，不能一半一半。
+                //
+                // `Arrangement.spacedBy` 左对齐排布，各自贴合文字。
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    FilledTonalButton(onClick = onOpenPanel) {
+                        Text(stringResource(R.string.lab_readonly_panel), maxLines = 1)
                     }
-                    FilledTonalButton(onClick = onOpenRawTest, modifier = Modifier.weight(1f)) {
-                        Text(stringResource(R.string.lab_raw_test))
+                    FilledTonalButton(onClick = onOpenRawTest) {
+                        Text(stringResource(R.string.lab_raw_test), maxLines = 1)
                     }
-                    FilledTonalButton(onClick = onResetAll) { Text(stringResource(R.string.lab_reset)) }
+                    FilledTonalButton(onClick = onResetAll) {
+                        Text(stringResource(R.string.lab_reset), maxLines = 1)
+                    }
                 }
-                state.message?.let {
-                    Text(it, style = MaterialTheme.typography.bodySmall)
-                }
+
+
+                state.message?.let { FailureNote(failure = it) }
             }
         }
 
-        state.groups.forEach { (category, items) ->
-            item(key = "header-${category.name}") { CategoryHeader(category) }
-            items.forEach { item ->
-                item(key = item.feature.key) {
-                    FeatureCard(
-                        item = item,
-                        clusters = state.clusters.map { it.policy },
-                        // 只有温控档位那一项有"当前生效"可显示；其余功能没有共享状态。
-                        liveThermal = if (item.feature.key == THERMAL_POLICY_KEY &&
+        state.groups.forEach { (placement, items) ->
+            item(key = "header-${placement.name}") { PlacementHeader(placement) }
+
+            // 一级列表只放**紧凑行**：标签 + 判定 + 风险 + 实时读数。
+            // 原来这里直接铺 FeatureCard，一张占接近一屏，「本机探测」有 17 项，
+            // 滚 17 屏才能看完一遍，而用户第一件想看的"生效了吗"反而埋在卡里。
+            // 控件和说明移到二级页，一行只回答"这是什么、能不能用、灵不灵"。
+            items.groupBy { it.feature.mergeKey ?: it.feature.key }.forEach { (entryKey, group) ->
+                item(key = entryKey) {
+                    FeatureRow(
+                        items = group,
+                        liveThermal = if (group.any { it.feature.key == THERMAL_POLICY_KEY } &&
                             state.thermalAppliedIndex != null && state.thermalAppliedSource != null
                         ) {
                             state.thermalAppliedIndex to state.thermalAppliedSource
                         } else {
                             null
                         },
-                        onValueChange = { policy, value -> onValueChange(item.feature, policy, value) },
-                        onHoldChange = { onHoldChange(item.feature, it) },
-                        onTest = { onTest(item.feature) },
-                        onSweep = { stop -> onSweep(item.feature, stop) },
+                        onClick = { onOpenFeature(entryKey) },
+                        editing = state.editing,
+                        onMark = onMark,
                     )
                 }
             }
@@ -166,17 +196,107 @@ fun LabScreen(
 }
 
 @Composable
-private fun CategoryHeader(category: LabCategory) {
-    Text(
-        category.title,
-        style = MaterialTheme.typography.titleMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(start = 4.dp, top = 8.dp),
-    )
+private fun PlacementHeader(placement: LabPlacement) {
+    Column(modifier = Modifier.padding(start = 4.dp, top = 8.dp)) {
+        Text(
+            stringResource(placement.titleRes),
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        // 一句话说清这一组是什么。原来这里只有分类名，
+        // 用户看到"调度""平台限制"还是不知道这东西能不能用、该不该碰。
+        Text(
+            stringResource(placement.hintRes),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+
+/**
+ * 一级列表里的一行。
+ *
+ * **为什么不是卡片**：卡片把控件、说明、判定、历史全塞在一屏，17 项就要滚 17 屏。
+ * 一行只放四样 —— 名称、判定、风险、实时读数；其余全部挪到二级页。
+ * 用户第一件想知道的"它在这台机器上灵不灵"由此变成零成本可读。
+ *
+ * @param items 同一入口下的项。通常一个；`mergeKey` 相同的会是多个
+ *   （前台/可见 uclamp 就是两个），行上显示主项的名称并标注"含 N 项"。
+ */
+@Composable
+private fun FeatureRow(
+    items: List<LabItemState>,
+    liveThermal: Pair<Int, ThermalPolicyController.Source>?,
+    onClick: () -> Unit,
+    editing: Boolean,
+    onMark: (LabFeature, LabController.State?) -> Unit,
+) {
+    val main = items.first()
+    val feature = main.feature
+    val merged = items.size > 1
+
+    Card(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    // "（N 项）"是行内后缀，单独一条资源：译文里括号和量词的
+                    // 位置和中文不一样，拼在模板里翻不出来。
+                    if (merged) {
+                        stringResource(R.string.lab_row_merged, stringResource(feature.labelRes), items.size)
+                    } else {
+                        stringResource(feature.labelRes)
+                    },
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+                // 实时读数：只有个别功能有（温控档位的皮肤阈值）。它是"现在是什么"，
+                // 和下面的判定"灵不灵"是两件事，都值得占一行。
+                val live = main.readout ?: liveThermal?.let { (index, source) ->
+                    stringResource(R.string.lab_live_thermal_row, index, sourceLabel(source))
+                }
+                if (live != null) {
+                    Text(
+                        live,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            // 徽章在标记图标的**左边**：标记是这一行最靠边的操作，
+            // 位置固定，连点几行时手指不用横向找。
+            if (feature.risk == LabRisk.HIGH) {
+                Badge(stringResource(R.string.lab_risk_high), riskColor(feature.risk))
+            }
+            if (main.supported == false) {
+                Badge(stringResource(R.string.lab_badge_absent), riskColor(LabRisk.HIGH))
+            }
+            // 平时只显示两种结果：**标了「能用」就是一个绿勾**，其余什么都不显示。
+            // 「没用」的项根本不在列表里（见 LabViewModel 的过滤），
+            // 「未测试」也不需要一行字提醒 —— 用户来这儿是要用功能，不是来看进度表。
+            // 编辑模式下才露出两个图标按钮。
+            if (editing) {
+                ManualMark(verdict = main.verdict, onMark = { onMark(feature, it) })
+            } else if (main.verdict?.stateEnum() == LabController.State.MANUAL_USABLE) {
+                Icon(
+                    imageVector = Icons.Filled.Check,
+                    contentDescription = stringResource(R.string.lab_mark_usable),
+                    tint = StateOk,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+    }
 }
 
 @Composable
-private fun FeatureCard(
+fun FeatureCard(
     item: LabItemState,
     clusters: List<String>,
     /** 固件当前生效的温控档位与它的来源；非温控卡片传 null。 */
@@ -184,7 +304,6 @@ private fun FeatureCard(
     onValueChange: (String, Int) -> Unit,
     onHoldChange: (Boolean) -> Unit,
     onTest: () -> Unit,
-    onSweep: (Boolean) -> Unit,
 ) {
     val feature = item.feature
 
@@ -198,27 +317,21 @@ private fun FeatureCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(feature.label, style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(feature.labelRes), style = MaterialTheme.typography.titleMedium)
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    // 运行时选项（温控策略索引）给一个「档位说明」：一次看完全部档位
-                    // 在干什么，不用逐项点。内容来自 assets，换 ROM 改那份文件即可。
-                    if (item.choices.isNotEmpty()) {
-                        var showNotes by remember { mutableStateOf(false) }
-                        TextButton(onClick = { showNotes = true }) { Text(stringResource(R.string.policy_notes_open)) }
-                        if (showNotes) {
-                            PolicyNotesDialog(briefs = item.briefs, onDismiss = { showNotes = false })
-                        }
-                    }
-                    Badge("风险 ${feature.risk.label}", riskColor(feature.risk))
+                    Badge(
+                        stringResource(R.string.lab_risk_badge, stringResource(feature.risk.labelRes)),
+                        riskColor(feature.risk),
+                    )
                     VerdictBadge(item.verdict)
                 }
             }
 
             Text(
-                feature.description,
+                stringResource(feature.descriptionRes),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -232,8 +345,8 @@ private fun FeatureCard(
                 )
             }
 
-            feature.danger?.let {
-                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+            feature.dangerRes?.let {
+                Text(stringResource(it), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
             }
 
             item.readout?.let { readout ->
@@ -257,7 +370,14 @@ private fun FeatureCard(
 
             // 当前选中档位的规则摘要：只有温度和频率，现读现解来的。
             // 参数原文不显示 —— 那部分留待将来的「高级」开关。
+            // 下面那一档是芯片选中的编号，先标出来 —— 摘要里的内容属于它，
+            // 只画一串等宽行，读者看不出这些字是在说哪一档。
             item.selectedBrief?.let { brief ->
+                Text(
+                    stringResource(R.string.lab_thermal_selected, item.values.values.firstOrNull() ?: 0),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 Text(
                     brief,
                     style = MaterialTheme.typography.bodySmall,
@@ -266,7 +386,7 @@ private fun FeatureCard(
             }
             if (item.selectedBrief == null && item.briefs.isNotEmpty()) {
                 Text(
-                    stringResource(R.string.policy_notes_loading),
+                    stringResource(R.string.lab_brief_loading),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -274,7 +394,7 @@ private fun FeatureCard(
 
             if (item.supported == false) {
                 Text(
-                    "本机没有这一项，功能不可用。",
+                    stringResource(R.string.lab_unsupported_body),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )
@@ -297,10 +417,9 @@ private fun FeatureCard(
                     Text(stringResource(R.string.lab_hold_long), style = MaterialTheme.typography.bodyMedium)
                     Text(
                         if (item.hold) {
-                            "请求永久有效。必须用「恢复全部」撤销,否则会一直生效。"
+                            stringResource(R.string.lab_hold_on_desc)
                         } else {
-                            "20 秒后由系统自动撤销。测试够用了,而且就算 App 崩了、" +
-                                "句柄丢了,也不会留下卡死的频率。"
+                            stringResource(R.string.lab_hold_off_desc)
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = if (item.hold) {
@@ -315,75 +434,15 @@ private fun FeatureCard(
 
             Button(
                 onClick = onTest,
-                enabled = !item.busy && item.supported != false && item.sweepProgress == null,
+                enabled = !item.busy && item.supported != false,
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text(if (item.busy) "测试中…" else "测试") }
+            ) { Text(stringResource(if (item.busy) R.string.lab_testing else R.string.lab_test)) }
 
-            // 取值语义没有公开文档的功能：一个一个手拖既慢又容易漏档，
-            // 还难保证上一档的请求已经释放。 sweepValues 非空才给这个入口。
-            if (feature.sweepValues != null) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    FilledTonalButton(
-                        onClick = { onSweep(true) },
-                        enabled = item.supported != false && item.sweepProgress == null,
-                        modifier = Modifier.weight(1f),
-                    ) { Text("扫到生效即停", style = MaterialTheme.typography.labelLarge) }
-                    FilledTonalButton(
-                        onClick = { onSweep(false) },
-                        enabled = item.supported != false && item.sweepProgress == null,
-                        modifier = Modifier.weight(1f),
-                    ) { Text("扫完全部 ${feature.sweepValues.size} 档", style = MaterialTheme.typography.labelLarge) }
-                }
-            }
-
-            // 扫档期间只留进度：逐档的"读回失败"在扫档里是纯噪声 ——
-            // 这一族本来就没有可读节点，每档弹一次只会把结果表挤下去。
-            if (item.sweepProgress != null) {
+            item.verdict?.let { verdict ->
                 Text(
-                    item.sweepProgress,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-
-            if (item.sweepResults.isNotEmpty()) {
-                SweepTable(item.sweepResults)
-            }
-
-            if (item.sweepProgress == null) {
-                item.verdict?.let { verdict ->
-                    Text(
-                        verdict.detail,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = verdictColor(verdict.stateEnum()),
-                    )
-                }
-            }
-        }
-    }
-}
-
-/** 扫档结果：一档一行。上限抖成一串说明那档没作用，只有整档一致地偏高才算信号。 */
-@Composable
-private fun SweepTable(rows: List<SweepRow>) {
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text("扫档结果：上限 / 当前频率", style = MaterialTheme.typography.labelMedium)
-        rows.forEach { row ->
-            Row(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    if (row.isBaseline) "基线" else "索引 ${row.value.toString().padStart(2)}",
+                    verdict.detail,
                     style = MaterialTheme.typography.bodySmall,
-                    fontFamily = FontFamily.Monospace,
-                    modifier = Modifier.weight(0.3f),
-                )
-                Text(
-                    "${row.capText}  /  ${row.curText}",
-                    style = MaterialTheme.typography.bodySmall,
-                    fontFamily = FontFamily.Monospace,
-                    modifier = Modifier.weight(0.7f),
+                    color = verdictColor(verdict.stateEnum()),
                 )
             }
         }
@@ -409,7 +468,8 @@ private fun Controls(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        if (feature.perCore) key else if (checked) "开" else "关",
+                        if (feature.perCore) key
+                        else stringResource(if (checked) R.string.lab_on else R.string.lab_off),
                         style = MaterialTheme.typography.bodyMedium,
                         color = if (feature.perCore) MaterialTheme.colorScheme.onSurface
                         else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -467,7 +527,8 @@ private fun Controls(
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         Text(
-                            if (feature.perCluster || feature.perCore) policy else "目标值",
+                            if (feature.perCluster || feature.perCore) policy
+                            else stringResource(R.string.lab_target_value),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -506,7 +567,8 @@ private fun Badge(text: String, color: Color) {
 
 @Composable
 private fun VerdictBadge(verdict: LabController.Verdict?) {
-    Badge(verdict?.stateEnum()?.label ?: LabController.State.UNTESTED.label, verdictColor(verdict?.stateEnum() ?: LabController.State.UNTESTED))
+    val state = verdict?.stateEnum() ?: LabController.State.UNTESTED
+    Badge(stringResource(state.labelRes), verdictColor(state))
 }
 
 @Composable
@@ -518,81 +580,13 @@ private fun riskColor(risk: LabRisk): Color = when (risk) {
 
 @Composable
 private fun verdictColor(state: LabController.State): Color = when (state) {
-    LabController.State.WORKING -> StateOk
-    LabController.State.NO_EFFECT, LabController.State.UNSUPPORTED -> StateBad
+    LabController.State.WORKING, LabController.State.MANUAL_USABLE -> StateOk
+    LabController.State.NO_EFFECT, LabController.State.UNSUPPORTED,
+    LabController.State.MANUAL_UNUSABLE,
+    -> StateBad
     LabController.State.UNKNOWN, LabController.State.UNTESTED -> StateNeutral
 }
 
-/**
- * 一次展示全部温控策略档位在干什么。
- *
- * 内容来自 `assets/thermal-policies.md` —— **不写死在代码里**：
- * 那是解码分析得出的结论，会随 ROM 版本失效；换 ROM 只改那份文件，
- * 不用重新编译。
- */
-@Composable
-private fun PolicyNotesDialog(briefs: Map<Int, String>, onDismiss: () -> Unit) {
-    val context = LocalContext.current
-    val fallback = remember(context) {
-        runCatching {
-            context.assets.open("thermal-policies.md").bufferedReader().use { it.readText() }
-        }.getOrNull()
-    }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.policy_notes_title)) },
-        text = {
-            Box(modifier = Modifier.heightIn(max = 460.dp)) {
-                SelectionContainer {
-                    LazyColumn {
-                        if (briefs.isNotEmpty()) {
-                            // 有现读的摘要就优先用它 —— 永远是设备当下的事实。
-                            briefs.toSortedMap().forEach { (index, brief) ->
-                                item(key = "brief-$index") {
-                                    Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                                        Text(
-                                            stringResource(R.string.policy_notes_index, index),
-                                            style = MaterialTheme.typography.titleSmall,
-                                        )
-                                        Text(
-                                            brief,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            fontFamily = FontFamily.Monospace,
-                                        )
-                                    }
-                                }
-                            }
-                        } else if (!fallback.isNullOrBlank()) {
-                            // 读不到文件时退回随包说明，并说明这不是实时的。
-                            item {
-                                Text(
-                                    stringResource(R.string.policy_notes_stale),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.error,
-                                )
-                            }
-                            item {
-                                Text(
-                                    fallback,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontFamily = FontFamily.Monospace,
-                                )
-                            }
-                        } else {
-                            item {
-                                Text(
-                                    stringResource(R.string.policy_notes_empty),
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("知道了") } },
-    )
-}
 
 
 /**
@@ -609,3 +603,44 @@ private fun sourceLabel(source: ThermalPolicyController.Source): String = string
         ThermalPolicyController.Source.LAB -> R.string.thermal_source_lab
     },
 )
+
+/**
+ * 编辑模式下的两个图标按钮：✓ 能用 / ✗ 没用。
+ *
+ * 点当前那个就清除（回到"未标记"）。
+ *
+ * **只有编辑模式才出现。** 平时列表里标为「没用」的项直接不显示、
+ * 标为「能用」的只在行尾画一个绿勾 —— 用户来这儿是要用功能，
+ * 不是来维护一张评分表，评分动作不该常驻在每一行上。
+ */
+@Composable
+private fun ManualMark(
+    verdict: LabController.Verdict?,
+    onMark: (LabController.State?) -> Unit,
+) {
+    val state = verdict?.stateEnum()
+    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        listOf(
+            LabController.State.MANUAL_USABLE to Icons.Filled.Check,
+            LabController.State.MANUAL_UNUSABLE to Icons.Filled.Close,
+        ).forEach { (target, icon) ->
+            val selected = state == target
+            IconButton(
+                onClick = { onMark(if (selected) null else target) },
+                modifier = Modifier.size(36.dp),
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = stringResource(
+                        if (target == LabController.State.MANUAL_USABLE) {
+                            R.string.lab_mark_usable
+                        } else {
+                            R.string.lab_mark_unusable
+                        },
+                    ),
+                    tint = if (selected) verdictColor(target) else MaterialTheme.colorScheme.outline,
+                )
+            }
+        }
+    }
+}

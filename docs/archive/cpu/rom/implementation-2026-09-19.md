@@ -7,7 +7,7 @@
 这仅说明静态导出一致，不能解释成 boost 没生效；本包没有运行时频率约束、活跃句柄或模式切换轨迹。
 
 原件复制并逐项核验于忽略目录 `reference/rom/PD2430D_A_16.1.12.0.W10/implementation-build19/{normal,boost}/`。
-反编译位于 `reference/rom-analysis/{framework,services}/sources/`，均不提交公开仓库。
+反编译位于 `reference/derived/rom-analysis/{framework,services}/sources/`，均不提交公开仓库。
 源文件 `70-vivo-framework.jar` SHA256=`846fa4f89c2b1f2f4dfba947466738c507012fd900f5e842358b0a81d0edc8c3`；
 服务来源 `78-vivo-services.jar`，对应哈希见原 manifest。
 JADX 完成输出但分别报 9/21 个反编译错误；不得把全部输出当源码真值。以下关注的策略方法没有反编译失败占位，涉及复杂控制流的后续修改仍需对照 DEX。

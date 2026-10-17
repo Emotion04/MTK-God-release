@@ -8,6 +8,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import magicau.mtkcontroller.R
+import magicau.mtkcontroller.data.Failure
+import magicau.mtkcontroller.data.Message
 import magicau.mtkcontroller.data.privilege.ForegroundApp
 import magicau.mtkcontroller.data.privilege.PrivilegeManager
 import magicau.mtkcontroller.data.privilege.PrivilegeMode
@@ -31,7 +34,7 @@ data class AppThermalUiState(
     val foreground: String = "",
     val draft: DraftRule = DraftRule(),
     val showAddDialog: Boolean = false,
-    val message: String? = null,
+    val message: Failure? = null,
 )
 
 /**
@@ -61,7 +64,7 @@ class AppThermalViewModel(private val container: magicau.mtkcontroller.di.AppCon
                 loading = false,
                 availableIndices = indices,
                 foreground = foreground,
-                message = if (indices.isEmpty()) "读不到温控策略文件，先确认 Shizuku 已授权" else null,
+                message = if (indices.isEmpty()) Failure(Message(R.string.app_thermal_no_indices)) else null,
             )
         }
         viewModelScope.launch {
@@ -74,7 +77,7 @@ class AppThermalViewModel(private val container: magicau.mtkcontroller.di.AppCon
     fun setRunning(running: Boolean) {
         if (running) {
             if (!privilegeOk()) {
-                _state.value = _state.value.copy(message = "请先授权 Shizuku")
+                _state.value = _state.value.copy(message = Failure(Message(R.string.app_thermal_need_shizuku)))
                 return
             }
             AppThermalService.start(container.context)
@@ -106,7 +109,7 @@ class AppThermalViewModel(private val container: magicau.mtkcontroller.di.AppCon
     fun addRule() {
         val draft = _state.value.draft
         if (draft.pkg.isBlank()) {
-            _state.value = _state.value.copy(message = "先选应用")
+            _state.value = _state.value.copy(message = Failure(Message(R.string.app_thermal_need_app)))
             return
         }
         viewModelScope.launch {
@@ -115,7 +118,7 @@ class AppThermalViewModel(private val container: magicau.mtkcontroller.di.AppCon
                 PrivilegeManager.exec("pm path ${draft.pkg}")?.contains("package:") == true
             }
             if (!ok) {
-                _state.value = _state.value.copy(message = "读不到这个应用的安装路径，请重新选")
+                _state.value = _state.value.copy(message = Failure(Message(R.string.app_thermal_no_path)))
                 return@launch
             }
             store.add(AppThermalRule(draft.pkg, draft.policyIndex, draft.label))

@@ -14,29 +14,42 @@ import java.util.zip.ZipFile
  * 为什么值得做：本机的 CPU 频率上下限读不出来（device-vivo-v2430a.md §2），
  * "充电为什么变慢"这类问题只能靠 bugreport 里的充电链路数据间接看。
  */
+import magicau.mtkcontroller.R
+import magicau.mtkcontroller.data.Message
+
 object BatteryReportParser {
+
+    /**
+     * 流式解析的结果。
+     *
+     * [message] 与正文分开：正文是报告内容，[message] 是"成没成、为什么"。
+     * 以前两者在 `parseStream` 里拼成一个字符串返回，调用方连成功失败都分不出来 ——
+     * 而它恰恰要据此决定显示报告还是显示错误。
+     */
+    data class StreamResult(val present: Boolean, val message: Message, val body: String)
 
     data class Result(
         val present: Boolean,
-        val message: String,
+        /** 给用户看的一句话。**`Message` 不是 `String`** —— 构造它不需要 `Context`。 */
+        val message: Message,
         val lines: List<String> = emptyList(),
     )
 
     /** 解析一个 bugreport zip；path 由用户通过系统文件选择器给出。 */
     fun parse(path: String): Result {
         val file = File(path)
-        if (!file.isFile || !file.canRead()) return Result(false, "无法读取该文件")
-        if (file.length() < 1024) return Result(false, "文件太小，不像 bugreport")
+        if (!file.isFile || !file.canRead()) return Result(false, Message(R.string.battery_report_unreadable))
+        if (file.length() < 1024) return Result(false, Message(R.string.battery_report_too_small))
 
         return try {
             ZipFile(file).use { zip ->
-                val entry = pickEntry(zip) ?: return Result(false, "zip 里没有文本条目")
+                val entry = pickEntry(zip) ?: return Result(false, Message(R.string.battery_report_no_text_entry))
                 val text = zip.getInputStream(entry).bufferedReader().use { it.readText() }
-                if (text.length < 4096) return Result(false, "主文本条目太小，可能不是完整 bugreport")
-                Result(true, "已解析 ${entry.name}（${text.length / 1024} KiB）", extract(text))
+                if (text.length < 4096) return Result(false, Message(R.string.battery_report_entry_too_small))
+                Result(true, Message(R.string.battery_report_parsed, listOf(entry.name, text.length / 1024)), extract(text))
             }
         } catch (e: Exception) {
-            Result(false, "解析失败：${e.javaClass.simpleName}: ${e.message}")
+            Result(false, Message(R.string.battery_report_failed, listOf(e.javaClass.simpleName, e.message.orEmpty())))
         }
     }
 
@@ -44,7 +57,7 @@ object BatteryReportParser {
      * 从 content:// 流解析。走文件选择器时拿不到真实路径，所以这里直接吃流。
      * 调用方负责关闭输入流。
      */
-    fun parseStream(input: java.io.InputStream, name: String): String {
+    fun parseStream(input: java.io.InputStream, name: String): StreamResult {
         // 流不能倒回，先落一个临时文件再按 zip 读；bugreport 可能有几十 MB，
         // 落盘位置用 cacheDir，由系统回收。
         val tmp = File.createTempFile("bugreport", ".zip")
@@ -52,12 +65,16 @@ object BatteryReportParser {
             tmp.outputStream().use { input.copyTo(it) }
             val result = parse(tmp.absolutePath)
             if (result.present) {
-                result.lines.joinToString("\n").let { "$name\n\n$it" }
+                StreamResult(true, Message(R.string.battery_report_parsed, listOf(name)), result.lines.joinToString("\n"))
             } else {
-                "$name\n\n解析未通过：${result.message}"
+                StreamResult(false, result.message, "")
             }
         } catch (e: Exception) {
-            "$name\n\n解析失败：${e.javaClass.simpleName}: ${e.message}"
+            StreamResult(
+                false,
+                Message(R.string.battery_report_failed, listOf(e.javaClass.simpleName, e.message.orEmpty())),
+                "",
+            )
         } finally {
             tmp.delete()
         }

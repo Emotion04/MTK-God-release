@@ -35,17 +35,18 @@ class SmartBackupTest {
         val events = mutableListOf<String>()
         val result = SmartRestore.run("1", { "0" }, { events += "saved:$it" }, {
             events += "write:$it"
-            if (it == "1") error("binder died") else true
+            if (it == "1") error("binder died") else null
         })
         assertEquals(listOf("saved:0", "write:1", "write:0"), events)
         assertEquals(false to true, result)
     }
     @Test fun failedReadOrBackupNeverWrites() = runBlocking {
         var writes = 0
-        assertTrue(runCatching { SmartRestore.run("1", { null }, {}, { writes++; true }) }.isFailure)
-        assertTrue(runCatching { SmartRestore.run("1", { "0" }, { error("disk full") }, { writes++; true }) }.isFailure)
+        assertTrue(runCatching { SmartRestore.run("1", { null }, {}, { writes++; null }) }.isFailure)
+        assertTrue(runCatching { SmartRestore.run("1", { "0" }, { error("disk full") }, { writes++; null }) }.isFailure)
         assertEquals(0, writes)
-        assertEquals(false to false, SmartRestore.run("1", { "0" }, {}, { false }))
+        // 写失败要回滚；回滚也失败时 rolledBack 必须是 false，不能吞成 true。
+        assertEquals(false to false, SmartRestore.run("1", { "0" }, {}, { "拒绝" }))
     }
     @Test fun totalBackupKeepsOldFormatCompatible() {
         val old = Json.decodeFromString<Backup>("{\"schema\":1}")

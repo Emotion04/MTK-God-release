@@ -986,7 +986,7 @@ CPU/GPU/NPU/SOC/TPU 那些阈值是 HAL 硬编码的（21 份 conf 里 `[thermal
 |---|---|---|
 | `vivo_ax_noroot_optimizer_v1.3.0`（唯一自标无 root） | `am broadcast` 关高保护、`settings put system vivo_gamethermal_switch 0`、关发热降亮度 | 只压 framework 层。**它自己的 README 划界：Thermal HAL / CoolingDevice / 内核 governor 一概不动** |
 | `MOsPremiumV13`（Magisk root） | 高通 prop + KGSL sysfs | MTK 机无消费者，且要 root |
-| `Kbattery` | `cmd shortcut reset-throttling`、假报温度、sysfs min=max | 本仓库 `reference/.local-temp/idx-findings.md` 判为未验证+高风险；`force-stop thermal-*` 在本机服务不存在 |
+| `Kbattery` | `cmd shortcut reset-throttling`、假报温度、sysfs min=max | 本仓库 `reference/derived/.local-temp/idx-findings.md` 判为未验证+高风险；`force-stop thermal-*` 在本机服务不存在 |
 
 **真正动 vendor 温控策略层的无 root 旋钮只有 `PERF_RES_THERMAL_POLICY` 一个**，
 reference 里只有定义和真值表、没有一个无 root 调用示例。

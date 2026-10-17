@@ -3,7 +3,8 @@ package magicau.mtkcontroller.data.tweaks
 import android.content.Context
 import android.os.Build
 import magicau.mtkcontroller.BuildConfig
-import magicau.mtkcontroller.data.diag.SettingChannel
+import magicau.mtkcontroller.R
+import magicau.mtkcontroller.data.settings.SettingChannel
 import magicau.mtkcontroller.data.privilege.PrivilegeManager
 
 /**
@@ -203,10 +204,10 @@ object StateBackup {
             ?.removePrefix("# 设备")?.trim().orEmpty()
         val owners = entries.map { it.owned.ownerRes }.distinct().size
         return buildString {
-            append("${entries.size} 个键")
-            if (owners > 0) append("，来自 $owners 项功能")
-            if (time.isNotEmpty()) append("\n取自 $time")
-            if (device.isNotEmpty()) append("\n备份时设备 $device")
+            append(context.getString(R.string.tweaks_state_backup_keys, entries.size))
+            if (owners > 0) append(context.getString(R.string.tweaks_state_backup_owners, owners))
+            if (time.isNotEmpty()) append("\n" + context.getString(R.string.tweaks_state_backup_time, time))
+            if (device.isNotEmpty()) append("\n" + context.getString(R.string.tweaks_state_backup_device, device))
         }
     }
 }
