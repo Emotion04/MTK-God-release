@@ -112,8 +112,8 @@ class VivoFeatureKeyDomainTest {
     }
 
     @Test
-    fun `触控调整不硬编码参考模块的取值`() {
-        // Kbattery 写 1,7,7,7，本机现值是 1,6,6,6 —— 三者互不相同说明机型相关。
+    fun `触控调整不硬编码外部实现的取值`() {
+        // 外部实现写 1,7,7,7，本机现值是 1,6,6,6 —— 三者互不相同说明机型相关。
         // 照抄参考值会覆盖本机现值，所以枚举里不放任何预设。
         assertEquals(setOf(""), VivoFeature.TOUCH_BOOST.values.values.toSet())
         assertEquals(1, VivoFeature.TOUCH_BOOST.values.size)

@@ -48,7 +48,7 @@ class TweakValuesTest {
     }
 
     @Test fun touchAdjustValuesMustBeCommaSeparatedIntegers() {
-        // 真机现值是 1,6,6,6，参考模块是 1,7,7,7 和 0,3,3,3 —— 三者互不相同，
+        // 真机现值是 1,6,6,6，外部实现是 1,7,7,7 和 0,3,3,3 —— 三者互不相同，
         // 说明机型相关，所以只校验形式，不规定内容。
         assertEquals("1,6,6,6", TweakValues.touchAdjust("1,6,6,6"))
         // 用户可能带空格输入；归一化成不带空格再拼命令，避免把空格带进 shell。
@@ -58,7 +58,7 @@ class TweakValuesTest {
     }
 
     @Test fun touchBoostDoesNotHardcodeTheReferenceValue() {
-        // 照抄参考模块的 1,7,7,7 会覆盖掉本机的 1,6,6,6。
+        // 照抄外部实现的 1,7,7,7 会覆盖掉本机的 1,6,6,6。
         assertEquals(setOf(""), VivoFeature.TOUCH_BOOST.values.values.toSet())
         assertTrue(VivoFeature.TOUCH_BOOST.allowMissing)
     }

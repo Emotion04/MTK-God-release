@@ -1,3 +1,7 @@
+import org.gradle.api.DefaultTask
+import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.tasks.OutputDirectory
+import org.gradle.api.tasks.TaskAction
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.util.Properties
 
@@ -26,7 +30,7 @@ android {
         minSdk = 33
         targetSdk = 37
         // Bump hand-off APKs so reports identify the exact installed revision.
-        versionCode = 150
+        versionCode = 204
         versionName = "0.5.1"
         // 证据等级低于这个值的功能在设置页不列出。
         //
@@ -34,6 +38,45 @@ android {
         // 不该把“预计无效”的东西摆在面前；release 是交付包，列出来的都要能用 ——
         // 但发布前没法逐台真机复验，所以 release 不设门槛，靠 Evidence 标签说明。
         // 默认值跟着构建类型走；`-PminEvidence=` 可以单独覆盖（例如发一个纯验证包）。
+        // 仅用于测试过期页：`-PforceExpiry=true` 的 debug 包也会进入阻断页。
+        // debug 也受 30 天限制；重新构建会刷新编译时间。
+        // 更新日志的公开地址（静态 JSON）。留空时用 APK 内置的那份。
+        buildConfigField(
+            "String",
+            "CHANGELOG_URL",
+            "\"" + providers.gradleProperty("changelogUrl").getOrElse(
+                "https://raw.githubusercontent.com/Emotion04/MTK-God-release/main/changelog.json",
+            ) + "\"",
+        )
+        // 备用地址：主地址在国内被限速/不可达时再试一次。
+        buildConfigField(
+            "String",
+            "CHANGELOG_URL_BACKUP",
+            "\"" + providers.gradleProperty("changelogUrlBackup").getOrElse("") + "\"",
+        )
+        // 更新清单；公开只读地址。App 只读，不放任何密钥。
+        buildConfigField(
+            "String",
+            "UPDATE_URL",
+            "\"" + providers.gradleProperty("updateUrl")
+                .getOrElse("https://raw.githubusercontent.com/Emotion04/MTK-God-release/main/update.json") + "\"",
+        )
+        buildConfigField(
+            "String",
+            "UPDATE_URL_BACKUP",
+            "\"" + providers.gradleProperty("updateUrlBackup").getOrElse("") + "\"",
+        )
+        buildConfigField(
+            "String",
+            "REMOTE_CONFIG_URL",
+            "\"" + providers.gradleProperty("remoteConfigUrl")
+                .getOrElse("https://raw.githubusercontent.com/Emotion04/MTK-God-release/main/remote-config.json") + "\"",
+        )
+        buildConfigField(
+            "Boolean",
+            "FORCE_EXPIRY",
+            providers.gradleProperty("forceExpiry").getOrElse("false"),
+        )
         buildConfigField(
             "String",
             "MIN_EVIDENCE",
@@ -128,6 +171,52 @@ configurations.configureEach {
     }
 }
 
+// ---------------------------------------------------------------------------
+// 编译时间
+//
+// 版本有效期从**这次构建**算，不是从安装时间算：时间戳编译进 APK，卸载重装同一个包
+// 不会重置。用生成源码而不是配置期的时间：配置缓存会把配置期的值缓存下来，
+// 重新构建可能拿到几个月前的旧时间。
+//
+// 生成 Java 常量，走 Variant API 的 generated source，依赖关系由 AGP 管理。
+// 任务每次构建都会跑（输出目录由任务自己生成）。
+// ---------------------------------------------------------------------------
+val buildTimeDir = layout.buildDirectory.dir("generated/buildtime")
+
+abstract class GenerateBuildTime : DefaultTask() {
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun generate() {
+        val dir = outputDir.get().asFile.resolve("magicau/mtkcontroller")
+        dir.mkdirs()
+        dir.resolve("AppBuildTime.java").writeText(
+            """
+            package magicau.mtkcontroller;
+
+            /** 由构建生成，勿手改。 */
+            public final class AppBuildTime {
+                private AppBuildTime() {}
+                public static final long MS = ${System.currentTimeMillis()}L;
+            }
+            """.trimIndent() + System.lineSeparator(),
+        )
+    }
+}
+
+val generateBuildTime = tasks.register<GenerateBuildTime>("generateBuildTime") {
+    outputDir.set(buildTimeDir)
+}
+androidComponents {
+    onVariants { variant ->
+        variant.sources.java?.addGeneratedSourceDirectory(
+            generateBuildTime,
+            GenerateBuildTime::outputDir,
+        )
+    }
+}
+
 // 规范只有真的跑到才算规范 —— 靠人记得手动执行等于没有。挂在 `preBuild` 上，
 // 让每次构建都过一遍；检查内容见 docs/dev/wording.md 与 docs/CONTRIBUTING.md。
 //
@@ -149,6 +238,37 @@ val checkCopy by tasks.registering(Exec::class) {
     description = "检查资源引用、分层文案审计与基线回归"
     commandLine("python", repoRoot.resolve("tools/check_strings.py").absolutePath)
 }
+
+// 更新日志以根目录 CHANGELOG.md 为唯一来源：构建前生成内置 JSON。
+// 不手工维护 assets/changelog.json，也不再依赖 remote 才会有内容。
+val changelogFile = repoRoot.resolve("CHANGELOG.md")
+val changelogOutDir = layout.buildDirectory.dir("generated/changelog")
+val generateChangelog by tasks.registering(org.gradle.api.tasks.Exec::class) {
+    inputs.file(changelogFile)
+    outputs.file(changelogOutDir.map { it.file("changelog.json") })
+    commandLine(
+        "python",
+        repoRoot.resolve("tools/make_changelog.py").absolutePath,
+        "--from-changelog", changelogFile.absolutePath,
+        "--out", changelogOutDir.get().file("changelog.json").asFile.absolutePath,
+    )
+}
+android.sourceSets.getByName("main").assets.srcDir(changelogOutDir.get().asFile)
+tasks.named("preBuild") { dependsOn(generateChangelog) }
+
+// 发布的远程地址以 release/config.jsonc 为准；这里核对 buildConfigField 的默认值没有跑偏，
+// 免得改了配置地址、App 却还读旧位置。`-PchangelogUrl=` 等覆盖时跳过对应项。
+val checkReleaseConfig by tasks.registering(org.gradle.api.tasks.Exec::class) {
+    group = "verification"
+    description = "检查 buildConfigField 的远程地址默认值与 release/config.jsonc 一致"
+    val script = repoRoot.resolve("tools/check_release_config.py")
+    commandLine("python", script.absolutePath)
+    for ((key, _) in listOf("changelogUrl", "updateUrl", "remoteConfigUrl").map { it to "" }) {
+        providers.gradleProperty(key).orNull?.let { environment("GRADLE_PROP_$key", it) }
+    }
+    isIgnoreExitValue = false
+}
+tasks.named("preBuild") { dependsOn(checkReleaseConfig) }
 
 // 没装 Python 的机器可以用 `-PskipChecks` 跳过；正常开发不要用。
 val skipChecks = providers.gradleProperty("skipChecks").isPresent

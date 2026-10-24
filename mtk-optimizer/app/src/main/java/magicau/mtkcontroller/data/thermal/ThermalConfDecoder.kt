@@ -3,7 +3,7 @@ package magicau.mtkcontroller.data.thermal
 /**
  * vivo `/vendor/etc/thermal/` 下 thermal_policy_NN.conf 的解码器。
  *
- * 编码方式（2026-09-25 从真机逆向得出）：
+ * 编码方式（2026-09-25 真机实测得出）：
  * 逐行 Vigenère 变体，密钥 = 行内字符下标 % 10，字母表 `0x20–0x7A`
  * （91 个可打印 ASCII），换行符原样透传并**把下标复位为 0**。
  *

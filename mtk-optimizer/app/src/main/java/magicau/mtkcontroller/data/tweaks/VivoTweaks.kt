@@ -81,7 +81,8 @@ class UnsupportedFeatureException(val reason: String) : Exception(reason)
 
 enum class VivoFeature(
     val labelRes: Int,
-    val detailRes: Int,
+    /** null = 这一项没有说明；界面不显示信息按钮。 */
+    val detailRes: Int?,
     val values: Map<String, String>,
     /** 界面需要额外拼一句说明时的资源；没有就传 0。 */
     val hintRes: Int = 0,
@@ -147,13 +148,13 @@ enum class VivoFeature(
         // 真机实测两个键都是 null —— 本机 ROM 没给这个机型定义，写了只会建两个没人读的键。
         // 保留开关，探测后变灰。
         gate = FeatureGate(), trialHintRes = R.string.trial_hint_memory),
-    ANIMATION(R.string.vivo_feature_animation, R.string.vivo_feature_animation_detail,
+    ANIMATION(R.string.vivo_feature_animation, null,
         mapOf("global animator_duration_scale" to "0.5"), hintRes = R.string.vivo_hint_animation, true,
         trialHintRes = R.string.trial_hint_animation),
-    WINDOW_ANIMATION(R.string.vivo_feature_window_animation, R.string.vivo_feature_window_animation_detail,
+    WINDOW_ANIMATION(R.string.vivo_feature_window_animation, null,
         mapOf("global window_animation_scale" to "1.0"), hintRes = R.string.vivo_hint_animation, true,
         trialHintRes = R.string.trial_hint_animation),
-    TRANSITION_ANIMATION(R.string.vivo_feature_transition_animation, R.string.vivo_feature_transition_animation_detail,
+    TRANSITION_ANIMATION(R.string.vivo_feature_transition_animation, null,
         mapOf("global transition_animation_scale" to "1.0"), hintRes = R.string.vivo_hint_animation, true,
         trialHintRes = R.string.trial_hint_animation),
     GAME_THERMAL(R.string.vivo_feature_game_thermal, R.string.vivo_feature_game_thermal_detail,
@@ -199,7 +200,7 @@ enum class VivoFeature(
     // 只写取值有可靠来源的那一个键。同一功能还有另外几个键，
     // power_engine_and_plugged_state_and_charging_aod / balance_charge_switch /
     // vivo_keyguard_super_speed_charge_switch / settings_battery_charge_director_game_cube，
-    // 但那几个的写入值在拆解记录里没有记载 —— 猜一个值写进影响电池的键，
+    // 但那几个的写入值没有可靠记载 —— 猜一个值写进影响电池的键，
     // 读回也是成功的，错了也看不出来。所以先只做这一个，其余等真机确认。
     //
     // 门禁判据：装机 + prop 为 1。
@@ -245,12 +246,25 @@ enum class VivoFeature(
 }
 
 object VivoReply {
+    /**
+     * 剥掉用户服务的输出包装，返回 stdout。
+     *
+     * **解析只此一份**：用 `DaemonExec.parse` 拿结构化结果，这里只保留本项目的
+     * 成功判据（退出 0、没有 stderr、没有致命字样）。之前有六七处各自
+     * `substringBefore("[exit]")`，有的看退出码、有的不看，同一段回包在不同路径上
+     * 结论不同 —— 比如一条无害的 stderr 会让写成功显示成失败。
+     */
     fun output(raw: String?): String? {
-        if (raw == null || !raw.trimEnd().endsWith("[exit] 0") || raw.contains("[stderr]")) return null
-        val body = raw.substringBeforeLast("[exit]").trim()
-        if (Regex("(?i)(permission denial|permission denied|securityexception|^error:|exception occurred)").containsMatchIn(body)) return null
+        val reply = magicau.mtkcontroller.data.exec.DaemonExec.parse(raw) ?: return null
+        if (reply.exit != 0 || reply.stderr.isNotEmpty()) return null
+        val body = reply.stdout.trim()
+        if (FATAL.containsMatchIn(body)) return null
         return body
     }
+
+    private val FATAL = Regex(
+        "(?i)(permission denial|permission denied|securityexception|^error:|exception occurred)",
+    )
 
     // 只接受标准 Parcel 的零异常码；不把错误信息中的数字当成固件能力。
     fun parcelWords(raw: String?): List<Long>? {
@@ -483,23 +497,36 @@ class VivoTweaks(
         }
     }
 
+    /**
+     * 恢复系统默认：删掉这个特性写过的键。
+     *
+     * settings 的默认值来自 ROM defaults，行不存在时系统会回退 —— 所以删除就是重置。
+     * 只处理有快照的特性（本软件确实写过）。删成功后清掉快照与 `:written` 记录。
+     */
+    suspend fun resetToSystemDefault(feature: VivoFeature): Boolean {
+        var ok = true
+        for (spec in feature.values.keys) {
+            val table = spec.substringBefore(' ')
+            val key = spec.substringAfter(' ')
+            val raw = PrivilegeManager.exec("${SettingChannel.deleteCommand(table, key)} 2>&1")
+            // 退出 0 不代表删掉了（这台 ROM 上 `settings put` 就退出 0 不落库）。
+            // 回读一次：键不在了才是真删掉。
+            val after = read(spec)
+            if (VivoReply.output(raw) == null || (after != null && after != "null")) ok = false
+        }
+        if (ok) {
+            originals.release(RecoverySnapshot.VIVO, feature.name, feature.values.keys)
+            baselines.edit().apply {
+                remove(feature.name + ":saved")
+                feature.values.keys.forEach { remove(feature.name + it + ":written") }
+            }.commit()
+        }
+        return ok
+    }
+
     /** 这个键存下的原值；`null` = 没存过，或原键当时不存在（后者见 [originalPresent]）。 */
     private suspend fun originalOf(feature: VivoFeature, spec: String): String? =
         originals.original(RecoverySnapshot.VIVO, feature.name, spec)
-
-    /** 升级迁移用：丢掉这个特性的全部原值，值本身留在系统里当"当前默认"。 */
-    suspend fun releaseOriginals(feature: VivoFeature) {
-        originals.release(RecoverySnapshot.VIVO, feature.name, feature.values.keys)
-        baselines.edit().apply {
-            remove(feature.name + ":saved")
-            feature.values.keys.forEach { remove(feature.name + it + ":written") }
-        }.commit()
-    }
-
-    /** 升级迁移用：清掉游戏加速的存活标记。 */
-    fun clearSnapshotMarkers() {
-        baselines.edit().remove(GAME_ACCEL_MARKER).commit()
-    }
 
     /** 原键在取快照时是否存在。 */
     private suspend fun originalPresent(feature: VivoFeature, spec: String): Boolean =
@@ -575,7 +602,7 @@ class VivoTweaks(
             if (restore && !originals.hasEntry(RecoverySnapshot.VIVO, feature.name)) {
                 // 这条必须记。早前它静默返回，用户点"恢复原值"没反应，
                 // 而流水里一条记录都没有，只能靠猜走到了哪个分支。
-                record("${feature.name} restore 被拦：没有快照（marker=$marker）")
+                record("${feature.name} restore 被拦：没有原值快照")
                 return@withContext TweakRepository.Outcome(false, Message(R.string.vivo_no_snapshot))
             }
 
@@ -716,6 +743,10 @@ class VivoTweaks(
                 // 性能模式没换成功，就把交出去的控制权还回来，别让用户两边都空着。
                 if (feature == VivoFeature.PERFORMANCE_MODE) onPerformanceModePause(false)
             }
+            // 成功写入后把 CPU 控制交还回来；失败分支已在 rollback 里交还。
+            if (feature == VivoFeature.PERFORMANCE_MODE && failed.isEmpty()) {
+                onPerformanceModePause(false)
+            }
             val log = "${feature.name} restore=$restore ${message.resolve(context)} failures=$failed"
             record(log)
             if (failed.isEmpty()) AppLog.i("VivoTweaks", log) else AppLog.w("VivoTweaks", log)
@@ -729,9 +760,6 @@ class VivoTweaks(
     }
 
     companion object {
-        /** 游戏加速自己的存活标记，不归 [RecoverySnapshot] 管（它是布尔不是键值）。 */
-        const val GAME_ACCEL_MARKER = "game_accel:active"
-
         fun conflictingFeature(feature: VivoFeature, saved: Set<VivoFeature>): VivoFeature? = saved.firstOrNull { other ->
             other != feature && other.values.keys.any { it in feature.values }
         }
