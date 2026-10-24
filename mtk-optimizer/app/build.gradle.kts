@@ -45,7 +45,7 @@ android {
             "String",
             "CHANGELOG_URL",
             "\"" + providers.gradleProperty("changelogUrl").getOrElse(
-                "https://raw.githubusercontent.com/Emotion04/MTK-God-release/main/changelog.json",
+                "https://changelog.a0v0a.cn/MTK-God/changelog.json",
             ) + "\"",
         )
         // 备用地址：主地址在国内被限速/不可达时再试一次。
@@ -59,7 +59,7 @@ android {
             "String",
             "UPDATE_URL",
             "\"" + providers.gradleProperty("updateUrl")
-                .getOrElse("https://raw.githubusercontent.com/Emotion04/MTK-God-release/main/update.json") + "\"",
+                .getOrElse("https://changelog.a0v0a.cn/MTK-God/update.json") + "\"",
         )
         buildConfigField(
             "String",
@@ -70,7 +70,7 @@ android {
             "String",
             "REMOTE_CONFIG_URL",
             "\"" + providers.gradleProperty("remoteConfigUrl")
-                .getOrElse("https://raw.githubusercontent.com/Emotion04/MTK-God-release/main/remote-config.json") + "\"",
+                .getOrElse("https://changelog.a0v0a.cn/MTK-God/remote-config.json") + "\"",
         )
         buildConfigField(
             "Boolean",
@@ -101,6 +101,15 @@ android {
                 keyPassword = keystoreProps.getProperty("keyPassword")
             }
         }
+        // 没有 keystore 时用 debug 签名顶位：只是让配置阶段能找到名字，
+        // 产物仍装不到官方包上（签名不同），见 README。
+        create("unsignedLike") {
+            val debugSign = signingConfigs.getByName("debug")
+            storeFile = debugSign.storeFile
+            storePassword = debugSign.storePassword
+            keyAlias = debugSign.keyAlias
+            keyPassword = debugSign.keyPassword
+        }
         // keystore.properties 缺失时不创建 release 签名：构建会因未签名而失败，
         // 这比静默退回 debug 签名好 —— 后者会让人在不知情的情况下发出一个
         // 任何人都能生成的签名，之后无法换成正式签名而不丢掉所有用户。
@@ -118,7 +127,10 @@ android {
             // （方案导入导出、备份还原）与 Shizuku 提权链路。没改规则就不必重跑。
             isMinifyEnabled = true
             isShrinkResources = true
-            signingConfig = signingConfigs.getByName("release")
+            // 没有 keystore（公开源码的干净克隆）时不绑定签名：debug 仍能构建，
+            // release 包会签不出正式签名、无法覆盖安装 —— 这是有意的，见上面 signingConfigs。
+            // 没有 release 时必须有一个存在的名字，否则 AGP 在配置期报 "SigningConfig not found"。
+            signingConfig = signingConfigs.getByName(if (keystoreProps != null) "release" else "unsignedLike")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
         debug {
@@ -230,21 +242,38 @@ val repoRoot = rootProject.projectDir.parentFile
 val checkDocs by tasks.registering(Exec::class) {
     group = "verification"
     description = "检查文档链接、锚点、总索引可达性与代码标识符"
-    commandLine("python", repoRoot.resolve("tools/check_docs.py").absolutePath)
+    val script = repoRoot.resolve("tools/check_docs.py")
+    commandLine("python", script.absolutePath)
+    // 只发布源码的仓库里没有这个脚本：Closure 只比较路径，配置缓存可以序列化。
+    inputs.files(script)
+    onlyIf("检查脚本存在") { script.isFile }
+    // 只发布源码的仓库里没有 docs/，没有可核对的文案基线，检查器以 2 退出不算错。
+    isIgnoreExitValue = true
 }
 
 val checkCopy by tasks.registering(Exec::class) {
     group = "verification"
     description = "检查资源引用、分层文案审计与基线回归"
-    commandLine("python", repoRoot.resolve("tools/check_strings.py").absolutePath)
+    val script = repoRoot.resolve("tools/check_strings.py")
+    commandLine("python", script.absolutePath)
+    // 同上。
+    inputs.files(script)
+    onlyIf("检查脚本存在") { script.isFile }
+    // 同上：没有 docs/ 时检查器以 2 退出。
+    isIgnoreExitValue = true
 }
 
 // 更新日志以根目录 CHANGELOG.md 为唯一来源：构建前生成内置 JSON。
 // 不手工维护 assets/changelog.json，也不再依赖 remote 才会有内容。
 val changelogFile = repoRoot.resolve("CHANGELOG.md")
+// 有源文件才生成；没有（只发布源码的仓库）时 preBuild 不依赖这个任务。
+val hasChangelogSource = changelogFile.isFile
 val changelogOutDir = layout.buildDirectory.dir("generated/changelog")
 val generateChangelog by tasks.registering(org.gradle.api.tasks.Exec::class) {
-    inputs.file(changelogFile)
+    // 源码快照里没有 CHANGELOG.md / 生成脚本：跳过，内置日志为空，远端日志照常可用。
+    val generator = repoRoot.resolve("tools/make_changelog.py")
+    // 有源文件才生成；没有（只发布源码的仓库）时由下面的 dependsOn 条件跳过整个任务。
+    inputs.files(changelogFile, generator)
     outputs.file(changelogOutDir.map { it.file("changelog.json") })
     commandLine(
         "python",
@@ -254,7 +283,7 @@ val generateChangelog by tasks.registering(org.gradle.api.tasks.Exec::class) {
     )
 }
 android.sourceSets.getByName("main").assets.srcDir(changelogOutDir.get().asFile)
-tasks.named("preBuild") { dependsOn(generateChangelog) }
+if (hasChangelogSource) tasks.named("preBuild") { dependsOn(generateChangelog) }
 
 // 发布的远程地址以 release/config.jsonc 为准；这里核对 buildConfigField 的默认值没有跑偏，
 // 免得改了配置地址、App 却还读旧位置。`-PchangelogUrl=` 等覆盖时跳过对应项。
@@ -263,10 +292,13 @@ val checkReleaseConfig by tasks.registering(org.gradle.api.tasks.Exec::class) {
     description = "检查 buildConfigField 的远程地址默认值与 release/config.jsonc 一致"
     val script = repoRoot.resolve("tools/check_release_config.py")
     commandLine("python", script.absolutePath)
+    inputs.files(script, repoRoot.resolve("release/config.jsonc"))
+    outputs.upToDateWhen { false }
+    // 它比对的是发布配置；源码快照里没有 release/config.jsonc，脚本以 2 退出不是错误。
+    isIgnoreExitValue = true
     for ((key, _) in listOf("changelogUrl", "updateUrl", "remoteConfigUrl").map { it to "" }) {
         providers.gradleProperty(key).orNull?.let { environment("GRADLE_PROP_$key", it) }
     }
-    isIgnoreExitValue = false
 }
 tasks.named("preBuild") { dependsOn(checkReleaseConfig) }
 

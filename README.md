@@ -4,22 +4,10 @@
 
 面向运行 MediaTek Dimensity SoC 的设备；簇布局、频率表和可用 governor 全部在运行时发现，而非预先假定。
 
-## 文档与当前状态
-
-开发文档从 [docs/README.md](docs/README.md) 按任务进入。设备行为与功能能力以对应主题的 `facts.md` 为准；带日期的实验只证明其记录条件下的结果，归档材料不构成当前待办。
-
 ## 文档
 
-| | |
-|---|---|
-| [docs/README.md](docs/README.md) | 文档总入口与按任务索引 |
-| [docs/cpu/facts.md](docs/cpu/facts.md) | CPU 当前能力、限制和兼容范围 |
-| [docs/thermal/facts.md](docs/thermal/facts.md) | 温控当前行为和已知边界 |
-| [docs/device/facts.md](docs/device/facts.md) | 开发设备、权限和可观测能力 |
-| [docs/dev/architecture.md](docs/dev/architecture.md) | 分层、`CpuControl` 不变式、设备适配、测试 |
-| [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) | Agent 文档写入、实验、版本和归档规范 |
-
-**文档一律用中文撰写**；代码、命令、路径、标识符和 URL 保持原样不翻译。给 AI agent 看的仓库约定在 [AGENTS.md](AGENTS.md)。
+文档随源码一起维护在私有仓库，公开快照只保留构建所需的源码与本节说明。
+应用运行时探测设备能力，不依赖预置的设备表。
 
 ## 构建
 
@@ -27,17 +15,12 @@
 
 ```bash
 cd mtk-optimizer
-./gradlew assembleDebug     # app/build/outputs/apk/debug/app-debug.apk   —— 日常开发
-./gradlew assembleRelease   # app/build/outputs/apk/release/app-release.apk —— 交付用
+./gradlew assembleDebug     # app/build/outputs/apk/debug/app-debug.apk
+./gradlew assembleRelease   # app/build/outputs/apk/release/app-release.apk
 ```
 
-**交付给用户的是 release 包**：它开了混淆和资源压缩，签名从
-`mtk-optimizer/signing/keystore.properties` 读；那个目录被 gitignore，
-新克隆的仓库里没有，此时 `assembleRelease` 会因未签名而失败（这是有意的，
-比静默退回 debug 签名好）。
-
-**签名密钥不能换。** 换了签名的 APK 装不到已装的包上——用户得先卸载，
-本地方案、设置和报告一起丢。密钥请离线备份，也不要提交进版本库。
+`assembleRelease` 开启混淆与资源压缩，签名读取 `mtk-optimizer/signing/keystore.properties`；
+该文件不入库，缺失时产出未签名包，不能覆盖安装官方发布版。
 
 ## 设备上的要求
 
