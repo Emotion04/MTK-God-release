@@ -1,6 +1,7 @@
 # Android 应用模块
 
 此目录包含 MTK God 的 Android 应用工程。项目介绍见上一级 [README.md](../README.md)。
+公开仓库只放源码快照；完整开发文档在私有仓库。
 
 ## 构建
 
