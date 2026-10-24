@@ -8,11 +8,16 @@
 !mtk-optimizer/gradle/wrapper/gradle-wrapper.jar
 
 # ---------------------------------------------------------------------------
-# 第三方原始资料在仓库外，已移到 MTK 仓库同级的 MTK-reference/（不在任何 git 仓库里）。
-# 这里只留一条安全网：万一有人把副本放回来，也不会被误提交。
-# 仓库里保留的是自己写的分析：reference/README、SPEC、LEDGER 和 docs/reference/**。
+# 本机工作目录（调试截图、临时脚本、一次性导出）。不参与构建。
 # ---------------------------------------------------------------------------
-/reference/
+/.scratch/
+/.workbuddy/
+/*.png
+/ui*.xml
+/ui-nodes.txt
+/tapnav.py
+/*.stackdump
+/.cyh
 
 # Android build artifacts (mtk-optimizer sub-project handles its own)
 *.iml
@@ -35,10 +40,6 @@ Thumbs.db
 *~
 .cursor/
 
-# Claude Code
-.claude/
-# Skill 安装锁：本地工具状态，不是项目内容。
-skills-lock.json
 
 # Python 字节码缓存：检查器的运行产物，不是项目内容。
 __pycache__/
@@ -83,12 +84,3 @@ desktop.ini
 /tapnav.py
 /*.stackdump
 /.cyh
-
-# ---------------------------------------------------------------------------
-# 发布
-#
-# release/public/ 是**构建产物，但故意入库**：CI 发版后提交回 main，App 从 raw 地址读它。
-# 本地发布窗口的凭据、错误日志、七牛临时文件都不要进库。
-# ---------------------------------------------------------------------------
-/tools/publish_gui_error.log
-/release/public/*.tmp
