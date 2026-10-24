@@ -2,6 +2,7 @@ package magicau.mtkcontroller.data.power
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import magicau.mtkcontroller.data.privilege.PrivilegeManager
 
 /**
@@ -56,47 +57,37 @@ object BatteryWhitelist {
      */
     fun openSystemSettings(context: android.content.Context): Boolean {
         val pkg = android.net.Uri.parse("package:$PKG")
-        val intents = listOf(
-            // 1. 安卓原生授权弹窗 —— 用户点了「允许」才算数，这才是正统入口。
-            android.content.Intent(
-                android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-                pkg,
-            ),
-            // 2. 电池优化列表页（vivo 上落在 iQOO 后台管理，管的范围更宽）。
-            android.content.Intent(
-                android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS,
-            ),
-            // 3. 应用详情页：任何 Android 机都有，里面必有电池相关入口。
-            android.content.Intent(
-                android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                pkg,
-            ),
-        )
-        // 第一个能解析的就用它；都不行才告诉调用方"打不开"。
-        return intents.firstOrNull { it.resolveActivity(context.packageManager) != null }
-            ?.let {
-                runCatching {
-                    context.startActivity(
-                        // 从 Activity 之外启动时要新任务栈，否则在某些 ROM 上不显示。
-                        it.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
-                    )
-                }.isSuccess
-            } ?: false
+        // 已经在白名单时，原生“请求忽略”页没有可申请的东西，可能直接结束；
+        // 先打开电池优化列表，让用户能看到并关闭。未加入时才先请求授权。
+        val intents = buildList {
+            if (isWhitelisted(context)) {
+                add(android.content.Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+            }
+            add(android.content.Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, pkg))
+            add(android.content.Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+            add(android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkg))
+        }
+        // 不依赖 resolveActivity：Android 11+ 的包可见性会让它误报不可达。
+        // 逐个真的 start，成功一个就返回；都抛异常才算打不开。
+        for (intent in intents) {
+            val started = runCatching {
+                context.startActivity(intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+            }.isSuccess
+            if (started) return true
+        }
+        return false
     }
 
     /**
      * 现在在不在白名单里。
      *
-     * @return true/false；null = 读不到（没授权 Shizuku 或命令失败）。
+     * 用 `PowerManager.isIgnoringBatteryOptimizations` 直接问系统 —— 这是平台自带的
+     * 判断，不需要 Shizuku、不需要解析 40 KB 的 `dumpsys`。原来走 shell 的版本
+     * 在没授权时返回 null，界面把开关藏起来，而这件事本来就无需授权就能读。
      */
-    suspend fun isWhitelisted(): Boolean? = withContext(Dispatchers.IO) {
-        if (!PrivilegeManager.state.value.mode.canElevate) return@withContext null
-        val out = PrivilegeManager.exec("dumpsys deviceidle whitelist | grep -c $PKG")
-            ?: return@withContext null
-        val count = out.lineSequence().firstOrNull()?.trim()?.toIntOrNull()
-            ?: return@withContext null
-        count > 0
-    }
+    fun isWhitelisted(context: android.content.Context): Boolean =
+        context.getSystemService(android.os.PowerManager::class.java)
+            ?.isIgnoringBatteryOptimizations(PKG) == true
 
     /**
      * 加入 / 移出白名单。
@@ -106,8 +97,10 @@ object BatteryWhitelist {
     suspend fun set(enabled: Boolean): Boolean = withContext(Dispatchers.IO) {
         if (!PrivilegeManager.state.value.mode.canElevate) return@withContext false
         val sign = if (enabled) "+" else "-"
-        val out = PrivilegeManager.exec("dumpsys deviceidle whitelist $sign$PKG")
-            ?: return@withContext false
+        // 服务端卡住时不能让界面一直 busy；5 秒还没回来就按失败处理。
+        val out = withTimeoutOrNull(5_000) {
+            PrivilegeManager.exec("dumpsys deviceidle whitelist $sign$PKG")
+        } ?: return@withContext false
         out.contains("Added") || out.contains("Removed")
     }
 }

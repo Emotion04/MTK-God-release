@@ -301,6 +301,7 @@ fun FeatureCard(
     clusters: List<String>,
     /** 固件当前生效的温控档位与它的来源；非温控卡片传 null。 */
     liveThermal: Pair<Int, ThermalPolicyController.Source>? = null,
+    physicalMaxByCluster: Map<Int, Int> = emptyMap(),
     onValueChange: (String, Int) -> Unit,
     onHoldChange: (Boolean) -> Unit,
     onTest: () -> Unit,
@@ -368,28 +369,42 @@ fun FeatureCard(
                 )
             }
 
-            // 当前选中档位的规则摘要：只有温度和频率，现读现解来的。
-            // 参数原文不显示 —— 那部分留待将来的「高级」开关。
-            // 下面那一档是芯片选中的编号，先标出来 —— 摘要里的内容属于它，
-            // 只画一串等宽行，读者看不出这些字是在说哪一档。
-            item.selectedBrief?.let { brief ->
+            // 当前选中档位：**和 CPU 页共用同一套曲线/矩阵表**，不再在这里
+            // 画一串等宽文字。档位编号先标出来，图表才知道自己属于哪一档。
+            val selectedPolicy = item.selectedPolicy
+            if (selectedPolicy != null) {
                 Text(
                     stringResource(R.string.lab_thermal_selected, item.values.values.firstOrNull() ?: 0),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Text(
-                    brief,
-                    style = MaterialTheme.typography.bodySmall,
-                    fontFamily = FontFamily.Monospace,
+                magicau.mtkcontroller.feature.cpu.ThermalPolicyOverview(
+                    policy = selectedPolicy,
+                    clusterLabel = { index ->
+                        clusters.getOrNull(index) ?: stringResource(R.string.cpu_cluster_core, index)
+                    },
+                    physicalMaxByCluster = physicalMaxByCluster,
                 )
-            }
-            if (item.selectedBrief == null && item.briefs.isNotEmpty()) {
-                Text(
-                    stringResource(R.string.lab_brief_loading),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            } else {
+                item.selectedBrief?.let { brief ->
+                    Text(
+                        stringResource(R.string.lab_thermal_selected, item.values.values.firstOrNull() ?: 0),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        brief,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                    )
+                }
+                if (item.selectedBrief == null && item.briefs.isNotEmpty()) {
+                    Text(
+                        stringResource(R.string.lab_brief_loading),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
 
             if (item.supported == false) {
@@ -414,7 +429,7 @@ fun FeatureCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(stringResource(R.string.lab_hold_long), style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.lab_send_mode), style = MaterialTheme.typography.bodyMedium)
                     Text(
                         if (item.hold) {
                             stringResource(R.string.lab_hold_on_desc)
@@ -429,7 +444,14 @@ fun FeatureCard(
                         },
                     )
                 }
-                Switch(checked = item.hold, onCheckedChange = onHoldChange)
+                // 这是**下次发送的参数**，不是设备现状 —— 所以不用开关（开关读起来像状态），
+                // 用一对明确的选项。
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    FilterChip(selected = !item.hold, onClick = { onHoldChange(false) },
+                        label = { Text(stringResource(R.string.lab_send_temporary)) })
+                    FilterChip(selected = item.hold, onClick = { onHoldChange(true) },
+                        label = { Text(stringResource(R.string.lab_send_hold)) })
+                }
             }
 
             Button(
@@ -468,12 +490,18 @@ private fun Controls(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        if (feature.perCore) key
-                        else stringResource(if (checked) R.string.lab_on else R.string.lab_off),
+                        when {
+                            feature.perCore -> key
+                            // 读不到就写「未读」，不画成「关」——"没读到"和"确实关着"是两件事。
+                            !item.stateKnown -> stringResource(R.string.lab_state_unknown)
+                            checked -> stringResource(R.string.lab_on)
+                            else -> stringResource(R.string.lab_off)
+                        },
                         style = MaterialTheme.typography.bodyMedium,
                         color = if (feature.perCore) MaterialTheme.colorScheme.onSurface
                         else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    // 未知时开关照旧可点：用户仍然可以主动下发这个值。
                     Switch(checked = checked, onCheckedChange = { onValueChange(key, if (it) 1 else 0) })
                 }
             }

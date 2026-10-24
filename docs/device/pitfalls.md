@@ -133,7 +133,7 @@ Kotlin suspend 状态机和内联 lambda 的重建可能有损。Java 搜不到�
 | `/sys/devices/system/cpu/*/affected_cpus` | ✅ `0 1 2 3` | **只有这一族读得到** |
 | `/sys/devices/system/cpu/*/scaling_max_freq` | ✅ 有值 | cpufreq 一族都正常 |
 
-**这些路径没有写错。** `reference/rom/PD2430D_A_16.1.12.0.W10` 里的
+**这些路径没有写错。** `../MTK-reference/rom/PD2430D_A_16.1.12.0.W10` 里的
 `vendor.mediatek.hardware.mtkpower@1.0-init.rc` 明确给它们 `chown`/`chmod`
 （`/dev/cpuctl/*` 是 0660、`/proc/perfmgr/*` 是 0664）—— init 不会给不存在的文件设权，
 所以节点**存在**，是权限与 SELinux 域拦着。

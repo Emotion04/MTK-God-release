@@ -67,6 +67,11 @@ fun CpuAdvancedScreen(
     modifier: Modifier = Modifier,
 ) {
     var showPolicySheet by remember { mutableStateOf(false) }
+    // 核簇索引 -> 硬件最高频率（MHz）；纵轴拉到超大核物理上限，并给百分比。
+    val physicalMaxByCluster = state.edits.mapNotNull { edit ->
+        val max = edit.cluster.availableFreqs.maxOrNull() ?: return@mapNotNull null
+        edit.cluster.index to (max / 1000).toInt()
+    }.toMap()
 
     if (showPolicySheet) {
         ThermalPolicySheet(
@@ -75,6 +80,7 @@ fun CpuAdvancedScreen(
             full = state.thermalFull,
             currentIndex = state.thermalIndexEdit ?: state.thermalPolicyIndex,
             showDetail = state.showThermalDetail,
+            physicalMaxByCluster = physicalMaxByCluster,
             clusterLabel = { index ->
                 val cluster = state.edits.getOrNull(index)?.cluster
                 // 取不到簇就只报编号 —— 这里没有簇可显示，也不该编一个。
@@ -121,6 +127,10 @@ private fun ThermalCard(
     onOpenSheet: () -> Unit,
 ) {
     var detailExpanded by remember { mutableStateOf(false) }
+    val physicalMaxByCluster = state.edits.mapNotNull { edit ->
+        val max = edit.cluster.availableFreqs.maxOrNull() ?: return@mapNotNull null
+        edit.cluster.index to (max / 1000).toInt()
+    }.toMap()
 
     // 先把两个索引取出来：`when` 里要判断"选的和生效的是不是同一个"，
     // 直接重复读 state 会写四遍同样的比较。原文案里"已生效"那一支还写了两遍。
@@ -193,13 +203,16 @@ private fun ThermalCard(
             }
             val policy: ThermalPolicy? = shown?.let { state.thermalPolicies[it] }
             if (policy != null && policy.decodeError == null) {
-                ThermalLadderTable(
+                ThermalPolicyOverview(
                     policy = policy,
                     clusterLabel = { index ->
                         val cluster = state.edits.getOrNull(index)?.cluster
                         if (cluster != null) cluster.displayLabel()
                         else stringResource(R.string.cpu_cluster_core, index)
                     },
+                    showDetail = state.showThermalDetail,
+                    fullText = shown?.let { state.thermalFull[it] },
+                    physicalMaxByCluster = physicalMaxByCluster,
                     modifier = Modifier.padding(start = 16.dp, end = 16.dp),
                 )
             } else {

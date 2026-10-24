@@ -177,6 +177,31 @@ class ThermalConfTest {
     }
 
     @Test
+    fun `阶梯表在温度之间沿用上一档`() {
+        val ladder = FreqLadder(listOf(40, 50), listOf(2000, 1500))
+        assertEquals(2000, ladder.freqAt(40))
+        assertEquals(2000, ladder.freqAt(45))
+        assertEquals(1500, ladder.freqAt(50))
+        assertEquals(1500, ladder.freqAt(60))
+        assertEquals(2000, ladder.freqAt(30))
+    }
+
+    @Test
+    fun `关闭的 CPU 表不作为生效内容展示`() {
+        val plain = """
+            [mtk-cpu-table-mapping]
+            mode= disabled
+            cluster= 2
+            threshold= [46000]
+            freq= [3200000]
+        """.trimIndent()
+        val summary = ThermalPolicySummary.brief(ThermalPolicyParser.parse(8, plain))
+        assertTrue(summary.contains("CPU 频率表已关闭"))
+        assertTrue(summary.contains("不参与控制"))
+        assertFalse("46°C 的表是 disabled，不能按生效内容列出来", summary.contains("46°C→3.2G"))
+    }
+
+    @Test
     fun `完整版也只翻译不评价`() {
         val full = ThermalPolicySummary.full(ThermalPolicyParser.parse(0, plain00))
         listOf("建议", "推荐", "最好", "较好", "适合", "不要用", "首选").forEach { word ->

@@ -27,6 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
@@ -68,6 +69,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import magicau.mtkcontroller.R
 import magicau.mtkcontroller.data.log.LogLevel
 import magicau.mtkcontroller.data.tweaks.BrightnessBackend
@@ -79,14 +82,18 @@ import magicau.mtkcontroller.domain.model.CpuLayoutMode
 import magicau.mtkcontroller.domain.model.NavBarStyle
 import magicau.mtkcontroller.domain.model.NavBarVisibility
 import magicau.mtkcontroller.domain.model.RangeControlMode
+import magicau.mtkcontroller.domain.model.ScreenOffPolicy
 import magicau.mtkcontroller.domain.model.ThemeMode
 import magicau.mtkcontroller.ui.components.FailureNote
 import magicau.mtkcontroller.ui.components.InsetDivider
+import magicau.mtkcontroller.ui.components.SectionLabel
 import magicau.mtkcontroller.ui.components.SettingsCard
 import magicau.mtkcontroller.ui.components.SettingsRow
+import magicau.mtkcontroller.ui.components.SettingsSwitchRow
 import magicau.mtkcontroller.ui.components.ShizukuStatusCard
 import magicau.mtkcontroller.domain.model.TabRestoreMode
 import magicau.mtkcontroller.ui.theme.MorandiAccent
+import magicau.mtkcontroller.ui.text
 import magicau.mtkcontroller.ui.descriptionRes
 import magicau.mtkcontroller.ui.labelRes
 import magicau.mtkcontroller.ui.navigation.Destination
@@ -134,7 +141,7 @@ fun SettingsScreen(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 14.dp)
             .padding(top = 12.dp, bottom = LocalNavBarClearance.current),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text(
             // 页面标题和底栏标签是同一个词、同一件事，共用一份，避免改了一处忘了另一处。
@@ -168,15 +175,75 @@ fun SettingsScreen(
             }
         }
 
+        ResetDefaultsCard(state, actions)
         // 关于直接摊在底部，不做分类：为它单开一页只装静态信息，多一跳不值得。
-        AboutCard()
+        val update by magicau.mtkcontroller.data.update.UpdateCenter.state.collectAsStateWithLifecycle()
+        val updateStage = magicau.mtkcontroller.data.update.UpdateCenter.Stage.CHECKING
+        AboutCard(
+            onOpenChangelog = actions.onOpenChangelog,
+            updateCheck = when {
+                update.stage == updateStage && update.manual -> UpdateCheckResult.Checking
+                update.stage == magicau.mtkcontroller.data.update.UpdateCenter.Stage.UP_TO_DATE &&
+                    update.manual -> UpdateCheckResult.Latest
+                update.stage == magicau.mtkcontroller.data.update.UpdateCenter.Stage.ERROR &&
+                    update.manual -> UpdateCheckResult.Failed
+                else -> UpdateCheckResult.Idle
+            },
+            onCheckUpdate = actions.onCheckUpdate,
+        )
+    }
+}
+
+/**
+ * 恢复默认。**删键，不是写一个猜出来的数** —— settings 的默认值来自 ROM defaults，
+ * 行不存在时系统自己回退。只删本软件有原值快照的项。
+ */
+@Composable
+private fun ResetDefaultsCard(state: SettingsUiState, actions: SettingsActions) {
+    var confirm by remember { mutableStateOf(false) }
+    SettingsCard {
+        SettingsRow(
+            icon = Icons.Filled.Delete,
+            iconTint = MaterialTheme.colorScheme.error,
+            title = stringResource(R.string.reset_defaults_title),
+            subtitle = stringResource(R.string.reset_defaults_sub),
+            onClick = { confirm = true },
+        )
+        state.resetMessage?.let { failure ->
+            Text(
+                failure.summary.text(),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 56.dp, end = 16.dp, bottom = 10.dp),
+            )
+        }
+    }
+    if (confirm) {
+        AlertDialog(
+            onDismissRequest = { confirm = false },
+            title = { Text(stringResource(R.string.reset_defaults_title)) },
+            text = { Text(stringResource(R.string.reset_defaults_confirm)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirm = false
+                    actions.onResetAllToDefaults()
+                }) { Text(stringResource(R.string.reset_defaults_title)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirm = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
     }
 }
 
 private fun SettingsCategory.icon(): ImageVector = when (this) {
     SettingsCategory.GENERAL -> Icons.Filled.Home
-    // 外观与行为：主题色、圆角、动画都归它，星形比"喜欢"更贴切。
+    // 外观：主题色、圆角、动画都归它，星形比"喜欢"更贴切。
     SettingsCategory.APPEARANCE -> Icons.Filled.Star
+    // 性能：扳手比齿轮更像"调设备"，齿轮留给维护。
+    SettingsCategory.PERFORMANCE -> Icons.Filled.Build
     // 实验室：core 图标集里没有烧瓶，用 res/drawable/ic_lab_flask.xml。
     SettingsCategory.LAB -> Icons.Filled.Info
     SettingsCategory.NOTIFICATIONS -> Icons.Filled.Notifications
@@ -189,6 +256,7 @@ private fun SettingsCategory.icon(): ImageVector = when (this) {
 private fun SettingsCategory.tint(): Color = when (this) {
     SettingsCategory.GENERAL -> TabIcon
     SettingsCategory.APPEARANCE -> ThemeIcon
+    SettingsCategory.PERFORMANCE -> ReapplyIcon
     SettingsCategory.LAB -> LabIcon
     SettingsCategory.NOTIFICATIONS -> NotifyIcon
     SettingsCategory.MAINTENANCE -> LogIcon
@@ -212,13 +280,14 @@ fun SettingsCategoryScreen(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 14.dp)
             .padding(top = 8.dp, bottom = SUB_SCREEN_EXTRA_PADDING),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         when (category) {
             SettingsCategory.GENERAL -> GeneralSection(state, actions)
             SettingsCategory.APPEARANCE -> AppearanceSection(state, actions)
+            SettingsCategory.PERFORMANCE -> PerformanceSection(state, actions)
             SettingsCategory.LAB -> LabSection(actions)
-            SettingsCategory.NOTIFICATIONS -> NotificationSection(actions)
+            SettingsCategory.NOTIFICATIONS -> NotificationSection(state, actions)
             SettingsCategory.MAINTENANCE -> MaintenanceSection(state, actions)
             SettingsCategory.BACKUP -> BackupSection(state, actions)
         }
@@ -230,9 +299,174 @@ fun SettingsCategoryScreen(
 @Composable
 private fun GeneralSection(state: SettingsUiState, actions: SettingsActions) {
     var tabExpanded by remember { mutableStateOf(false) }
+    var tabRestoreExpanded by remember { mutableStateOf(false) }
+    var swipeExpanded by remember { mutableStateOf(false) }
+
+    // 从系统授权页返回时重读一次；否则界面会一直显示离开前的状态。
+    LifecycleResumeEffect(Unit) {
+        actions.onRefreshBatteryWhitelist()
+        onPauseOrDispose { }
+    }
+
+    SectionLabel(stringResource(R.string.settings_group_startup))
+    SettingsCard {
+        SettingsRow(
+            icon = Icons.Filled.Home,
+            iconTint = TabIcon,
+            title = stringResource(R.string.settings_default_tab),
+            subtitle = stringResource(R.string.settings_default_tab_sub),
+            trailingText = stringResource(state.defaultTab.labelRes),
+            onClick = { tabExpanded = !tabExpanded },
+        )
+        AnimatedVisibility(visible = tabExpanded) {
+            Column(modifier = Modifier.padding(bottom = 8.dp)) {
+                magicau.mtkcontroller.ui.navigation.FeatureFlags.tabs.forEach { destination ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .selectable(
+                                selected = state.defaultTab == destination,
+                                role = Role.RadioButton,
+                                onClick = { actions.onSetDefaultTab(destination) },
+                            )
+                            .padding(start = 56.dp, end = 16.dp, top = 6.dp, bottom = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        RadioButton(selected = state.defaultTab == destination, onClick = null)
+                        Icon(destination.icon, contentDescription = null, modifier = Modifier.size(17.dp))
+                        Text(stringResource(destination.labelRes), style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
+        }
+
+        InsetDivider()
+        // SettingsCard 内的行一律用 SettingsRow（自带 16dp 水平内边距）；
+        // ToggleRow 没有内边距，只给已经补过 16dp 的 ToolCard 一类容器用。
+        SettingsRow(
+            iconPainter = painterResource(R.drawable.ic_settings_eye_off),
+            iconTint = NotifyIcon,
+            title = stringResource(R.string.settings_hide_recents),
+            subtitle = stringResource(R.string.settings_hide_recents_sub),
+            trailing = {
+                Switch(
+                    checked = state.hideFromRecents,
+                    enabled = !state.busy,
+                    onCheckedChange = actions.onSetHideFromRecents,
+                )
+            },
+        )
+    }
+
+    SectionLabel(stringResource(R.string.settings_group_interaction))
+    SettingsCard {
+        SettingsRow(
+            icon = Icons.Filled.Refresh,
+            iconTint = ThemeIcon,
+            title = stringResource(R.string.settings_tab_restore),
+            subtitle = stringResource(state.tabRestoreMode.descriptionRes),
+            trailingText = stringResource(state.tabRestoreMode.labelRes),
+            onClick = { tabRestoreExpanded = !tabRestoreExpanded },
+        )
+        AnimatedVisibility(visible = tabRestoreExpanded) {
+            Column(modifier = Modifier.padding(bottom = 8.dp)) {
+                TabRestoreMode.entries.forEach { mode ->
+                    OptionRow(
+                        label = stringResource(mode.labelRes),
+                        detail = mode.descriptionRes?.let { stringResource(it) },
+                        selected = state.tabRestoreMode == mode,
+                        onClick = { actions.onSetTabRestoreMode(mode) },
+                    )
+                }
+            }
+        }
+
+        InsetDivider()
+        SettingsRow(
+            iconPainter = painterResource(R.drawable.ic_settings_gesture),
+            iconTint = ThemeIcon,
+            title = stringResource(R.string.tab_swipe_title),
+            subtitle = state.tabSwipeMode.descriptionRes?.let { stringResource(it) },
+            trailingText = stringResource(state.tabSwipeMode.labelRes),
+            onClick = { swipeExpanded = !swipeExpanded },
+        )
+        AnimatedVisibility(visible = swipeExpanded) {
+            Column(modifier = Modifier.padding(bottom = 8.dp)) {
+                magicau.mtkcontroller.ui.navigation.TabSwipeMode.entries.forEach { mode ->
+                    OptionRow(
+                        label = stringResource(mode.labelRes),
+                        detail = mode.descriptionRes?.let { stringResource(it) },
+                        selected = state.tabSwipeMode == mode,
+                        onClick = { actions.onSetTabSwipeMode(mode) },
+                    )
+                }
+            }
+        }
+    }
+
+    SectionLabel(stringResource(R.string.settings_group_background))
+    SettingsCard {
+        // 白名单两行：上面一行直接改，下面一行打开系统那一页。
+        // 直写只覆盖 Doze 白名单，厂商 ROM 的后台管理远不止一项；
+        // 系统那一页能看到全貌，也能自己确认我们改成功了没有。
+        val whitelisted = state.batteryWhitelisted
+        SettingsRow(
+            iconPainter = painterResource(R.drawable.ic_settings_battery),
+            iconTint = NotifyIcon,
+            title = stringResource(R.string.battery_whitelist_title),
+            // 读不到就只说明"读不到"，不给开关 ——
+            // 拿 false 冒充"未加入"是让用户去拨一个我们并不知道状态的开关。
+            trailingText = if (whitelisted == null) {
+                stringResource(R.string.battery_whitelist_unknown)
+            } else {
+                null
+            },
+            trailing = whitelisted?.let { inWhitelist ->
+                {
+                    Switch(
+                        checked = inWhitelist,
+                        enabled = !state.batteryBusy,
+                        onCheckedChange = actions.onSetBatteryWhitelist,
+                    )
+                }
+            },
+            // 整行也能点：只把开关当热区时，用户点标题会觉得“没反应”。
+            onClick = whitelisted?.let { inWhitelist ->
+                { if (!state.batteryBusy) actions.onSetBatteryWhitelist(!inWhitelist) }
+            },
+        )
+        InsetDivider()
+        SettingsRow(
+            icon = Icons.Default.Settings,
+            iconTint = NotifyIcon,
+            title = stringResource(R.string.battery_whitelist_open),
+            subtitle = when (state.batteryWhitelisted) {
+                true -> stringResource(R.string.battery_whitelist_open_joined)
+                false -> stringResource(R.string.battery_whitelist_open_not_joined)
+                null -> null
+            },
+            onClick = actions.onOpenBatterySettings,
+        )
+    }
+    state.batteryMessage?.let {
+        FailureNote(
+            failure = it,
+            modifier = Modifier.padding(horizontal = 16.dp),
+        )
+    }
+}
+
+// --- 性能 -----------------------------------------------------------------
+
+@Composable
+private fun PerformanceSection(state: SettingsUiState, actions: SettingsActions) {
     var applyModeExpanded by remember { mutableStateOf(false) }
+    var screenPolicyExpanded by remember { mutableStateOf(false) }
     var backendDialog by remember { mutableStateOf<String?>(null) }
     var ceilingDialog by remember { mutableStateOf(false) }
+    var cpuLayoutExpanded by remember { mutableStateOf(false) }
+    var rangeModeExpanded by remember { mutableStateOf(false) }
 
     if (backendDialog != null) {
         AlertDialog(
@@ -296,44 +530,12 @@ private fun GeneralSection(state: SettingsUiState, actions: SettingsActions) {
         )
     }
 
+    SectionLabel(stringResource(R.string.settings_group_cpu_apply))
     SettingsCard {
         SettingsRow(
-            icon = Icons.Filled.Home,
-            iconTint = TabIcon,
-            title = stringResource(R.string.settings_default_tab),
-            subtitle = stringResource(R.string.settings_default_tab_sub),
-            trailingText = stringResource(state.defaultTab.labelRes),
-            onClick = { tabExpanded = !tabExpanded },
-        )
-        AnimatedVisibility(visible = tabExpanded) {
-            Column(modifier = Modifier.padding(bottom = 8.dp)) {
-                Destination.entries.forEach { destination ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .selectable(
-                                selected = state.defaultTab == destination,
-                                role = Role.RadioButton,
-                                onClick = { actions.onSetDefaultTab(destination) },
-                            )
-                            .padding(start = 56.dp, end = 16.dp, top = 6.dp, bottom = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        RadioButton(selected = state.defaultTab == destination, onClick = null)
-                        Icon(destination.icon, contentDescription = null, modifier = Modifier.size(17.dp))
-                        Text(stringResource(destination.labelRes), style = MaterialTheme.typography.bodyMedium)
-                    }
-                }
-            }
-        }
-
-        InsetDivider()
-        SettingsRow(
-            icon = Icons.Filled.Refresh,
+            iconPainter = painterResource(R.drawable.ic_settings_cpu),
             iconTint = ReapplyIcon,
             title = stringResource(R.string.settings_apply_mode),
-            subtitle = stringResource(state.applyMode.descriptionRes),
             trailingText = stringResource(state.applyMode.labelRes),
             onClick = { applyModeExpanded = !applyModeExpanded },
         )
@@ -342,7 +544,7 @@ private fun GeneralSection(state: SettingsUiState, actions: SettingsActions) {
                 ApplyMode.entries.forEach { mode ->
                     OptionRow(
                         label = stringResource(mode.labelRes),
-                        detail = stringResource(mode.descriptionRes),
+                        detail = mode.descriptionRes?.let { stringResource(it) },
                         selected = state.applyMode == mode,
                         onClick = { actions.onSetApplyMode(mode) },
                     )
@@ -361,7 +563,142 @@ private fun GeneralSection(state: SettingsUiState, actions: SettingsActions) {
 
         InsetDivider()
         SettingsRow(
-            icon = Icons.Default.Build,
+            iconPainter = painterResource(R.drawable.ic_settings_screen),
+            iconTint = ReapplyIcon,
+            title = stringResource(R.string.settings_screen_policy_short),
+            trailingText = stringResource(state.screenOffPolicy.labelRes()),
+            onClick = { screenPolicyExpanded = !screenPolicyExpanded },
+        )
+        AnimatedVisibility(visible = screenPolicyExpanded) {
+            Column(modifier = Modifier.padding(bottom = 10.dp)) {
+                ScreenOffPolicy.entries.forEach { policy ->
+                    OptionRow(
+                        label = stringResource(policy.labelRes()),
+                        detail = policy.descriptionRes()?.let { stringResource(it) },
+                        selected = state.screenOffPolicy == policy,
+                        onClick = { actions.onSetScreenOffPolicy(policy) },
+                    )
+                }
+                if (state.screenOffPolicy != ScreenOffPolicy.OFF) {
+                    Text(
+                        stringResource(R.string.screen_policy_service_note),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 56.dp, end = 16.dp, top = 4.dp),
+                    )
+                }
+            }
+        }
+
+        InsetDivider()
+        SettingsRow(
+            icon = Icons.Filled.Refresh,
+            iconTint = ReapplyIcon,
+            title = stringResource(R.string.settings_apply_on_boot),
+            subtitle = stringResource(R.string.settings_apply_on_boot_sub),
+            trailing = {
+                Switch(
+                    checked = state.applyOnBoot,
+                    onCheckedChange = actions.onSetApplyOnBoot,
+                )
+            },
+        )
+
+        InsetDivider()
+        // 与"应用方式"并列：一个说什么时候下发，一个说下发什么。
+        SettingsRow(
+            iconPainter = painterResource(R.drawable.ic_settings_gauge),
+            iconTint = ToolsIcon,
+            title = stringResource(R.string.freq_ceiling_title),
+            subtitle = stringResource(state.freqRangeMode.labelRes),
+            onClick = { ceilingDialog = true },
+        )
+        // 放开温控开着时，硬限是**强制**的（软限会被厂商 boost 顶掉，见
+        // docs/cpu/facts.md CPU-007）。这时不再给用户一个看起来能关、实际关不掉的
+        // 开关——把这一行藏起来，只在放开温控关闭、确实需要用户选择时才出现。
+        if (!state.freqThermalCompanion) {
+            InsetDivider()
+            SettingsRow(
+                iconPainter = painterResource(R.drawable.ic_settings_lock),
+                iconTint = ToolsIcon,
+                title = stringResource(R.string.freq_hard_limits_title),
+                subtitle = stringResource(
+                    if (state.freqHardLimits) R.string.freq_hard_limits_on else R.string.freq_hard_limits_off,
+                ),
+                onClick = { actions.onSetFreqHardLimits(!state.freqHardLimits) },
+            )
+        }
+
+        InsetDivider()
+        // 频率与温控是一起决定"能跑多高"的两层：只调频率、厂商温控仍压着，
+        // 用户会看到"设了没用"。默认一并发开；手动选过档位时以手动为准。
+        SettingsRow(
+            iconPainter = painterResource(R.drawable.ic_settings_thermometer),
+            iconTint = ToolsIcon,
+            title = stringResource(R.string.freq_thermal_companion_title),
+            subtitle = stringResource(
+                if (state.freqThermalCompanion) R.string.freq_thermal_companion_on
+                else R.string.freq_thermal_companion_off,
+            ),
+            trailing = {
+                Switch(
+                    checked = state.freqThermalCompanion,
+                    onCheckedChange = actions.onSetFreqThermalCompanion,
+                )
+            },
+        )
+    }
+
+    SectionLabel(stringResource(R.string.settings_group_cpu_page))
+    SettingsCard {
+        SettingsRow(
+            iconPainter = painterResource(R.drawable.ic_settings_grid),
+            iconTint = ThemeIcon,
+            title = stringResource(R.string.settings_cpu_page_layout),
+            subtitle = state.cpuLayoutMode.descriptionRes?.let { stringResource(it) },
+            trailingText = stringResource(state.cpuLayoutMode.labelRes),
+            onClick = { cpuLayoutExpanded = !cpuLayoutExpanded },
+        )
+        AnimatedVisibility(visible = cpuLayoutExpanded) {
+            Column(modifier = Modifier.padding(bottom = 8.dp)) {
+                CpuLayoutMode.entries.forEach { mode ->
+                    OptionRow(
+                        label = stringResource(mode.labelRes),
+                        detail = mode.descriptionRes?.let { stringResource(it) },
+                        selected = state.cpuLayoutMode == mode,
+                        onClick = { actions.onSetCpuLayoutMode(mode) },
+                    )
+                }
+            }
+        }
+
+        InsetDivider()
+        SettingsRow(
+            iconPainter = painterResource(R.drawable.ic_settings_slider),
+            iconTint = ThemeIcon,
+            title = stringResource(R.string.settings_range_control_short),
+            subtitle = state.rangeControlMode.descriptionRes?.let { stringResource(it) },
+            trailingText = stringResource(state.rangeControlMode.labelRes),
+            onClick = { rangeModeExpanded = !rangeModeExpanded },
+        )
+        AnimatedVisibility(visible = rangeModeExpanded) {
+            Column(modifier = Modifier.padding(bottom = 8.dp)) {
+                RangeControlMode.entries.forEach { mode ->
+                    OptionRow(
+                        label = stringResource(mode.labelRes),
+                        detail = mode.descriptionRes?.let { stringResource(it) },
+                        selected = state.rangeControlMode == mode,
+                        onClick = { actions.onSetRangeControlMode(mode) },
+                    )
+                }
+            }
+        }
+    }
+
+    SectionLabel(stringResource(R.string.settings_group_input))
+    SettingsCard {
+        SettingsRow(
+            iconPainter = painterResource(R.drawable.ic_settings_touch),
             iconTint = ToolsIcon,
             title = stringResource(R.string.settings_touch_backend),
             trailingText = stringResource(state.touchBackend.labelRes),
@@ -369,7 +706,7 @@ private fun GeneralSection(state: SettingsUiState, actions: SettingsActions) {
         )
         InsetDivider()
         SettingsRow(
-            icon = Icons.Default.Star,
+            iconPainter = painterResource(R.drawable.ic_settings_brightness),
             iconTint = PaletteIcon,
             title = stringResource(R.string.settings_brightness_backend),
             trailingText = stringResource(state.brightnessBackend.labelRes),
@@ -381,69 +718,42 @@ private fun GeneralSection(state: SettingsUiState, actions: SettingsActions) {
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 10.dp),
             )
         }
-
         InsetDivider()
-        // 与"应用方式"并列：一个说什么时候下发，一个说下发什么。
         SettingsRow(
-            icon = Icons.Default.Build,
+            iconPainter = painterResource(R.drawable.ic_settings_display),
             iconTint = ToolsIcon,
-            title = stringResource(R.string.freq_ceiling_title),
-            subtitle = stringResource(state.freqRangeMode.labelRes),
-            onClick = { ceilingDialog = true },
+            title = stringResource(R.string.settings_display_tweaks),
+            subtitle = stringResource(R.string.settings_tools_sub),
+            onClick = actions.onOpenDisplayTweaks,
         )
-        InsetDivider()
-        // 与"应用方式"并列：一个说什么时候下发，一个说下发什么。
-        // 默认关 —— 实测软硬等效（docs/cpu/facts.md 2026-10-14）。
-        SettingsRow(
-            icon = Icons.Default.Build,
-            iconTint = ToolsIcon,
-            title = stringResource(R.string.freq_hard_limits_title),
-            subtitle = stringResource(
-                if (state.freqHardLimits) R.string.freq_hard_limits_on else R.string.freq_hard_limits_off,
-            ),
-            onClick = { actions.onSetFreqHardLimits(!state.freqHardLimits) },
-        )
+    }
 
-        InsetDivider()
-        // 白名单两行：上面一行直接改，下面一行打开系统那一页。
-        //
-        // **为什么两个入口都要。** 直写只覆盖 Doze 白名单这一项，而厂商 ROM 的
-        // 后台管理远不止一项；系统那一页能看到全貌，用户也能自己确认我们改成功了没有。
-        val whitelisted = state.batteryWhitelisted
+    SectionLabel(stringResource(R.string.settings_group_vendor_perf))
+    SettingsCard {
         SettingsRow(
-            icon = Icons.Default.Settings,
-            iconTint = NotifyIcon,
-            title = stringResource(R.string.battery_whitelist_title),
-            subtitle = stringResource(R.string.battery_whitelist_sub),
-            // 读不到就只说明"读不到"，不给开关 ——
-            // 拿 false 冒充"未加入"是让用户去拨一个我们并不知道状态的开关。
-            trailingText = if (whitelisted == null) {
-                stringResource(R.string.battery_whitelist_unknown)
-            } else {
-                null
-            },
-            trailing = whitelisted?.let { inWhitelist ->
-                {
-                    Switch(
-                        checked = inWhitelist,
-                        enabled = !state.busy,
-                        onCheckedChange = actions.onSetBatteryWhitelist,
-                    )
-                }
+            iconPainter = painterResource(R.drawable.ic_settings_bolt),
+            iconTint = ReapplyIcon,
+            title = stringResource(R.string.settings_performance_mode),
+            subtitle = stringResource(R.string.settings_performance_mode_sub),
+            onClick = actions.onOpenPerformanceMode,
+            trailing = {
+                Icon(
+                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             },
         )
-        InsetDivider()
-        SettingsRow(
-            icon = Icons.Default.Settings,
-            iconTint = NotifyIcon,
-            title = stringResource(R.string.battery_whitelist_open),
-            subtitle = stringResource(R.string.battery_whitelist_open_sub),
-            onClick = actions.onOpenBatterySettings,
+        Text(
+            stringResource(R.string.settings_performance_mode_note),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
         )
     }
 }
 
-// --- 外观与行为 ------------------------------------------------------------
+// --- 外观 -----------------------------------------------------------------
 
 @Composable
 private fun AppearanceSection(state: SettingsUiState, actions: SettingsActions) {
@@ -452,18 +762,15 @@ private fun AppearanceSection(state: SettingsUiState, actions: SettingsActions) 
     var shapeExpanded by remember { mutableStateOf(false) }
     var paletteExpanded by remember { mutableStateOf(false) }
     var navStyleExpanded by remember { mutableStateOf(false) }
-    var swipeExpanded by remember { mutableStateOf(false) }
-    var cpuLayoutExpanded by remember { mutableStateOf(false) }
-    var rangeModeExpanded by remember { mutableStateOf(false) }
-    var tabRestoreExpanded by remember { mutableStateOf(false) }
     var navVisibilityExpanded by remember { mutableStateOf(false) }
 
+    SectionLabel(stringResource(R.string.settings_group_theme))
     SettingsCard {
         SettingsRow(
             icon = Icons.Filled.Star,
             iconTint = ThemeIcon,
             title = stringResource(R.string.settings_theme_mode),
-            subtitle = stringResource(state.themeMode.descriptionRes),
+            subtitle = state.themeMode.descriptionRes?.let { stringResource(it) },
             trailingText = stringResource(state.themeMode.labelRes),
             onClick = { themeModeExpanded = !themeModeExpanded },
         )
@@ -472,7 +779,7 @@ private fun AppearanceSection(state: SettingsUiState, actions: SettingsActions) 
                 ThemeMode.entries.forEach { mode ->
                     OptionRow(
                         label = stringResource(mode.labelRes),
-                        detail = stringResource(mode.descriptionRes),
+                        detail = mode.descriptionRes?.let { stringResource(it) },
                         selected = state.themeMode == mode,
                         onClick = { actions.onSetThemeMode(mode) },
                     )
@@ -482,50 +789,7 @@ private fun AppearanceSection(state: SettingsUiState, actions: SettingsActions) 
 
         InsetDivider()
         SettingsRow(
-            icon = Icons.Filled.Refresh,
-            iconTint = ThemeIcon,
-            title = stringResource(R.string.settings_motion_speed),
-            subtitle = stringResource(state.motionSpeed.descriptionRes),
-            trailingText = stringResource(state.motionSpeed.labelRes),
-            onClick = { speedExpanded = !speedExpanded },
-        )
-        AnimatedVisibility(visible = speedExpanded) {
-            Column(modifier = Modifier.padding(bottom = 8.dp)) {
-                magicau.mtkcontroller.ui.theme.MotionSpeed.entries.forEach { speed ->
-                    OptionRow(
-                        label = stringResource(speed.labelRes),
-                        detail = stringResource(speed.descriptionRes),
-                        selected = state.motionSpeed == speed,
-                        onClick = { actions.onSetMotionSpeed(speed) },
-                    )
-                }
-            }
-        }
-
-        InsetDivider()
-        SettingsRow(
-            icon = Icons.Filled.Star,
-            iconTint = ThemeIcon,
-            title = stringResource(R.string.settings_shape),
-            subtitle = stringResource(R.string.settings_shape_sub),
-            trailingText = stringResource(state.shapeStyle.labelRes),
-            onClick = { shapeExpanded = !shapeExpanded },
-        )
-        AnimatedVisibility(visible = shapeExpanded) {
-            Column(modifier = Modifier.padding(bottom = 8.dp)) {
-                magicau.mtkcontroller.ui.theme.ShapeStyle.entries.forEach { style ->
-                    OptionRow(
-                        label = stringResource(style.labelRes),
-                        selected = state.shapeStyle == style,
-                        onClick = { actions.onSetShapeStyle(style) },
-                    )
-                }
-            }
-        }
-
-        InsetDivider()
-        SettingsRow(
-            icon = Icons.Filled.Favorite,
+            iconPainter = painterResource(R.drawable.ic_settings_palette),
             iconTint = PaletteIcon,
             title = stringResource(R.string.settings_palette),
             subtitle = stringResource(state.palette.labelRes),
@@ -575,21 +839,20 @@ private fun AppearanceSection(state: SettingsUiState, actions: SettingsActions) 
 
         InsetDivider()
         SettingsRow(
-            icon = Icons.Filled.List,
-            iconTint = NavIcon,
-            title = stringResource(R.string.settings_nav_visibility),
-            subtitle = stringResource(state.navBarVisibility.descriptionRes),
-            trailingText = stringResource(state.navBarVisibility.labelRes),
-            onClick = { navVisibilityExpanded = !navVisibilityExpanded },
+            iconPainter = painterResource(R.drawable.ic_settings_shape),
+            iconTint = ThemeIcon,
+            title = stringResource(R.string.settings_shape),
+            subtitle = stringResource(R.string.settings_shape_sub),
+            trailingText = stringResource(state.shapeStyle.labelRes),
+            onClick = { shapeExpanded = !shapeExpanded },
         )
-        AnimatedVisibility(visible = navVisibilityExpanded) {
+        AnimatedVisibility(visible = shapeExpanded) {
             Column(modifier = Modifier.padding(bottom = 8.dp)) {
-                NavBarVisibility.entries.forEach { mode ->
+                magicau.mtkcontroller.ui.theme.ShapeStyle.entries.forEach { style ->
                     OptionRow(
-                        label = stringResource(mode.labelRes),
-                        detail = stringResource(mode.descriptionRes),
-                        selected = state.navBarVisibility == mode,
-                        onClick = { actions.onSetNavBarVisibility(mode) },
+                        label = stringResource(style.labelRes),
+                        selected = state.shapeStyle == style,
+                        onClick = { actions.onSetShapeStyle(style) },
                     )
                 }
             }
@@ -597,7 +860,31 @@ private fun AppearanceSection(state: SettingsUiState, actions: SettingsActions) 
 
         InsetDivider()
         SettingsRow(
-            icon = Icons.Filled.List,
+            iconPainter = painterResource(R.drawable.ic_settings_gauge),
+            iconTint = ThemeIcon,
+            title = stringResource(R.string.settings_motion_speed),
+            subtitle = state.motionSpeed.descriptionRes?.let { stringResource(it) },
+            trailingText = stringResource(state.motionSpeed.labelRes),
+            onClick = { speedExpanded = !speedExpanded },
+        )
+        AnimatedVisibility(visible = speedExpanded) {
+            Column(modifier = Modifier.padding(bottom = 8.dp)) {
+                magicau.mtkcontroller.ui.theme.MotionSpeed.entries.forEach { speed ->
+                    OptionRow(
+                        label = stringResource(speed.labelRes),
+                        detail = speed.descriptionRes?.let { stringResource(it) },
+                        selected = state.motionSpeed == speed,
+                        onClick = { actions.onSetMotionSpeed(speed) },
+                    )
+                }
+            }
+        }
+    }
+
+    SectionLabel(stringResource(R.string.settings_group_nav))
+    SettingsCard {
+        SettingsRow(
+            iconPainter = painterResource(R.drawable.ic_settings_display),
             iconTint = NavIcon,
             title = stringResource(R.string.settings_nav_style),
             subtitle = stringResource(state.navBarStyle.descriptionRes),
@@ -636,103 +923,25 @@ private fun AppearanceSection(state: SettingsUiState, actions: SettingsActions) 
 
         InsetDivider()
         SettingsRow(
-            icon = Icons.Filled.List,
-            iconTint = ThemeIcon,
-            title = stringResource(R.string.tab_swipe_title),
-            subtitle = stringResource(state.tabSwipeMode.descriptionRes),
-            trailingText = stringResource(state.tabSwipeMode.labelRes),
-            onClick = { swipeExpanded = !swipeExpanded },
+            iconPainter = painterResource(R.drawable.ic_settings_gesture),
+            iconTint = NavIcon,
+            title = stringResource(R.string.settings_nav_visibility),
+            subtitle = state.navBarVisibility.descriptionRes?.let { stringResource(it) },
+            trailingText = stringResource(state.navBarVisibility.labelRes),
+            onClick = { navVisibilityExpanded = !navVisibilityExpanded },
         )
-        AnimatedVisibility(visible = swipeExpanded) {
+        AnimatedVisibility(visible = navVisibilityExpanded) {
             Column(modifier = Modifier.padding(bottom = 8.dp)) {
-                magicau.mtkcontroller.ui.navigation.TabSwipeMode.entries.forEach { mode ->
+                NavBarVisibility.entries.forEach { mode ->
                     OptionRow(
                         label = stringResource(mode.labelRes),
-                        detail = stringResource(mode.descriptionRes),
-                        selected = state.tabSwipeMode == mode,
-                        onClick = { actions.onSetTabSwipeMode(mode) },
+                        detail = mode.descriptionRes?.let { stringResource(it) },
+                        selected = state.navBarVisibility == mode,
+                        onClick = { actions.onSetNavBarVisibility(mode) },
                     )
                 }
             }
         }
-
-        InsetDivider()
-        SettingsRow(
-            icon = Icons.Filled.List,
-            iconTint = ThemeIcon,
-            title = stringResource(R.string.settings_cpu_layout),
-            subtitle = stringResource(state.cpuLayoutMode.descriptionRes),
-            trailingText = stringResource(state.cpuLayoutMode.labelRes),
-            onClick = { cpuLayoutExpanded = !cpuLayoutExpanded },
-        )
-        AnimatedVisibility(visible = cpuLayoutExpanded) {
-            Column(modifier = Modifier.padding(bottom = 8.dp)) {
-                CpuLayoutMode.entries.forEach { mode ->
-                    OptionRow(
-                        label = stringResource(mode.labelRes),
-                        detail = stringResource(mode.descriptionRes),
-                        selected = state.cpuLayoutMode == mode,
-                        onClick = { actions.onSetCpuLayoutMode(mode) },
-                    )
-                }
-            }
-        }
-
-        InsetDivider()
-        SettingsRow(
-            icon = Icons.Filled.List,
-            iconTint = ThemeIcon,
-            title = stringResource(R.string.settings_range_control),
-            subtitle = stringResource(state.rangeControlMode.descriptionRes),
-            trailingText = stringResource(state.rangeControlMode.labelRes),
-            onClick = { rangeModeExpanded = !rangeModeExpanded },
-        )
-        AnimatedVisibility(visible = rangeModeExpanded) {
-            Column(modifier = Modifier.padding(bottom = 8.dp)) {
-                RangeControlMode.entries.forEach { mode ->
-                    OptionRow(
-                        label = stringResource(mode.labelRes),
-                        detail = stringResource(mode.descriptionRes),
-                        selected = state.rangeControlMode == mode,
-                        onClick = { actions.onSetRangeControlMode(mode) },
-                    )
-                }
-            }
-        }
-
-        InsetDivider()
-        // 切回标签时：保留二级页面还是回到主页。放在"频率区间调节方式"后面，
-        // 两者都是"这一页怎么用"的选择，不是设备能力。
-        SettingsRow(
-            icon = Icons.Filled.Refresh,
-            iconTint = ThemeIcon,
-            title = stringResource(R.string.settings_tab_restore),
-            subtitle = stringResource(state.tabRestoreMode.descriptionRes),
-            trailingText = stringResource(state.tabRestoreMode.labelRes),
-            onClick = { tabRestoreExpanded = !tabRestoreExpanded },
-        )
-        AnimatedVisibility(visible = tabRestoreExpanded) {
-            Column(modifier = Modifier.padding(bottom = 8.dp)) {
-                TabRestoreMode.entries.forEach { mode ->
-                    OptionRow(
-                        label = stringResource(mode.labelRes),
-                        detail = stringResource(mode.descriptionRes),
-                        selected = state.tabRestoreMode == mode,
-                        onClick = { actions.onSetTabRestoreMode(mode) },
-                    )
-                }
-            }
-        }
-
-        InsetDivider()
-        // 触控、插帧、旋转建议、高温降亮度都在这条后面 —— 它们都是"改变观感与手感"的开关。
-        SettingsRow(
-            icon = Icons.Filled.Build,
-            iconTint = ToolsIcon,
-            title = stringResource(R.string.settings_tools),
-            subtitle = stringResource(R.string.settings_tools_sub),
-            onClick = actions.onOpenDisplayTweaks,
-        )
     }
 }
 
@@ -740,6 +949,7 @@ private fun AppearanceSection(state: SettingsUiState, actions: SettingsActions) 
 
 @Composable
 private fun LabSection(actions: SettingsActions) {
+    SectionLabel(stringResource(R.string.settings_group_lab))
     SettingsCard {
         SettingsRow(
             iconPainter = painterResource(R.drawable.ic_lab_flask),
@@ -750,7 +960,7 @@ private fun LabSection(actions: SettingsActions) {
         )
         InsetDivider()
         SettingsRow(
-            icon = Icons.Filled.List,
+            iconPainter = painterResource(R.drawable.ic_settings_thermometer),
             iconTint = LabIcon,
             title = stringResource(R.string.app_thermal_title),
             subtitle = stringResource(R.string.settings_app_thermal_sub),
@@ -779,13 +989,74 @@ private fun LabSection(actions: SettingsActions) {
 // --- 通知 ------------------------------------------------------------------
 
 @Composable
-private fun NotificationSection(actions: SettingsActions) {
+private fun NotificationSection(state: SettingsUiState, actions: SettingsActions) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val permission = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { granted -> if (granted) actions.onSetKeepAlive(true) }
+    val hasPermission =
+        androidx.core.content.ContextCompat.checkSelfPermission(
+            context,
+            android.Manifest.permission.POST_NOTIFICATIONS,
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+    SectionLabel(stringResource(R.string.settings_group_keepalive))
     SettingsCard {
         SettingsRow(
             icon = Icons.Filled.Notifications,
             iconTint = NotifyIcon,
-            title = stringResource(R.string.settings_notifications),
-            subtitle = stringResource(R.string.settings_notifications_sub),
+            title = stringResource(R.string.settings_keepalive),
+            subtitle = stringResource(R.string.settings_keepalive_sub),
+            trailing = {
+                Switch(
+                    checked = state.keepAlive,
+                    onCheckedChange = { on ->
+                        if (on && !hasPermission) {
+                            permission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                        } else {
+                            actions.onSetKeepAlive(on)
+                        }
+                    },
+                )
+            },
+        )
+    }
+
+    if (state.keepAlive) {
+        SectionLabel(stringResource(R.string.settings_group_notif_content))
+        SettingsCard {
+            SettingsSwitchRow(
+                title = stringResource(R.string.settings_notif_profile),
+                checked = state.notifShowProfile,
+                onCheckedChange = actions.onSetNotifShowProfile,
+            )
+            SettingsSwitchRow(
+                title = stringResource(R.string.settings_notif_cpu),
+                checked = state.notifShowCpu,
+                onCheckedChange = actions.onSetNotifShowCpu,
+            )
+            SettingsSwitchRow(
+                title = stringResource(R.string.settings_notif_temp),
+                checked = state.notifShowTemp,
+                onCheckedChange = actions.onSetNotifShowTemp,
+            )
+            InsetDivider()
+            SettingsSwitchRow(
+                title = stringResource(R.string.settings_notif_quick),
+                checked = state.notifQuickSwitch,
+                onCheckedChange = actions.onSetNotifQuickSwitch,
+                subtitle = stringResource(R.string.settings_notif_quick_sub),
+            )
+        }
+    }
+
+    SectionLabel(stringResource(R.string.settings_group_notif_system))
+    SettingsCard {
+        SettingsRow(
+            icon = Icons.Filled.Settings,
+            iconTint = NotifyIcon,
+            title = stringResource(R.string.settings_notif_system),
+            subtitle = stringResource(R.string.settings_notif_system_sub),
             onClick = actions.onOpenNotifications,
         )
     }
@@ -797,6 +1068,7 @@ private fun NotificationSection(actions: SettingsActions) {
 private fun MaintenanceSection(state: SettingsUiState, actions: SettingsActions) {
     var logLevelExpanded by remember { mutableStateOf(false) }
 
+    SectionLabel(stringResource(R.string.settings_group_diagnostics))
     SettingsCard {
         SettingsRow(
             icon = Icons.Filled.Search,
@@ -807,7 +1079,7 @@ private fun MaintenanceSection(state: SettingsUiState, actions: SettingsActions)
         )
         InsetDivider()
         SettingsRow(
-            icon = Icons.Filled.List,
+            iconPainter = painterResource(R.drawable.ic_settings_slider),
             iconTint = LogIcon,
             title = stringResource(R.string.settings_log_level),
             subtitle = stringResource(state.logLevel.descriptionRes),
@@ -883,6 +1155,7 @@ private fun BackupSection(state: SettingsUiState, actions: SettingsActions) {
         )
     }
 
+    SectionLabel(stringResource(R.string.settings_group_backup))
     SettingsCard {
         SettingsRow(
             icon = Icons.Filled.Refresh,
@@ -893,7 +1166,7 @@ private fun BackupSection(state: SettingsUiState, actions: SettingsActions) {
         )
         InsetDivider()
         SettingsRow(
-            icon = Icons.Filled.Refresh,
+            icon = Icons.Filled.Share,
             iconTint = BackupIcon,
             title = stringResource(R.string.settings_export_config),
             subtitle = stringResource(R.string.settings_export_config_sub),
@@ -1255,4 +1528,16 @@ private fun OptionRow(
         Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
         if (!detail.isNullOrBlank()) magicau.mtkcontroller.ui.components.FeatureInfo(label, detail)
     }
+}
+
+private fun ScreenOffPolicy.labelRes(): Int = when (this) {
+    ScreenOffPolicy.OFF -> R.string.screen_policy_off
+    ScreenOffPolicy.KEEP -> R.string.screen_policy_keep
+    ScreenOffPolicy.RELEASE -> R.string.screen_policy_release
+}
+
+private fun ScreenOffPolicy.descriptionRes(): Int? = when (this) {
+    ScreenOffPolicy.OFF -> null
+    ScreenOffPolicy.KEEP -> R.string.screen_policy_keep_desc
+    ScreenOffPolicy.RELEASE -> R.string.screen_policy_release_desc
 }

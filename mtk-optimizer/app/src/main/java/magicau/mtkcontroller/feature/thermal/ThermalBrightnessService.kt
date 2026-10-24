@@ -20,9 +20,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import magicau.mtkcontroller.data.AppExpiry
 import magicau.mtkcontroller.MainActivity
 import magicau.mtkcontroller.MtkApp
 
@@ -48,10 +47,16 @@ class ThermalBrightnessService : Service() {
     companion object {
         private const val CHANNEL_ID = "thermal_brightness"
         private const val NOTIFICATION_ID = 1001
-        private const val COOL_POLL_INTERVAL_MS = 15_000L
 
         /** Ignore small deltas so we don't fight the slider. */
         private const val RESTORE_THRESHOLD = 8
+
+        /**
+         * 服务是否真的在跑。**界面开关读它，不读偏好** ——
+         * 进程被杀、系统回收之后偏好还是 true，而守护早就停了。
+         */
+        private val _running = kotlinx.coroutines.flow.MutableStateFlow(false)
+        val running: kotlinx.coroutines.flow.StateFlow<Boolean> = _running
 
         fun start(context: Context) {
             context.startForegroundService(Intent(context, ThermalBrightnessService::class.java))
@@ -78,6 +83,11 @@ class ThermalBrightnessService : Service() {
         super.onCreate()
         createChannel()
         startForeground(NOTIFICATION_ID, buildNotification())
+        _running.value = true
+        if (AppExpiry.isExpired()) {
+            stopSelf()
+            return
+        }
 
         preferredBrightness = readBrightness()
         contentResolver.registerContentObserver(
@@ -86,16 +96,8 @@ class ThermalBrightnessService : Service() {
             observer,
         )
 
-        val container = (application as MtkApp).container
-        scope.launch {
-            // Slow heartbeat: while cool, keep tracking what the user actually wants.
-            while (isActive) {
-                if (!isThermallyHot()) {
-                    readBrightness()?.let { preferredBrightness = it }
-                }
-                delay(COOL_POLL_INTERVAL_MS)
-            }
-        }
+        // **不需要定时轮询。** 用户改亮度会触发上面的 ContentObserver；
+        // 系统压暗也是改亮度，同样会触发。所谓"慢心跳"只是在重复观察者的工作。
     }
 
     private fun handleBrightnessChanged() {
@@ -129,6 +131,7 @@ class ThermalBrightnessService : Service() {
     override fun onDestroy() {
         runCatching { contentResolver.unregisterContentObserver(observer) }
         scope.cancel()
+        _running.value = false
         super.onDestroy()
     }
 

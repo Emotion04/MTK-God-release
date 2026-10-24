@@ -24,11 +24,18 @@ object ThermalPolicySummary {
             null -> out.append("没有 CPU 频率表 —— 温度变化不会压核频率\n")
         }
 
-        policy.cpuLadders.toSortedMap().forEach { (cluster, ladder) ->
-            out.append("  核簇 $cluster：")
-            out.append(ladder.thresholdsC.zip(ladder.freqsMHz)
-                .joinToString("  ") { (c, mhz) -> "${c}°C→${"%.1f".format(mhz / 1000.0)}G" })
-            out.append('\n')
+        // mode=disabled 时文件里仍可能留着表。**不把那些行当生效内容列出来** ——
+        // 08/09 就有一段 46°C 的表，列出来会被读成“这档只有 46°C 才压频”。
+        if (policy.cpuMappingEnabled == false && policy.cpuLadders.isNotEmpty()) {
+            out.append("  文件里仍有一段表，但 mode=disabled，不参与控制\n")
+        }
+        if (policy.cpuMappingEnabled != false) {
+            policy.cpuLadders.toSortedMap().forEach { (cluster, ladder) ->
+                out.append("  核簇 $cluster：")
+                out.append(ladder.thresholdsC.zip(ladder.freqsMHz)
+                    .joinToString("  ") { (c, mhz) -> "${c}°C→${"%.1f".format(mhz / 1000.0)}G" })
+                out.append('\n')
+            }
         }
 
         policy.steadyTargetTJC?.let { target ->

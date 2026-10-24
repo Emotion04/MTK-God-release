@@ -54,13 +54,8 @@ val ThemeMode.labelRes: Int
         ThemeMode.DARK -> R.string.theme_mode_dark
     }
 
-@get:StringRes
-val ThemeMode.descriptionRes: Int
-    get() = when (this) {
-        ThemeMode.SYSTEM -> R.string.theme_mode_system_desc
-        ThemeMode.LIGHT -> R.string.theme_mode_light_desc
-        ThemeMode.DARK -> R.string.theme_mode_dark_desc
-    }
+/** 用户已删除这些冗余说明；返回 null 时不渲染信息按钮。 */
+val ThemeMode.descriptionRes: Int? get() = null
 
 @get:StringRes
 val ApplyMode.labelRes: Int
@@ -69,12 +64,7 @@ val ApplyMode.labelRes: Int
         ApplyMode.POLLING -> R.string.apply_mode_polling
     }
 
-@get:StringRes
-val ApplyMode.descriptionRes: Int
-    get() = when (this) {
-        ApplyMode.SINGLE -> R.string.apply_mode_single_desc
-        ApplyMode.POLLING -> R.string.apply_mode_polling_desc
-    }
+val ApplyMode.descriptionRes: Int? get() = null
 
 @get:StringRes
 val CpuLayoutMode.labelRes: Int
@@ -83,12 +73,7 @@ val CpuLayoutMode.labelRes: Int
         CpuLayoutMode.UNIFIED -> R.string.cpu_layout_unified
     }
 
-@get:StringRes
-val CpuLayoutMode.descriptionRes: Int
-    get() = when (this) {
-        CpuLayoutMode.PER_CLUSTER -> R.string.cpu_layout_per_cluster_desc
-        CpuLayoutMode.UNIFIED -> R.string.cpu_layout_unified_desc
-    }
+val CpuLayoutMode.descriptionRes: Int? get() = null
 
 @get:StringRes
 val RangeControlMode.labelRes: Int
@@ -97,12 +82,7 @@ val RangeControlMode.labelRes: Int
         RangeControlMode.SLIDER -> R.string.range_control_slider
     }
 
-@get:StringRes
-val RangeControlMode.descriptionRes: Int
-    get() = when (this) {
-        RangeControlMode.SEGMENT -> R.string.range_control_segment_desc
-        RangeControlMode.SLIDER -> R.string.range_control_slider_desc
-    }
+val RangeControlMode.descriptionRes: Int? get() = null
 
 @get:StringRes
 val NavBarVisibility.labelRes: Int
@@ -111,11 +91,10 @@ val NavBarVisibility.labelRes: Int
         NavBarVisibility.AUTO_HIDE -> R.string.nav_visibility_auto_hide
     }
 
-@get:StringRes
-val NavBarVisibility.descriptionRes: Int
+val NavBarVisibility.descriptionRes: Int?
     get() = when (this) {
         NavBarVisibility.FIXED -> R.string.nav_visibility_fixed_desc
-        NavBarVisibility.AUTO_HIDE -> R.string.nav_visibility_auto_hide_desc
+        NavBarVisibility.AUTO_HIDE -> null
     }
 
 @get:StringRes

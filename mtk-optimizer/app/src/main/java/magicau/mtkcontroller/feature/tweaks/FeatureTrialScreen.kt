@@ -322,10 +322,12 @@ private fun RestoreConfirmDialog(
                                 )
                             }
                         }
-                        FeatureInfo(
-                            "${item.owned.table} ${item.owned.key}",  // ui-check:ignore 同上
-                            stringResource(item.owned.noteRes),
-                        )
+                        item.owned.noteRes?.let { noteRes ->
+                            FeatureInfo(
+                                "${item.owned.table} ${item.owned.key}",  // ui-check:ignore 同上
+                                stringResource(noteRes),
+                            )
+                        }
                     }
                     if (index < items.lastIndex) InsetDivider()
                 }

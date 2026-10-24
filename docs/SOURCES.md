@@ -9,7 +9,7 @@
 | 应用与场景选路表 | `.local-baselines/policy-select/`、`.local-baselines/pull/powerscntbl.xml`；[静态映射](thermal/configs/app-whitelist.md) |
 | PowerHAL 与资源定义 | [协议](cpu/protocol.md)、[资源表](cpu/resources.md) 各自的一手实现路径 |
 | 历史设备输出 | [evidence/README.md](archive/evidence/README.md) 及 [归档索引](archive/README.md) |
-| 外部资料 | 被忽略的 `reference/` 原件；[分析入口](reference/README.md) |
+| 外部资料 | 第三方原件放在仓库外的 `MTK-reference/`（不进版本库）；[分析入口](reference/README.md) |
 
 代码证明 App 发出什么；配置证明文件写了什么；设备读回证明指定条件下观察到了什么。
 它们共同支撑判断，任何一种都不能自动证明另一机型或场景的效果。

@@ -21,8 +21,15 @@ data class SettingsActions(
     val onSetDefaultTab: (magicau.mtkcontroller.ui.navigation.Destination) -> Unit = {},
     val onSetApplyMode: (magicau.mtkcontroller.domain.model.ApplyMode) -> Unit = {},
     val onSetReapplyInterval: (Long) -> Unit = {},
+    /** 锁屏时释放还是保持 CPU 频率请求。 */
+    val onSetScreenOffPolicy: (magicau.mtkcontroller.domain.model.ScreenOffPolicy) -> Unit = {},
+    /** 隐藏 / 恢复最近任务卡片。 */
+    val onSetHideFromRecents: (Boolean) -> Unit = {},
+    /** 开机后自动按上一次范围下发一次。 */
+    val onSetApplyOnBoot: (Boolean) -> Unit = {},
     val onSetFreqRangeMode: (magicau.mtkcontroller.data.tweaks.TweakCommands.RangeMode) -> Unit = {},
     val onSetFreqHardLimits: (Boolean) -> Unit = {},
+    val onSetFreqThermalCompanion: (Boolean) -> Unit = {},
     val onSetTouchBackend: (magicau.mtkcontroller.data.tweaks.TouchBackend) -> Unit = {},
     val onSetBrightnessBackend: (magicau.mtkcontroller.data.tweaks.BrightnessBackend) -> Unit = {},
     /** 频率配合项（调度器搭配），跟着区间一起下发。 */
@@ -36,6 +43,8 @@ data class SettingsActions(
     val onSetBatteryWhitelist: (Boolean) -> Unit = {},
     /** 打开系统自带的电池优化设置页。 */
     val onOpenBatterySettings: () -> Unit = {},
+    /** 从系统页返回后重读白名单，避免显示旧状态。 */
+    val onRefreshBatteryWhitelist: () -> Unit = {},
 
     // --- 外观与行为 ---
     val onSetThemeMode: (magicau.mtkcontroller.domain.model.ThemeMode) -> Unit = {},
@@ -53,6 +62,8 @@ data class SettingsActions(
     val onSetCustomConcentration: (Int) -> Unit = {},
     /** 显示与交互的各项开关（触控、插帧、旋转建议、高温降亮度）。 */
     val onOpenDisplayTweaks: () -> Unit = {},
+    /** 厂商性能档（BOOST / BOOST+ / Monster）。切换会交出 CPU 控制。 */
+    val onOpenPerformanceMode: () -> Unit = {},
 
     // --- 实验室 ---
     val onOpenLab: () -> Unit = {},
@@ -63,6 +74,9 @@ data class SettingsActions(
 
     // --- 通知 ---
     val onOpenNotifications: () -> Unit = {},
+    val onOpenChangelog: () -> Unit = {},
+    /** 关于页「检查更新」：结果由 UpdateCenter 的弹窗呈现。 */
+    val onCheckUpdate: () -> Unit = {},
 
     // --- 维护与诊断 ---
     val onOpenDiagnostics: () -> Unit = {},
@@ -82,4 +96,12 @@ data class SettingsActions(
 
     // --- 授权 ---
     val onRequestAuth: () -> Unit = {},
+    /** 删除本软件写过的系统设置，回到 ROM 默认值。 */
+    val onResetAllToDefaults: () -> Unit = {},
+    // --- 通知 ---
+    val onSetKeepAlive: (Boolean) -> Unit = {},
+    val onSetNotifShowProfile: (Boolean) -> Unit = {},
+    val onSetNotifShowCpu: (Boolean) -> Unit = {},
+    val onSetNotifShowTemp: (Boolean) -> Unit = {},
+    val onSetNotifQuickSwitch: (Boolean) -> Unit = {},
 )

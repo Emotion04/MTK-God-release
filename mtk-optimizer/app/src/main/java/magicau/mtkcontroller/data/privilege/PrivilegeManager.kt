@@ -146,6 +146,7 @@ object PrivilegeManager {
             uid = uid,
             shizukuVersion = version,
             message = message?.let(::resolve),
+            serviceReady = remote != null,
         )
     }
 

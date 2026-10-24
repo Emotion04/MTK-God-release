@@ -47,7 +47,16 @@ class LabController(
     private val lock: PerfLockController,
 ) {
 
-    private companion object {
+    companion object {
+        /**
+         * 盲测开关：**只由适配测试会话打开**，正常使用永远为 false。
+         *
+         * 打开后，判据节点读不到时仍允许做一次 5 秒的 CPU 频率下发，结果记为 UNKNOWN，
+         * 由用户体感或报告判断。只允许 CPU 频率资源族，避免写到射频/缓存等无关资源。
+         */
+        @Volatile
+        var blindWritesEnabled: Boolean = false
+
         const val TAG = "Lab"
 
         /**
@@ -58,6 +67,13 @@ class LabController(
          * missing therefore costs at most this much.
          */
         const val TEST_DURATION_MS = 20_000
+
+        /** 盲测的强制期限：比常规实验更短，读不到结果时不能留太久。 */
+        const val BLIND_DURATION_MS = 5_000
+
+        /** CPU 频率资源族；盲测只允许碰这一族。 */
+        const val CPU_FAMILY_START = 0x00400000
+        const val CPU_FAMILY_END = 0x0040FFFF
 
         /** Non-private so the raw test panel can share the settle timing. */
 
@@ -194,7 +210,9 @@ class LabController(
         // 里层文件报 ENOENT，父目录报 EACCES。按 `Sysfs.absenceIsProven` 那套判定，
         // 这属于"读不到"而不是"不存在"，所以不该判 UNSUPPORTED；
         // 但"读不到"和"没有它"对用户是同一件事：**看不见，就判不了**。
-        if (before == null) {
+        val blind = before == null && blindWritesEnabled &&
+            feature.baseId in CPU_FAMILY_START..CPU_FAMILY_END
+        if (before == null && !blind) {
             val verdict = Verdict(
                 state = State.UNKNOWN.name,
                 detail = context.getString(R.string.lab_verdict_unreadable_no_write),
@@ -213,7 +231,7 @@ class LabController(
             }
         }
 
-        val duration = if (hold) 0 else durationMs
+        val duration = if (blind) BLIND_DURATION_MS else if (hold) 0 else durationMs
         AppLog.i(
             TAG,
             "[${feature.key}] 测试下发 " + pairs.joinToString(", ") { "${it.first}=${it.second}" } +
@@ -243,6 +261,17 @@ class LabController(
         if (!outcome.success) {
             val verdict = Verdict(State.NO_EFFECT.name, context.getString(R.string.lab_verdict_rejected, AppLog.text(outcome.message)))
             AppLog.w(TAG, "[${feature.key}] ${verdict.detail}")
+            record(feature.key, verdict)
+            return verdict
+        }
+
+        if (blind) {
+            val verdict = Verdict(
+                state = State.UNKNOWN.name,
+                detail = context.getString(R.string.lab_verdict_blind_sent, BLIND_DURATION_MS / 1000),
+                atMs = System.currentTimeMillis(),
+            )
+            AppLog.w(TAG, "[${feature.key}] 盲测 ${verdict.detail}")
             record(feature.key, verdict)
             return verdict
         }
@@ -307,12 +336,16 @@ class LabController(
         val before = readAll(readNodes)
         // 同 [apply]：读不到判据就别写。逐 ID 测试是给排错用的，写一个自己看不见
         // 结果的资源号，只会让"读回失败"多一条记录。
-        if (before == null) {
+        val blind = before == null && blindWritesEnabled && pairs.all { pair ->
+            runCatching { pair.first.removePrefix("0x").toInt(16) in CPU_FAMILY_START..CPU_FAMILY_END }
+                .getOrDefault(false)
+        }
+        if (before == null && !blind) {
             val verdict = Verdict(State.UNKNOWN.name, context.getString(R.string.lab_verdict_unreadable_no_write))
             AppLog.w(TAG, "[手动] ${verdict.detail}")
             return verdict
         }
-        val duration = if (hold) 0 else TEST_DURATION_MS
+        val duration = if (blind) BLIND_DURATION_MS else if (hold) 0 else TEST_DURATION_MS
         AppLog.i(
             TAG,
             "[手动] 下发 " + pairs.joinToString(", ") { "${it.first}=${it.second}" } +
@@ -323,6 +356,16 @@ class LabController(
         if (!outcome.success) {
             val verdict = Verdict(State.NO_EFFECT.name, context.getString(R.string.lab_verdict_rejected, AppLog.text(outcome.message)))
             AppLog.w(TAG, "[手动] ${verdict.detail}")
+            return verdict
+        }
+
+        if (blind) {
+            val verdict = Verdict(
+                State.UNKNOWN.name,
+                context.getString(R.string.lab_verdict_blind_sent, BLIND_DURATION_MS / 1000),
+                System.currentTimeMillis(),
+            )
+            AppLog.w(TAG, "[手动] 盲测 ${verdict.detail}")
             return verdict
         }
 

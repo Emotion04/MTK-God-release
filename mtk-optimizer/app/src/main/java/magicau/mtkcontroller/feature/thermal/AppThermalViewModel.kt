@@ -67,6 +67,13 @@ class AppThermalViewModel(private val container: magicau.mtkcontroller.di.AppCon
                 message = if (indices.isEmpty()) Failure(Message(R.string.app_thermal_no_indices)) else null,
             )
         }
+        // 开关读服务的真实存活状态，不读"上次点了什么"。
+        // 服务自己会因为"没有规则"而 stopSelf，以前开关还停在开。
+        viewModelScope.launch {
+            AppThermalService.running.collect { running ->
+                _state.value = _state.value.copy(running = running)
+            }
+        }
         viewModelScope.launch {
             store.rules.collect { rules ->
                 _state.value = _state.value.copy(rules = rules)
@@ -84,7 +91,7 @@ class AppThermalViewModel(private val container: magicau.mtkcontroller.di.AppCon
         } else {
             AppThermalService.stop(container.context)
         }
-        _state.value = _state.value.copy(running = running)
+        // 不在这里写 running：服务真的起来/停掉之后由 [AppThermalService.running] 反映。
     }
 
     private fun privilegeOk(): Boolean =

@@ -73,7 +73,7 @@ object Motion {
  * 那是"完全不要动画"，这里是"快一点"。两者不冲突：系统关了动画时，
  * 这一档设成什么都不影响（`MotionDurationScale` 会把时长归零）。
  */
-enum class MotionSpeed(val labelRes: Int, val descriptionRes: Int, val scale: Float) {
+enum class MotionSpeed(val labelRes: Int, val descriptionRes: Int?, val scale: Float) {
     /**
      * 不额外缩放。**这是默认档，也是唯一"我们什么都不做"的档。**
      *
@@ -81,9 +81,9 @@ enum class MotionSpeed(val labelRes: Int, val descriptionRes: Int, val scale: Fl
      * 系统设成 0.5× 时动画就已经是 0.5×。所以这一档的含义是"我们不再叠加"，
      * 而不是"固定 1 倍速" —— 叫它"标准"会让人以为绕过了系统设置。
      */
-    SYSTEM(R.string.motion_system, R.string.motion_system_desc, 1.0f),
-    FAST(R.string.motion_fast, R.string.motion_fast_desc, 0.6f),
-    RELAXED(R.string.motion_relaxed, R.string.motion_relaxed_desc, 1.5f),
+    SYSTEM(R.string.motion_system, null, 1.0f),
+    FAST(R.string.motion_fast, null, 0.6f),
+    RELAXED(R.string.motion_relaxed, null, 1.5f),
     ;
 
     companion object {

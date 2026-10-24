@@ -14,7 +14,7 @@ data class OwnedKey(
     val table: String,
     val key: String,
     val ownerRes: Int,
-    val noteRes: Int,
+    val noteRes: Int?,
 )
 
 /**
@@ -96,7 +96,7 @@ object OwnedKeys {
      * 并把规矩说清楚：**新增任何写系统键的功能，必须让键出现在 [all] 里** ——
      * 要么走 VivoFeature / TouchItems，要么加到这里。
      */
-    private fun directKeys(): List<OwnedKey> = listOf(
+    fun directKeys(): List<OwnedKey> = listOf(
         OwnedKey("secure", "show_rotation_suggestions",
             R.string.tweak_rotation_suggestion, R.string.tweak_rotation_suggestion_note),
         OwnedKey("system", "accelerometer_rotation",
@@ -105,6 +105,9 @@ object OwnedKeys {
             R.string.tweak_frame_interpolation, R.string.tweak_frame_interpolation_note),
         OwnedKey("system", TweakCommands.KEY_INTERP_SR,
             R.string.tweak_frame_interpolation_sr, R.string.tweak_frame_interpolation_sr_note),
+        // 重度游戏 boost 会往这个列表里加/删包名；恢复默认时应该整条清掉。
+        OwnedKey("global", "game_driver_opt_in_apps",
+            R.string.tweaks_game_boost_title, R.string.game_boost_info),
     )
 
     /** 全部登记键。顺序就是备份文件里的顺序。 */

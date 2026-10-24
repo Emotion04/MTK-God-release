@@ -26,7 +26,7 @@
 源码与 APK 恢复副本见 [单值基线](../../cpu/known-good.md)。
 
 完整 ROM 配置原件在本地忽略目录
-`reference/rom/PD2430D_A_16.1.12.0.W10/rom-configs-1789740529639/`；
+`../MTK-reference/rom/PD2430D_A_16.1.12.0.W10/rom-configs-1789740529639/`；
 [配置分析](../cpu/rom/configs-2026-09-18.md) 记录哈希。
 
 ## 仅剩分析的缺失原件

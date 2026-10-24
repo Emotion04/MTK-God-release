@@ -22,6 +22,7 @@ import kotlinx.coroutines.withContext
 import magicau.mtkcontroller.data.Failure
 import magicau.mtkcontroller.data.Message
 import magicau.mtkcontroller.data.cpu.CpuControl
+import magicau.mtkcontroller.data.cpu.CpuVerification
 import magicau.mtkcontroller.data.cpu.CpuFreqNodes
 import magicau.mtkcontroller.data.cpu.CpuLoadRunner
 import magicau.mtkcontroller.data.thermal.ThermalPolicyController
@@ -31,6 +32,7 @@ import magicau.mtkcontroller.data.privilege.PrivilegeMode
 import magicau.mtkcontroller.di.AppContainer
 import magicau.mtkcontroller.domain.model.ClusterSetting
 import magicau.mtkcontroller.domain.model.CpuCluster
+import magicau.mtkcontroller.domain.model.OutcomeKind
 import magicau.mtkcontroller.domain.model.Profile
 import java.util.UUID
 import magicau.mtkcontroller.data.thermal.ThermalPolicyReader
@@ -39,6 +41,7 @@ import magicau.mtkcontroller.data.thermal.ThermalPolicySummary
 import magicau.mtkcontroller.data.thermal.ThermalPolicy
 import magicau.mtkcontroller.domain.model.CpuLayoutMode
 import magicau.mtkcontroller.domain.model.RangeControlMode
+
 
 /** One cluster's editable state. Indices point into [CpuCluster.availableFreqs]. */
 data class ClusterEdit(
@@ -91,8 +94,10 @@ data class CpuUiState(
      * null 表示编辑区就是默认状态。
      */
     val editorProfileId: String? = null,
-    /** 本次操作的结果。摘要与原始错误分两层，界面用 `FailureNote` 展示。 */
+    /** 本次操作的结果。摘要与原始错误分两层，界面用 `OutcomeNote` 展示。 */
     val message: Failure? = null,
+    /** 结果的性质：决定图标和标题颜色。 */
+    val messageKind: OutcomeKind = OutcomeKind.NONE,
     val probing: Boolean = false,
     val probeReport: String = "",
     val probeSaveNote: String = "",
@@ -104,7 +109,6 @@ data class CpuUiState(
     /** 负载已运行秒数。 */
     val loadSeconds: Int = 0,
     /** 这次负载占了哪些核。 */
-    val loadCores: List<Int> = emptyList(),
     /**
      * 负载期间各簇的实时频率，`policy to MHz`。
      *
@@ -650,25 +654,49 @@ class CpuViewModel(private val container: AppContainer) : ViewModel() {
                     governor = it.governor,
                 )
             }
-            // CpuControl owns the whole release-then-acquire sequence, the
-            // handle bookkeeping and the governor side of it.
-            val outcome = container.cpuControl.apply(edits.map { it.cluster }, settings)
-            if (outcome.success) {
-                container.syncCpuReapply()
-                // 温控档位跟着「应用」一起落地 —— 它和频率区间共同决定实际能跑多高，
-                // 只应用一半会让用户看到与预期不符的结果。选档本身不下发。
-                // null = 用户没选过档位：保持现场不动，不替用户关掉。
-                // （原先 applyIndex(null) 会走 disable，与它自己上面那句注释正相反。）
-                _state.value.thermalIndexEdit?.let { index ->
-                    val thermal = ThermalPolicyController.applyUserIndex(index)
-                    if (!thermal.success) {
-                        AppLog.w("Cpu", "频率已下发，但温控档位切换失败")
+            // 温控档位先落地，再下发频率。
+            //
+            // **顺序不能反。** 切温控策略会让平台重推自己的一套限制；如果频率请求先发，
+            // 随后的切档可能把它顶掉（2026-10-22 真机：CPU 请求 17:48:30 下发，
+            // 17:48:33 切到 01 后读回只剩 1.2/0.6GHz）。把频率放在最后，
+            // 至少我们发出的是切换之后的请求。
+            // 温控失败不阻断频率：两者独立，用户最需要的是频率控制。
+            val manual = _state.value.thermalIndexEdit
+            val companion = if (manual == null) {
+                runCatching { container.settingsRepository.freqThermalCompanion.first() }
+                    .getOrDefault(true)
+            } else false
+            when {
+                // 用户手动选过档位：以手动为准。
+                manual != null -> {
+                    val thermal = ThermalPolicyController.applyUserIndex(manual)
+                    if (!thermal.success) AppLog.w("Cpu", "温控档位切换失败，继续下发频率")
+                }
+                // 没选过 + 设置里开着：一并切到最宽松的那一档。
+                companion -> {
+                    val loose = magicau.mtkcontroller.data.lab.ThermalPolicyCatalog.looseIndex()
+                    if (loose == null) {
+                        AppLog.w("Cpu", "没有读到可用的温控档位，未附带放开")
+                    } else {
+                        val thermal = ThermalPolicyController.applyUserIndex(loose)
+                        if (!thermal.success) AppLog.w("Cpu", "附带放开温控失败，继续下发频率")
                     }
                 }
             }
+
+            // CpuControl owns the whole release-then-acquire sequence, the
+            // handle bookkeeping and the governor side of it.
+            val outcome = container.cpuControl.apply(edits.map { it.cluster }, settings)
+            if (outcome.success) container.syncCpuReapply()
             _state.value = _state.value.copy(
                 busy = false,
                 message = Failure(outcome.message, outcome.detail),
+                messageKind = when {
+                    !outcome.success -> OutcomeKind.ERROR
+                    container.cpuControl.status.value.verification == CpuVerification.VERIFIED ->
+                        OutcomeKind.SUCCESS
+                    else -> OutcomeKind.WARNING
+                },
             )
         }
     }
@@ -710,7 +738,6 @@ class CpuViewModel(private val container: AppContainer) : ViewModel() {
                 }
                 _state.value = _state.value.copy(
                     loadSeconds = CpuLoadRunner.state.value.seconds,
-                    loadCores = CpuLoadRunner.state.value.cores,
                     loadFreqs = freqs,
                 )
                 delay(1000)
@@ -740,6 +767,7 @@ class CpuViewModel(private val container: AppContainer) : ViewModel() {
             _state.value = _state.value.copy(
                 busy = false,
                 message = Failure(outcome.message, outcome.detail),
+                messageKind = if (outcome.success) OutcomeKind.SUCCESS else OutcomeKind.ERROR,
             )
         }
     }
@@ -830,7 +858,9 @@ class CpuViewModel(private val container: AppContainer) : ViewModel() {
             _state.value = _state.value.copy(edits = full)
             val clusters = full.map { it.cluster }
                 .ifEmpty { withContext(Dispatchers.IO) { container.cpuScanner.scan(deep = false) } }
-            val outcome = container.cpuControl.release(clusters)
+            // 用户选了“默认”：不是锁屏自动释放，而是明确不再需要控制。
+            // 用 disable，避免亮屏联动把刚才撤掉的范围又放回来。
+            val outcome = container.cpuControl.disable(clusters)
             CpuReapplyService.stop(container.context)
             ThermalPolicyController.releaseAll()
             container.profileRepository.setActiveProfile(null)
@@ -862,15 +892,15 @@ class CpuViewModel(private val container: AppContainer) : ViewModel() {
             _state.value = _state.value.copy(busy = true, message = null)
             val clusters = _state.value.edits.map { it.cluster }
                 .ifEmpty { withContext(Dispatchers.IO) { container.cpuScanner.scan() } }
+            // 先切档位、再下发频率：切档会重推平台限制，频率请求必须最后发。
+            // 档位失败不阻断频率；null = 这个方案不管档位，保持现场不动。
+            // applyIndex 而不是 enable：enable 在已有句柄时是 alreadyOn，换方案时切不过去。
+            profile.thermalIndex?.let { index ->
+                val thermal = ThermalPolicyController.applyUserIndex(index)
+                if (!thermal.success) AppLog.w("Cpu", "方案温控档位切换失败，继续下发频率")
+            }
             val outcome = container.cpuControl.apply(clusters, profile.clusters)
             if (outcome.success) {
-                // 档位与频率区间一起生效：两者共同决定实际能跑多高，只应用一半
-                // 会让用户看到与方案描述不符的结果。null 表示这个方案不管档位，
-                // 保持现场不动 —— 而不是替用户关掉。
-                // applyIndex 而不是 enable：enable 在已有句柄时是 alreadyOn，
-                // 换方案时档位切不过去。
-                // null = 这个方案不管档位，保持现场不动 —— 不是替用户关掉。
-                profile.thermalIndex?.let { ThermalPolicyController.applyUserIndex(it) }
                 container.profileRepository.setActiveProfile(profile.id)
                 container.syncCpuReapply()
             }

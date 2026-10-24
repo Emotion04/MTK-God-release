@@ -33,6 +33,8 @@ class FeatureTrialViewModel(container: AppContainer) : ViewModel() {
         val report: String = "",
         /** 待导出的备份文本。非空 → 界面弹保存框。 */
         val pendingBackupExport: String = "",
+    /** 这份待导出备份实际包含的键数（读不到的不算）。 */
+    val pendingBackupCount: Int = 0,
         /** 导入的备份待恢复清单。空 = 没有待恢复的请求。 */
         val restoreItems: List<StateBackup.RestoreItem> = emptyList(),
         /** 导入来源的摘要，显示在确认表顶部。 */
@@ -141,13 +143,29 @@ class FeatureTrialViewModel(container: AppContainer) : ViewModel() {
         if (_state.value.busy) return
         viewModelScope.launch {
             _state.value = _state.value.copy(busy = true, message = containerContext.getString(R.string.tweaks_trial_msg_reading_config))
-            val entries = StateBackup.capture()
+            val capture = StateBackup.capture()
+            if (capture.entries.isEmpty()) {
+                // 一个键都读不到时导出没有意义，而且恢复会误删 —— 直接拒绝。
+                _state.value = _state.value.copy(
+                    busy = false,
+                    message = containerContext.getString(R.string.tweaks_trial_msg_read_failed),
+                )
+                return@launch
+            }
             val text = StateBackup.encode(
-                entries = entries,
+                entries = capture.entries,
                 labelOf = { res -> containerContext.getString(res) },
                 uptimeMinutes = SystemClock.elapsedRealtime() / 60_000,
             )
-            _state.value = _state.value.copy(busy = false, pendingBackupExport = text, message = "")
+            // 读不到的键没写进备份，要告诉用户这份备份不完整，别当成全量。
+            _state.value = _state.value.copy(
+                busy = false,
+                pendingBackupExport = text,
+                pendingBackupCount = capture.entries.size,
+                message = if (capture.unreadable > 0) {
+                    containerContext.getString(R.string.tweaks_trial_msg_backup_partial, capture.unreadable)
+                } else "",
+            )
             _pendingBackup.value = text
         }
     }
@@ -163,7 +181,7 @@ class FeatureTrialViewModel(container: AppContainer) : ViewModel() {
             containerContext.contentResolver.openOutputStream(uri, "wt")?.use { it.write(text.toByteArray()) }
                 ?: error(containerContext.getString(R.string.tweaks_trial_err_write_failed))
             _state.value = _state.value.copy(pendingBackupExport = "",
-                message = containerContext.getString(R.string.tweaks_trial_msg_exported, OwnedKeys.all.size))
+                message = containerContext.getString(R.string.tweaks_trial_msg_exported, _state.value.pendingBackupCount))
         }
     }
 

@@ -66,6 +66,113 @@ object ThermalPolicyCatalog {
         PREFERRED.firstOrNull { it in available } ?: available.firstOrNull() ?: 0
 
     /**
+     * 设备上**最接近“放开 CPU 温控”**的那一档，没有合适的不返回。
+     *
+     * 不写死编号，也不看“首档频率”或目标温度 —— 真机配置里这两者都会骗人：
+     * `thermal_policy_07` 首档 3.3 GHz，但 42°C 时只剩 2.0 GHz；
+     * `00` 首档只有 2.6 GHz，42°C 却有 2.2 GHz。
+     *
+     * 判据直接取自 CPU 频率表：**在 40–50°C 区间取每个整数温度的允许频率，求平均**。
+     * 平均值越高，这一档在常用温度区间里放得越松。完全没有 CPU 频率表段的
+     * 排第一，有段但 `mode=disabled` 的排第二 —— 两者都不压频，但后者的段还在，
+     * 固件是否始终遵守 disabled 没有运行时证据。
+     *
+     * 局限：不同策略可能用不同传感器（`ap_ntc` / `tz_shell` / `tz_game_shell`），
+     * 它们的摄氏度不是同一个物理量；这里只做相对比较，不据此断言绝对温度。
+     */
+    suspend fun looseIndex(): Int? {
+        val indices = magicau.mtkcontroller.data.thermal.ThermalPolicyReader.availableIndices()
+        if (indices.isEmpty()) return null
+        val policies = indices.mapNotNull { index ->
+            runCatching { magicau.mtkcontroller.data.thermal.ThermalPolicyReader.read(index) }.getOrNull()
+        }.filter { it.decodeError == null }
+        return pickLoose(policies)?.index ?: indices.firstOrNull()
+    }
+
+    /**
+     * 从已解开的策略里挑最宽松的一档。
+     *
+     * 比较是**分层的**，不是一个加权分数：
+     *
+     * 1. **完全没有** `[mtk-cpu-table-mapping]` 段的优先；
+     * 2. 有段但 `mode=disabled`、或表为空 —— 温度不压 CPU，排第二；
+     * 3. 有生效频率表的，比 40–50°C 的平均允许频率；
+     * 4. 都没有生效表时，`isolate` 关闭的优先 —— 核心隔离也是限制手段；
+     * 5. 再看目标结温、皮肤阈值，越高越宽松；
+     * 6. 仍然并列就选编号小的。
+     *
+     * **为什么把“没有段”和“段被关闭”分开**：真机上 01 没有这一段，
+     * 08/09 有段但 `mode=disabled`。两者温度都不压频，但关闭只是配置值，
+     * 固件是否遵守没有运行时证据；而 01 的段根本不存在，更接近“没有这张表”。
+     * 2026-10-22 起优先 01，避免用户看到 08 里那段 46°C 的表就以为它在生效。
+     *
+     * **不写死编号**：哪些档没有表、哪一档 isolate 关闭，都随 ROM 变。
+     */
+    fun pickLoose(policies: List<magicau.mtkcontroller.data.thermal.ThermalPolicy>):
+        magicau.mtkcontroller.data.thermal.ThermalPolicy? =
+        policies.maxWithOrNull { a, b -> compareRanks(rank(a), rank(b)) }
+
+    /** 从低到高比较：越"宽松"的维度排在越后面越大。 */
+    private fun compareRanks(a: List<Int>, b: List<Int>): Int {
+        for (i in a.indices) {
+            val c = a[i].compareTo(b[i])
+            if (c != 0) return c
+        }
+        return 0
+    }
+
+    private fun rank(p: magicau.mtkcontroller.data.thermal.ThermalPolicy): List<Int> {
+        val hasLadder = p.cpuLadders.values.any { !it.isEmpty }
+        // 2 = 连段都没有；1 = 有段但关闭/空；0 = 有生效表。
+        val tableRank = when {
+            p.cpuMappingEnabled == null && !hasLadder -> 2
+            p.cpuMappingEnabled == false || !hasLadder -> 1
+            else -> 0
+        }
+        val noActiveTable = tableRank > 0
+        val avg = if (noActiveTable) Int.MAX_VALUE else (averageAllowedFreq(p) ?: Int.MIN_VALUE)
+        return listOf(
+            tableRank,
+            avg,
+            // isolate 关闭 = 少一层核心限制。
+            if (p.isolateEnabled == false) 1 else 0,
+            p.maxTargetTJC ?: 0,
+            p.minTargetTJC ?: 0,
+            p.skinThresholdsC.maxOrNull() ?: 0,
+            // 取最大时，-index 越大代表编号越小 → 并列时优先小编号。
+            -p.index,
+        )
+    }
+
+    /**
+     * 40–50°C 每 1°C 的允许频率（kHz）平均值；null = 这一档根本不压 CPU 频率。
+     *
+     * 拆出来是为了能单测，也为了让判据可读：它就是一个物理量，不是打分。
+     */
+    fun averageAllowedFreq(policy: magicau.mtkcontroller.data.thermal.ThermalPolicy): Int? {
+        if (policy.cpuMappingEnabled == false) return null
+        // 取硬件最高频率的那一簇（性能核）。没有频率表的策略同样视为不压 CPU。
+        val ladder = policy.cpuLadders.values
+            .filter { !it.isEmpty }
+            .maxByOrNull { it.freqsMHz.maxOrNull() ?: Int.MIN_VALUE }
+            ?: return null
+        val pairs = ladder.thresholdsC.zip(ladder.freqsMHz).sortedBy { it.first }
+        if (pairs.isEmpty()) return null
+        var sum = 0L
+        var n = 0
+        for (tempC in 40..50) {
+            val t = tempC * 1000
+            var allowed = pairs.first().second
+            for ((threshold, freq) in pairs) {
+                if (threshold <= t) allowed = freq
+            }
+            sum += allowed
+            n++
+        }
+        return (sum / n).toInt()
+    }
+
+    /**
      * 读当前生效的皮肤节流阈值，例如 "41/44/46/48/60/80 °C"。
      *
      * 来源：`dumpsys thermalservice` 的 `Temperature static thresholds from HAL:`

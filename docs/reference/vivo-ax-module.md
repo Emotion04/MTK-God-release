@@ -1,12 +1,12 @@
 # vivo AxManager 无 Root 优化模块 — 实现记录
 
-> - 分析对象：`reference/sources/2026-09-ax-module/`（第三方文件，git-ignored）
+> - 分析对象：`../MTK-reference/sources/2026-09-ax-module/`（第三方文件，git-ignored）
 > - 分析日期：2026-09-18
 > - 材料来源：模块自带 README、全部 shell 源码、WebUI 源码、5 个 jar 的 DEX 反汇编
 
 ---
 
-> 本文分析固定版本的第三方源码，不描述本项目当前实现。目标 ROM 的服务、权限和读回范围见 [设备事实](../device/facts.md)，接入约束见 [工程架构](../dev/architecture.md)。
+> 本文分析固定版本的第三方源码，不描述本项目当前实现。目标 ROM 的服务、权限和读回范围见 [设备事实](../../docs/device/facts.md)，接入约束见 [工程架构](../../docs/dev/architecture.md)。
 
 ## 0. 证据等级
 
@@ -28,7 +28,7 @@
 
 来源模块面向 vivo 设备；本项目目标机也使用 vivo ROM，但不保证接口与效果相同。
 
-我们的目标机是 **vivo V2430A / MT6989（Dimensity 9300+）** —— 见 [device-vivo-v2430a.md](../device/facts.md)。它**既是 vivo 的 ROM，也是 MediaTek 的 SoC**。这些 vivo 服务是值得检查的候选；是否存在、接口是否相容，必须以目标手机当前 ROM 的探测为准，不能从品牌和 SoC 推断。
+我们的目标机是 **vivo V2430A / MT6989（Dimensity 9300+）** —— 见 [device-vivo-v2430a.md](../../docs/device/facts.md)。它**既是 vivo 的 ROM，也是 MediaTek 的 SoC**。这些 vivo 服务是值得检查的候选；是否存在、接口是否相容，必须以目标手机当前 ROM 的探测为准，不能从品牌和 SoC 推断。
 
 它不是"另一套技术"，是**同一台设备上另一半控制面**：
 
@@ -514,7 +514,7 @@ green 的条目**要求 guard 存活** —— 比如 `active_mode_target` 要 pe
 ## 4. 应用到本项目的边界
 
 这里只保存来源实现的调用与恢复方法。当前功能、缺陷和工作计划分别由源码、主题事实与
-[待办](../dev/todo.md) 维护。
+[待办](../../docs/dev/todo.md) 维护。
 
 - vivo 的 30 秒租约属于 `VivoPerfManager`；不能据此改变 MTK duration=0 请求。
 - 系统设置后端的命令选择放在 `SettingChannel`，统一身份、读回和恢复。
@@ -573,11 +573,11 @@ green 的条目**要求 guard 存活** —— 比如 `active_mode_target` 要 pe
 
 ```bash
 # 模块本体
-reference/sources/2026-09-ax-module/
+../MTK-reference/sources/2026-09-ax-module/
 
 # 5 个 jar 是 DEX-only，没有 .class。用 JDK 的 javap 看不到，
 # 需要直接解析 classes.dex（每个 jar 里就是 classes.dex）
-unzip -l reference/sources/2026-09-ax-module/lib/vivo_binder_tool.jar
+unzip -l ../MTK-reference/sources/2026-09-ax-module/lib/vivo_binder_tool.jar
 ```
 
 解析工具按本地环境选择；这份来源材料不维护机器上的 JDK 安装路径。

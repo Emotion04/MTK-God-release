@@ -1,0 +1,40 @@
+# 复制到 .github/workflows/publish-qiniu.yml 即可启用。
+# 与 Cloudflare 模板二选一，或同时启用做双活。
+#
+# 需要的 Secrets：
+#   QINIU_ACCESS_KEY / QINIU_SECRET_KEY / QINIU_BUCKET
+#   QINIU_PREFIX（可选，形如 mtk-god，多 App 共用一个空间）
+#   QINIU_URL（可选，形如 https://cdn.example.com/mtk-god/changelog.json，用于刷新 CDN）
+name: Publish changelog to Qiniu
+on:
+  push:
+    paths: ["CHANGELOG.md"]
+  workflow_dispatch: {}
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Generate changelog
+        run: python tools/make_changelog.py --from-changelog CHANGELOG.md --out release/public/changelog.json
+      - name: Install Qiniu SDK
+        run: pip install qiniu
+      - name: Upload to Kodo
+        run: python tools/upload_qiniu.py release/public/changelog.json changelog.json
+        env:
+          QINIU_ACCESS_KEY: ${{ secrets.QINIU_ACCESS_KEY }}
+          QINIU_SECRET_KEY: ${{ secrets.QINIU_SECRET_KEY }}
+          QINIU_BUCKET: ${{ secrets.QINIU_BUCKET }}
+          QINIU_PREFIX: ${{ secrets.QINIU_PREFIX }}
+          QINIU_URL: ${{ secrets.QINIU_URL }}
+      - name: Upload update manifest (if present)
+        if: ${{ hashFiles('release/public/update.json') != '' }}
+        run: python tools/upload_qiniu.py release/public/update.json update.json
+        env:
+          QINIU_ACCESS_KEY: ${{ secrets.QINIU_ACCESS_KEY }}
+          QINIU_SECRET_KEY: ${{ secrets.QINIU_SECRET_KEY }}
+          QINIU_BUCKET: ${{ secrets.QINIU_BUCKET }}
+          QINIU_PREFIX: ${{ secrets.QINIU_PREFIX }}
+          QINIU_URL: ${{ secrets.QINIU_URL }}

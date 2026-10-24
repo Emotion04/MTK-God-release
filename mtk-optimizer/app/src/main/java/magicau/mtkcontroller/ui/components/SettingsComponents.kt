@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import magicau.mtkcontroller.R
 import magicau.mtkcontroller.ui.theme.adaptiveAccent
 import magicau.mtkcontroller.ui.theme.isDarkScheme
 import androidx.compose.material3.Switch
@@ -167,7 +168,37 @@ fun SectionLabel(text: String, modifier: Modifier = Modifier) {
 }
 
 /**
+ * `SettingsCard` 里的无图标开关行：自带 16dp 水平内边距。
+ *
+ * 新增设置项时优先用它或 [SettingsRow] + `trailing = { Switch(...) }`，
+ * 不要把 [ToggleRow] 直接放进 `SettingsCard` —— 那个组件没有内边距，
+ * 只给已经补过 16dp 的 `ToolCard` 一类容器用。
+ */
+@Composable
+fun SettingsSwitchRow(
+    title: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    subtitle: String? = null,
+    enabled: Boolean = true,
+) {
+    ToggleRow(
+        title = title,
+        checked = checked,
+        onCheckedChange = onCheckedChange,
+        modifier = modifier.padding(horizontal = 16.dp),
+        enabled = enabled,
+        subtitle = subtitle,
+    )
+}
+
+/**
  * 带开关的设置行。**全应用只有这一个实现。**
+ *
+ * **不自带水平内边距。** 它只给已经有 16dp 内边距的容器用（`ToolCard`、首页卡片）；
+ * `SettingsCard` 里的行请用 [SettingsRow] + `trailing = { Switch(...) }` ——
+ * `SettingsRow` 自己带 16dp，混用会让新行贴到卡片边缘。
  *
  * 之前 `ToggleRow` 在首页和调校页各写了一份，签名和布局都不同 —— 同一个名字
  * 两种长相。合并成一个：所有槽位可选，调用方只填用得上的。
@@ -195,6 +226,11 @@ fun ToggleRow(
     chipText: String? = null,
     chipTone: StatusTone = StatusTone.Neutral,
     info: String? = null,
+    /**
+     * 读不到当前状态。只在开关前放一个低透明度问号，**不写文字** ——
+     * 「未知」是一种状态标记，不需要一句解释。
+     */
+    unknown: Boolean = false,
 ) {
     Row(
         modifier = modifier
@@ -226,6 +262,14 @@ fun ToggleRow(
         }
         chipText?.let { StatusChip(it, chipTone) }
         info?.let { FeatureInfo(title, it) }
+        if (unknown) {
+            Icon(
+                painter = androidx.compose.ui.res.painterResource(R.drawable.ic_unknown),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f),
+                modifier = Modifier.size(16.dp),
+            )
+        }
         Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
     }
 }

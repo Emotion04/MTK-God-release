@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "version": 1,
+  "channel": "stable",
+  "texts": {
+    "notice": "",
+    "download_button": "下载新版",
+    "download_hint": ""
+  },
+  "flags": {
+    "enable_update_check": true,
+    "show_lab": true
+  },
+  "downloadUrl": "https://changelog.a0v0a.cn/MTK-God/app-release.apk"
+}

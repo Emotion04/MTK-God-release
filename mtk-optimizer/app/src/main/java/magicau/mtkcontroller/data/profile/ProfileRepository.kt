@@ -1,7 +1,9 @@
 package magicau.mtkcontroller.data.profile
 
 import android.content.Context
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.Flow
@@ -24,7 +26,9 @@ class ProfileRepository(private val context: Context) {
 
     private val profilesKey = stringPreferencesKey("profiles_json")
     private val activeProfileKey = stringPreferencesKey("active_profile_id")
-    private val gpuHandlerKey = intPreferencesKey("gpu_handler")
+    private val gpuActiveKey = booleanPreferencesKey("gpu_active")
+    private val gpuMinKey = longPreferencesKey("gpu_min_baseline")
+    private val gpuMaxKey = longPreferencesKey("gpu_max_baseline")
 
     val profiles: Flow<List<Profile>> = context.profileStore.data.map { prefs ->
         prefs[profilesKey]
@@ -58,17 +62,47 @@ class ProfileRepository(private val context: Context) {
         context.profileStore.edit { it[profilesKey] = json.encodeToString(list) }
     }
 
+    private companion object {
+        /** 节点读不到时存这个哨兵；不能和真实的 kHz 混淆。 */
+        const val NO_BASELINE = Long.MIN_VALUE
+    }
+
     suspend fun setActiveProfile(id: String?) {
         context.profileStore.edit {
             if (id == null) it.remove(activeProfileKey) else it[activeProfileKey] = id
         }
     }
 
-    // --- GPU PowerHAL handle -------------------------------------------------
+    // --- GPU 原值（devfreq） -------------------------------------------------
+    //
+    // 原值与"有没有应用过"一起持久化。GpuTuner 原来把基线放在内存里，
+    // 进程一死就只剩"硬件范围"这个兜底 —— 用它恢复会把用户或散热压出来的上限
+    // 覆盖成硬件最高频。所以写之前就落盘，恢复时按落盘的值写回。
 
-    suspend fun gpuHandler(): Int = context.profileStore.data.first()[gpuHandlerKey] ?: 0
+    /** null 表示这个节点当时读不到，恢复时不动它。 */
+    suspend fun gpuBaseline(): Pair<Long?, Long?>? {
+        val prefs = context.profileStore.data.first()
+        if (prefs[gpuActiveKey] != true) return null
+        val min = prefs[gpuMinKey]?.takeIf { it != NO_BASELINE }
+        val max = prefs[gpuMaxKey]?.takeIf { it != NO_BASELINE }
+        return min to max
+    }
 
-    suspend fun setGpuHandler(handler: Int) {
-        context.profileStore.edit { it[gpuHandlerKey] = handler }
+    suspend fun gpuApplied(): Boolean = context.profileStore.data.first()[gpuActiveKey] == true
+
+    suspend fun setGpuBaseline(min: Long?, max: Long?) {
+        context.profileStore.edit {
+            it[gpuActiveKey] = true
+            it[gpuMinKey] = min ?: NO_BASELINE
+            it[gpuMaxKey] = max ?: NO_BASELINE
+        }
+    }
+
+    suspend fun clearGpu() {
+        context.profileStore.edit {
+            it.remove(gpuActiveKey)
+            it.remove(gpuMinKey)
+            it.remove(gpuMaxKey)
+        }
     }
 }

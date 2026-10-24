@@ -22,20 +22,20 @@ class GpuTuner {
     )
 
     /**
-     * Devfreq min/max as they were before we touched them.
+     * 读一次 devfreq 的当前 min/max，用于**写之前**落盘原值。
      *
-     * One slot is enough — sysfs is a single global state, so at most one
-     * devfreq range can be in force. Keying this by handle would be wrong: the
-     * GPU handler is not a lease but a persistent marker
-     * (`ProfileRepository.gpuHandler` holds 0 while a range is applied), so it
-     * cannot tell two applies apart.
+     * 原值由 `ProfileRepository` 持久化，不放在这里的内存字段里 ——
+     * 进程被杀之后内存字段就没了，恢复时只剩"硬件范围"可写，
+     * 那会把用户或散热压出来的上限覆盖成硬件最高频。
      *
-     * The values are sampled on write, never taken from a scan. `GpuInfo` min/max
-     * is a cache that may already reflect a ceiling we set ourselves; restoring
-     * from it would keep our own lock in place and still report success.
+     * @return null = 这两条路径不是 devfreq，或节点读不到。
      */
-    @Volatile
-    private var devfreqBaseline: Pair<Long?, Long?>? = null
+    suspend fun sampleDevfreqBaseline(): Pair<Long?, Long?>? {
+        val root = GpuScanner.DEVFREQ_ROOT
+        val min = Sysfs.read("$root/min_freq")?.toLongOrNull()
+        val max = Sysfs.read("$root/max_freq")?.toLongOrNull()
+        return if (min == null && max == null) null else min to max
+    }
 
     /**
      * @param minKhz desired floor; null = leave alone
@@ -56,15 +56,6 @@ class GpuTuner {
     private suspend fun applyDevfreq(gpu: GpuInfo, minKhz: Long?, maxKhz: Long?): Outcome {
         val failures = mutableListOf<String>()
         val root = GpuScanner.DEVFREQ_ROOT
-
-        // Snapshot both nodes before the first write, including the one that is
-        // being left alone — a range we did not set still has to be restored.
-        // Kept on failure: whatever is there then is the original state anyway,
-        // and dropping it would strand a range an earlier apply did set.
-        if (devfreqBaseline == null) {
-            devfreqBaseline = Sysfs.read("$root/min_freq")?.toLongOrNull() to
-                Sysfs.read("$root/max_freq")?.toLongOrNull()
-        }
 
         // Raise the ceiling before lowering the floor, so min <= max always holds.
         // 写失败时把服务端原话收着 —— 那是判断"该去哪儿修"的唯一依据。
@@ -114,8 +105,13 @@ class GpuTuner {
         }
     }
 
-    /** Release: undo whatever channel-specific lock we applied. */
-    suspend fun release(gpu: GpuInfo, handler: Int): Outcome {
+    /**
+     * 释放 GPU 锁。
+     *
+     * @param baseline devfreq 的原值（写之前落盘的那份）。null = 没有记录，
+     *   退回硬件范围，并如实说明这是兜底而不是原值。
+     */
+    suspend fun release(gpu: GpuInfo, baseline: Pair<Long?, Long?>?): Outcome {
         return when (gpu.channel) {
             GpuChannel.GPUFREQ_V2 -> {
                 val writeError = Sysfs.writeOrNull(GpuScanner.GPUFREQ_V2_FIX_OPP, "-1")
@@ -137,7 +133,7 @@ class GpuTuner {
 
             GpuChannel.DEVFREQ -> {
                 val root = GpuScanner.DEVFREQ_ROOT
-                val (beforeMin, beforeMax) = devfreqBaseline ?: devfreqHardwareRange()
+                val (beforeMin, beforeMax) = baseline ?: devfreqHardwareRange()
                 val writeErrors = mutableListOf<String>()
                 // Ceiling first, so the floor written next can never exceed it.
                 beforeMax?.let {
@@ -147,7 +143,6 @@ class GpuTuner {
                     Sysfs.writeOrNull("$root/min_freq", it.toString())?.let(writeErrors::add)
                 }
                 val ok = writeErrors.isEmpty()
-                if (ok) devfreqBaseline = null
                 Outcome(
                     ok,
                     Message(if (ok) R.string.gpu_range_restored else R.string.gpu_restore_failed),

@@ -3,7 +3,7 @@
 <!-- external-symbols -->
 本页记录外部模块实现，其中的类名属于该模块，不在本项目源码里。
 
-> - 分析对象：`reference/sources/2026-10-b1/游戏蓝盒1.1.4.apk`（第三方文件，git-ignored）
+> - 分析对象：`../MTK-reference/sources/2026-10-b1/游戏蓝盒1.1.4.apk`（第三方文件，git-ignored）
 > - sha256：`038993f1399a16acf8eb0380e8dada29914086cc5b402788d51589f2d3358dea`（4 034 162 字节）
 > - 分析日期：2026-09-21
 > - 材料来源：`AndroidManifest.xml`（二进制 AXML 字符串池）、`classes.dex` 字符串池、4 个 arm64 ELF 的可打印字符串与符号表
@@ -75,7 +75,7 @@ com.youxilanhe.cjd.shizuku.ShizukuCommandRunnerService$NativeFpsDaemonBackend
 
 事务常量 `TRANSACTION_executeCommand`，方法 `executeCommand` / `executeShell`。后端标识 `backend=shizuku_runner`。
 
-**这和本项目的 [RuntimeUserService.kt](../../mtk-optimizer/app/src/main/java/magicau/mtkcontroller/data/privilege/RuntimeUserService.kt) 是同一个模式**：跑在 Shizuku 拉起的进程里，adb 授权时 uid 2000（shell），所有 shell 操作在这里发生以继承该身份。
+**这和本项目的 [RuntimeUserService.kt](../../../mtk-optimizer/app/src/main/java/magicau/mtkcontroller/data/privilege/RuntimeUserService.kt) 是同一个模式**：跑在 Shizuku 拉起的进程里，adb 授权时 uid 2000（shell），所有 shell 操作在这里发生以继承该身份。
 
 ### 3.2 二进制落盘与启动 **[字节码] + [ELF]**
 
@@ -151,7 +151,7 @@ Java_..._nativeStopDaemon
 
 ### 3.6 温度来源 **[字节码]**
 
-四个原生二进制里**没有任何 thermal / `/sys/class/thermal` 字符串**。温度走标准 Android API：`registerReceiver` 粘性广播 + `getIntExtra`，以及 `BatteryManager.getProperty`。也就是 `EXTRA_TEMPERATURE`（十分之一摄氏度）。**本项目已经在用同一个源**，见 [CpuViewModel.kt](../../mtk-optimizer/app/src/main/java/magicau/mtkcontroller/feature/cpu/CpuViewModel.kt) 的 `temperatureTenthsC`。
+四个原生二进制里**没有任何 thermal / `/sys/class/thermal` 字符串**。温度走标准 Android API：`registerReceiver` 粘性广播 + `getIntExtra`，以及 `BatteryManager.getProperty`。也就是 `EXTRA_TEMPERATURE`（十分之一摄氏度）。**本项目已经在用同一个源**，见 [CpuViewModel.kt](../../../mtk-optimizer/app/src/main/java/magicau/mtkcontroller/feature/cpu/CpuViewModel.kt) 的 `temperatureTenthsC`。
 
 ---
 
@@ -161,8 +161,8 @@ Java_..._nativeStopDaemon
   具体 layer 选择与统计方法未取得方法体级证据。
 - 帧呈现不是游戏逻辑帧、GPU 利用率或 CPU 限制本身。层名、缓冲长度、输出格式和权限按目标 ROM 确认。
 - 轮询会增加 CPU 与 Binder 负载，控制对照需记录是否同时运行采样。
-- 若接入本项目，沿 [UserService](../../mtk-optimizer/app/src/main/java/magicau/mtkcontroller/data/privilege/RuntimeUserService.kt)
-  的执行身份采集；当前实现和生命周期由 [工程架构](../dev/architecture.md) 与源码维护。
+- 若接入本项目，沿 [UserService](../../../mtk-optimizer/app/src/main/java/magicau/mtkcontroller/data/privilege/RuntimeUserService.kt)
+  的执行身份采集；当前实现和生命周期由 [工程架构](../../../docs/dev/architecture.md) 与源码维护。
 
 ---
 

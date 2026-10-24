@@ -40,6 +40,8 @@ data class TweakUiState(
     val autoRotate: Boolean = false,
     val rotationSuggestion: Boolean = false,
     val thermalBrightness: Boolean = false,
+    val brightnessBackend: magicau.mtkcontroller.data.tweaks.BrightnessBackend =
+        magicau.mtkcontroller.data.tweaks.BrightnessBackend.LEGACY,
 )
 
 data class HomeUiState(
@@ -99,9 +101,14 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
                 _state.value = _state.value.copy(privilege = privilege)
             }
         }
+        // 触控总开关读设备。本地集合是"上次点了什么"，键被系统或用户改掉之后会分叉。
         viewModelScope.launch {
-            container.tweakRepository.touchEnabled.collect { enabled ->
-                _state.value = _state.value.copy(tweaks = _state.value.tweaks.copy(touchEnabled = enabled))
+            container.tweakRepository.touchItems.collect {
+                val device = withContext(Dispatchers.IO) {
+                    runCatching { container.tweakRepository.touchDeviceState() }.getOrNull()
+                } ?: return@collect
+                val anyOn = device.values.any { it == true }
+                _state.value = _state.value.copy(tweaks = _state.value.tweaks.copy(touchEnabled = anyOn))
             }
         }
         viewModelScope.launch {
@@ -119,9 +126,29 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
                 _state.value = _state.value.copy(tweaks = _state.value.tweaks.copy(rotationSuggestion = enabled))
             }
         }
+        // 亮度守护读真实状态：LEGACY 看服务是否在跑，VIVO 读系统键。
+        // 原来读的是偏好 —— 进程被杀后服务已经停了，首页还显示"开"。
         viewModelScope.launch {
-            container.tweakRepository.thermalBrightness.collect { enabled ->
-                _state.value = _state.value.copy(tweaks = _state.value.tweaks.copy(thermalBrightness = enabled))
+            ThermalBrightnessService.running.collect { running ->
+                if (_state.value.tweaks.brightnessBackend ==
+                    magicau.mtkcontroller.data.tweaks.BrightnessBackend.LEGACY
+                ) {
+                    _state.value = _state.value.copy(tweaks = _state.value.tweaks.copy(thermalBrightness = running))
+                }
+            }
+        }
+        viewModelScope.launch {
+            container.tweakRepository.brightnessBackend.collect { backend ->
+                val on = if (backend == magicau.mtkcontroller.data.tweaks.BrightnessBackend.LEGACY) {
+                    ThermalBrightnessService.running.value
+                } else {
+                    withContext(Dispatchers.IO) {
+                        runCatching { container.tweakRepository.vivoBrightnessOn() }.getOrNull()
+                    } == true
+                }
+                _state.value = _state.value.copy(
+                    tweaks = _state.value.tweaks.copy(brightnessBackend = backend, thermalBrightness = on),
+                )
             }
         }
     }

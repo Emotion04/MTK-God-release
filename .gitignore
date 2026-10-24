@@ -8,15 +8,11 @@
 !mtk-optimizer/gradle/wrapper/gradle-wrapper.jar
 
 # ---------------------------------------------------------------------------
-# Reference material — a third party's files, kept local only.
-#
-# Everything under reference/ is either someone else's file or derived from
-# someone else's binary. Only our own two notes are tracked: README explains the
-# folder layout and the rule, LEDGER records which sources were analysed and where
-# their features landed. Neither is needed to build or run the app.
-/reference/*
-!/reference/README.md
-!/reference/LEDGER.md
+# 第三方原始资料在仓库外，已移到 MTK 仓库同级的 MTK-reference/（不在任何 git 仓库里）。
+# 这里只留一条安全网：万一有人把副本放回来，也不会被误提交。
+# 仓库里保留的是自己写的分析：reference/README、SPEC、LEDGER 和 docs/reference/**。
+# ---------------------------------------------------------------------------
+/reference/
 
 # Android build artifacts (mtk-optimizer sub-project handles its own)
 *.iml
@@ -79,9 +75,20 @@ desktop.ini
 # 也不该进版本库；留着会让 `git status` 每次都被噪声淹没。
 # ---------------------------------------------------------------------------
 /.scratch/
+/mtk-optimizer/.scratch/
 /.workbuddy/
 /*.png
 /ui*.xml
 /ui-nodes.txt
 /tapnav.py
 /*.stackdump
+/.cyh
+
+# ---------------------------------------------------------------------------
+# 发布
+#
+# release/public/ 是**构建产物，但故意入库**：CI 发版后提交回 main，App 从 raw 地址读它。
+# 本地发布窗口的凭据、错误日志、七牛临时文件都不要进库。
+# ---------------------------------------------------------------------------
+/tools/publish_gui_error.log
+/release/public/*.tmp

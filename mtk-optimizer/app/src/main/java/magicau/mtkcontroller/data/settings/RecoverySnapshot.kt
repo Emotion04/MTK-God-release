@@ -39,6 +39,14 @@ class RecoverySnapshot(
         /** 厂商功能。条目名是特性名，键名同上。 */
         const val VIVO = "vivo"
 
+        /**
+         * 直接写、没有独立数据定义的系统开关（旋转建议、自动旋转、插帧）。
+         *
+         * 条目名就是键名。以后新增同类开关，只要**写之前**调一次
+         * `RecoverySnapshot.capture(DIRECT, 键名, …)`，恢复默认就能自动覆盖到它。
+         */
+        const val DIRECT = "direct"
+
         /** 一条记录在存储里的名字。 */
         fun token(space: String, entry: String, key: String): String = "$space|$entry|$key"
 

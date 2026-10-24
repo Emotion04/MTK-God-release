@@ -9,6 +9,8 @@
 | 用户文案与字符串资源 | [wording.md](wording.md) |
 | 尚未完成且决定要做的工作 | [todo.md](todo.md) |
 | 更新说明与任务收尾 | [文档维护流程](../CONTRIBUTING.md) |
+| 版本号、更新日志、CI/CD 与托管 | [release.md](release.md) |
+| 提交规范、打 tag、发版流程 | [release-flow.md](release-flow.md) |
 
 源码负责实现细节，指南只保留跨功能的契约和容易遗漏的取舍。
 不是每个核心功能都需要单独文档；判断标准和文档类型见 [维护流程](../CONTRIBUTING.md#核心功能与文档类型)。

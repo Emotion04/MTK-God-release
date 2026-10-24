@@ -6,6 +6,8 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.content.BroadcastReceiver
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.CancellationException
@@ -13,12 +15,14 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import magicau.mtkcontroller.MtkApp
 import magicau.mtkcontroller.R
+import magicau.mtkcontroller.data.AppExpiry
 import magicau.mtkcontroller.data.log.AppLog
 import magicau.mtkcontroller.data.power.BatteryWhitelist
 import magicau.mtkcontroller.data.privilege.ForegroundApp
@@ -68,6 +72,10 @@ class AppThermalService : Service() {
          */
         private const val POLL_MS = 2_000L
 
+        /** 服务是否真的在跑。界面开关读它，不读"上次发的命令"。 */
+        private val _running = kotlinx.coroutines.flow.MutableStateFlow(false)
+        val running: kotlinx.coroutines.flow.StateFlow<Boolean> = _running
+
         const val ACTION_START = "magicau.mtkcontroller.action.APP_THERMAL_START"
         const val ACTION_STOP = "magicau.mtkcontroller.action.APP_THERMAL_STOP"
 
@@ -83,17 +91,33 @@ class AppThermalService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var loop: kotlinx.coroutines.Job? = null
     private var currentPkg: String? = null
+    /** 熄屏时这个循环挂起，等亮屏广播再继续 —— 熄屏后前台应用不可能变。 */
+    private val screenOnSignal = Channel<Unit>(Channel.CONFLATED)
+    private val screenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action == Intent.ACTION_SCREEN_ON) screenOnSignal.trySend(Unit)
+        }
+    }
+    /** 规则表的当前版本；改了规则就让下一轮重新判断，不必重启服务。 */
+    @Volatile private var rulesVersion = 0
+    @Volatile private var rules: List<magicau.mtkcontroller.data.thermal.AppThermalRule> = emptyList()
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
+        _running.value = true
+        registerReceiver(
+            screenReceiver,
+            IntentFilter(Intent.ACTION_SCREEN_ON),
+            Context.RECEIVER_NOT_EXPORTED,
+        )
         createChannel()
         startForeground(NOTIFICATION_ID, buildNotification(getString(R.string.app_thermal_notification_starting)))
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_STOP) {
+        if (intent?.action == ACTION_STOP || AppExpiry.isExpired()) {
             stopSelf()
             return START_NOT_STICKY
         }
@@ -109,22 +133,51 @@ class AppThermalService : Service() {
             val store = AppThermalStore(applicationContext)
 
             // 先保证自己不被冻掉。失败不阻断 —— 功能照样跑，只是被杀概率高些。
-            if (BatteryWhitelist.isWhitelisted() == false) {
+            if (!BatteryWhitelist.isWhitelisted(this@AppThermalService)) {
                 AppLog.i(TAG, "本软件不在电池优化白名单，尝试加入")
                 BatteryWhitelist.set(true)
             }
 
-            val rules = store.rules.first()
+            // 规则热更新：运行中改规则不必重启服务。
+            // 收集和轮询各用一个协程，收集只改这两个 @Volatile 字段。
+            scope.launch {
+                store.rules.collect { updated ->
+                    val wasEmpty = rules.isEmpty()
+                    rules = updated
+                    rulesVersion++
+                    if (updated.isEmpty()) {
+                        AppLog.w(TAG, "规则已清空，服务停止")
+                        stopSelf()
+                    } else if (wasEmpty) {
+                        AppLog.i(TAG, "开始按应用温控，${updated.size} 条规则，间隔 ${POLL_MS}ms")
+                    }
+                }
+            }
+            // 等第一次规则到达再开始轮询。
+            while (isActive && rules.isEmpty() && rulesVersion == 0) delay(50)
             if (rules.isEmpty()) {
-                AppLog.w(TAG, "没有按应用温控规则，服务停止")
                 stopSelf()
                 return@launch
             }
             AppLog.i(TAG, "开始按应用温控，${rules.size} 条规则，间隔 ${POLL_MS}ms")
 
             var lastForeground = ""
+            var seenVersion = rulesVersion
             while (isActive) {
+                // 熄屏：先撤掉当前规则，然后挂起等亮屏。`dumpsys activity` 不再跑。
+                if (!isScreenOn()) {
+                    if (currentPkg != null) applyRule(null, null)
+                    lastForeground = ""
+                    screenOnSignal.receive()
+                    continue
+                }
                 delay(POLL_MS)
+                // 规则变了：强制重新判断当前前台应用，哪怕包名没变。
+                if (rulesVersion != seenVersion) {
+                    seenVersion = rulesVersion
+                    lastForeground = ""
+                }
+                val snapshot = rules
                 val pkg = ForegroundApp.current()
                 // 读不到时保持上一状态，不要因为一次抖动就释放掉正在用的策略。
                 if (pkg.startsWith("ERROR:")) {
@@ -135,7 +188,7 @@ class AppThermalService : Service() {
                 if (pkg == lastForeground) continue
                 lastForeground = pkg
 
-                val rule = rules.firstOrNull { it.pkg == pkg }
+                val rule = snapshot.firstOrNull { it.pkg == pkg }
                 if (rule == null) {
                     if (currentPkg != null) {
                         applyRule(null, null)
@@ -166,7 +219,12 @@ class AppThermalService : Service() {
         updateNotification()
     }
 
+    private fun isScreenOn(): Boolean =
+        getSystemService(android.os.PowerManager::class.java)?.isInteractive == true
+
     override fun onDestroy() {
+        _running.value = false
+        runCatching { unregisterReceiver(screenReceiver) }
         // 服务停下时把规则撤掉 —— 否则会留下一个没人释放的长期请求。
         // 必须 NonCancellable：下一行就 scope.cancel()，普通 launch 很可能还没开始跑，
         // 于是请求留在固件里，用户此后自己怎么设都不对。

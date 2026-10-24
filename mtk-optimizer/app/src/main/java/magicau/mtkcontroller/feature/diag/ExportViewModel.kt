@@ -13,6 +13,7 @@ import magicau.mtkcontroller.R
 import magicau.mtkcontroller.data.Failure
 import magicau.mtkcontroller.data.Message
 
+import magicau.mtkcontroller.data.diag.AdaptationSession
 import magicau.mtkcontroller.data.diag.ReportExporter
 import magicau.mtkcontroller.data.log.AppLog
 import magicau.mtkcontroller.data.log.DebugRecorder
@@ -50,6 +51,10 @@ class ExportViewModel(private val container: AppContainer) : ViewModel() {
     val message: Failure? = null,
         /** 生成好但还没交出去的文件，供"分享/保存/复制路径"三个出口复用。 */
         val pending: File? = null,
+        /** 适配测试会话是否在跑。 */
+        val adaptationRunning: Boolean = false,
+        /** 本次适配测试是否允许在判据节点读不到时做有界下发。 */
+        val blindWrites: Boolean = false,
     ) {
         val estimatedBytes: Long
             get() = when {
@@ -71,6 +76,15 @@ class ExportViewModel(private val container: AppContainer) : ViewModel() {
             }
         }
         viewModelScope.launch { refreshStorage() }
+        // 会话状态比本 ViewModel 活得久：离开页面再回来要接着显示“结束”。
+        viewModelScope.launch {
+            AdaptationSession.state.collect { session ->
+                _state.value = _state.value.copy(
+                    adaptationRunning = session.running,
+                    blindWrites = session.blind,
+                )
+            }
+        }
     }
 
     private suspend fun refreshStorage() = withContext(Dispatchers.IO) {
@@ -114,19 +128,42 @@ class ExportViewModel(private val container: AppContainer) : ViewModel() {
      * 生成一个包。勾选项决定它是"适配报告"还是"调试日志"，两者可以一起导 —
      * 但内容分开放在 report.json 与 logs/ 里，读的人一眼知道哪份是哪种。
      */
+    fun setBlindWrites(enabled: Boolean) = AdaptationSession.setBlind(enabled)
+
+    /**
+     * 适配测试：开始后用户去复现问题，结束后自动生成报告。
+     *
+     * 报告窗口从“开始”前 10 秒到“结束”，所以开始前后的日志都在里面。
+     * 盲测开关只在这里生效；退出会话立刻关掉，正常使用仍然遵守“读不到不下发”。
+     */
+    fun startAdaptation() {
+        _state.value = _state.value.copy(message = null)
+        AdaptationSession.start()
+    }
+
+    fun stopAdaptation() {
+        val elapsed = AdaptationSession.stop() ?: return
+        exportWithWindow(elapsed + 10_000)
+    }
+
     fun export() {
+        val s = _state.value
+        val window = when {
+            s.includeAll -> null
+            s.include1h -> 60L * 60 * 1000
+            s.include24h -> 24L * 60 * 60 * 1000
+            else -> null
+        }
+        exportWithWindow(window)
+    }
+
+    private fun exportWithWindow(window: Long?) {
         if (_state.value.busy) return
         viewModelScope.launch {
             _state.value = _state.value.copy(busy = true, message = null)
             try {
                 val s = _state.value
-                val window = when {
-                    s.includeAll -> null
-                    s.include1h -> 60L * 60 * 1000
-                    s.include24h -> 24L * 60 * 60 * 1000
-                    else -> null
-                }
-                val withLogs = s.includeAll || s.include24h || s.include1h
+                val withLogs = s.includeAll || s.include24h || s.include1h || window != null
                 val kind = if (withLogs && !s.includeAdaptation) {
                     ReportExporter.Kind.DEBUG
                 } else {

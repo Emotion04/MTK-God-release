@@ -1,0 +1,21 @@
+// 发布配置的唯一来源：构建（CI）和本地发布窗口都读这个文件。
+// 改发布方式只改这里，App 里 build.gradle.kts 的三个地址也要同步（见 release/config.md）。
+// 这里可以写 // 注释；上传到七牛等地方的版本会由脚本去掉注释。
+// 字段说明：release/config.md · 发布流程：docs/dev/release-flow.md
+{
+  // APK 下载地址。默认指向**公开产物仓库**的 Release 固定链接（源码仓库可以是私有的）。
+  // 每个 tag 发布后 latest/download 自动指向新包；地址必须以 .apk 结尾才是直链。
+  "apkUrl": "https://github.com/Emotion04/MTK-God-release/releases/latest/download/app-release.apk",
+
+  // App 读取的三份远程文件，放在公开产物仓库（raw 直链，无鉴权）。
+  "changelogUrl": "https://raw.githubusercontent.com/Emotion04/MTK-God-release/main/changelog.json",
+  "updateUrl": "https://raw.githubusercontent.com/Emotion04/MTK-God-release/main/update.json",
+  "remoteConfigUrl": "https://raw.githubusercontent.com/Emotion04/MTK-God-release/main/remote-config.json",
+
+  // 备用地址（主地址被限速/不可达时再试一次）；构建时用 -PchangelogUrlBackup= 传入。
+  "changelogUrlBackup": "",
+  "updateUrlBackup": "",
+
+  // 低于这个 versionCode 的版本会强制更新；0 表示不强制。
+  "minVersionCode": 0
+}

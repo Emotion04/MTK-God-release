@@ -33,10 +33,11 @@ object PhaseOffset {
         Key("debug.sf.high_fps_early_phase_offset_ns", R.string.phase_offset_high_fps, 6_100_000),
     )
 
-    /** 所有键的原值；读不到的记为 null，恢复时跳过而不是写空。 */
-    suspend fun snapshot(): Map<String, String?> = keys.associate { it.prop to read(it.prop) }
+    /** 所有键的当前值；读不到的记为 null，恢复时跳过而不是写空。 */
+    suspend fun snapshot(): Map<String, String?> = keys.associate { it.prop to readProp(it.prop) }
 
-    private suspend fun read(prop: String): String? {
+    /** 读一个属性的当前值；null = 读不到（不是"值不存在"）。 */
+    suspend fun readProp(prop: String): String? {
         val out = DaemonExec.runArgv(listOf("/system/bin/getprop", prop)) ?: return null
         if (out.exit != 0) return null
         // getprop 对未设置的属性返回空串。空串与"读不到"要分开：空串可以写，读不到不能猜。
@@ -46,7 +47,7 @@ object PhaseOffset {
     private suspend fun write(prop: String, value: String): Boolean {
         val out = DaemonExec.runArgv(listOf("/system/bin/setprop", prop, value)) ?: return false
         if (out.exit != 0) return false
-        return read(prop) == value
+        return readProp(prop) == value
     }
 
     /**

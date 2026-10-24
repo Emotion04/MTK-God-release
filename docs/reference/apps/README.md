@@ -1,7 +1,8 @@
 # 固定版本实现摘录
 
 用于查找外部实现中的接口、命令和源码位置；设备效果与本项目实现分别核验。
-原始 APK、解包与模块脚本留在本地忽略的 `reference/`，分析记录保存在这里。
+原始 APK 与反编译树都在仓库外的 `../../MTK-reference/sources/`、`../../MTK-reference/derived/decompiled/`
+（与本仓库同级，不进版本库）；行号索引见 `../../MTK-reference/derived/decompiled/INDEX.md`。这里只放读出来的结论。
 
 | 对象 | 摘录 |
 |---|---|
@@ -9,10 +10,10 @@
 | Metric 1.5.3 | [metric.md](metric.md) |
 | MOs Premium v13 | [mospremium-v13.md](mospremium-v13.md) |
 | 蓝河工具箱 6.12 | [lanhe-toolbox-6.12.md](lanhe-toolbox-6.12.md) |
-| 游戏蓝盒 1.1.4 | [FPS 浮层记录](../../tools/youxilanhe-fps-module.md)（按主题归在 `tools/`） |
+| 游戏蓝盒 1.1.4 | [FPS 浮层记录](youxilanhe-fps-module.md) |
 | 接入时的关键判断 | [reference-teardown.md](reference-teardown.md) |
 
 摘录指向固定对象版本，不随本项目功能清单更新。分析状态与本地路径查
-[来源台账](../../../reference/LEDGER.md)。
+[来源台账](../LEDGER.md)。
 采用某个方法后，将实际契约留在 [工程架构](../../dev/architecture.md)，
 设备差异留在对应主题事实页。只有已决定推进的工作进入 [待办](../../dev/todo.md)。

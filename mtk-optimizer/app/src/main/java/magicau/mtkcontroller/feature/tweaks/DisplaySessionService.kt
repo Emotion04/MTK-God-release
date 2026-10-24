@@ -7,6 +7,7 @@ import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import magicau.mtkcontroller.data.AppExpiry
 import magicau.mtkcontroller.MtkApp
 import magicau.mtkcontroller.R
 import magicau.mtkcontroller.data.Message
@@ -46,6 +47,10 @@ class DisplaySessionService : Service() {
             .addAction(0, getString(R.string.action_stop), stop).setOngoing(true).build())
     }
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (AppExpiry.isExpired()) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
         job?.cancel()
         val repo = (application as MtkApp).container.tweakRepository
         val fps = intent?.getIntExtra("fps", -1) ?: -1

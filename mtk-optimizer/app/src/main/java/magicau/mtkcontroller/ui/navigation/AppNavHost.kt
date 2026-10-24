@@ -63,6 +63,8 @@ import magicau.mtkcontroller.feature.diag.DiagScreen
 import magicau.mtkcontroller.feature.diag.DiagViewModel
 import magicau.mtkcontroller.feature.home.HomeScreen
 import magicau.mtkcontroller.feature.home.HomeViewModel
+import magicau.mtkcontroller.feature.changelog.ChangelogScreen
+import magicau.mtkcontroller.feature.changelog.ChangelogViewModel
 import magicau.mtkcontroller.feature.lab.LabDetailScreen
 import magicau.mtkcontroller.feature.lab.LabPanelScreen
 import magicau.mtkcontroller.feature.lab.LabPanelViewModel
@@ -112,7 +114,7 @@ fun AppNavHost(container: AppContainer, modifier: Modifier = Modifier) {
     var dragPosition by remember { mutableFloatStateOf(0f) }
     LaunchedEffect(Unit) {
         val configured = container.settingsRepository.defaultTabRoute.first()
-        startRoute = configured ?: Destination.HOME.route
+        startRoute = configured ?: FeatureFlags.defaultTab().route
         // 上次停留的标签就是启动标签 —— 用户从哪离开就从哪回来。
         // 但只在冷启动这么做：tabInitialised 为真说明这份状态是还原来的，
         // 那时 selectedTab 已经是用户真正停留的标签，覆盖它就和眼前看到的分家了。
@@ -570,6 +572,7 @@ fun AppNavHost(container: AppContainer, modifier: Modifier = Modifier) {
                         onFrameInterpolation = vm::setFrameInterpolation,
                         onFrameInterpolationSr = vm::setFrameInterpolationSr,
                         onRotationSuggestion = vm::setRotationSuggestion,
+                        onAutoRotate = vm::setAutoRotate,
                         onThermalBrightness = vm::setThermalBrightness,
                         onRequestPermission = vm::requestPermission,
                         onOpenNotifications = { navController.navigate(SubRoutes.NOTIFICATIONS) },
@@ -590,6 +593,15 @@ fun AppNavHost(container: AppContainer, modifier: Modifier = Modifier) {
                     else magicau.mtkcontroller.feature.tweaks.SmartBackupScreen(state, vm)
                 }
             } }
+
+            composable(SubRoutes.CHANGELOG) {
+                val vm: ChangelogViewModel = viewModel(
+                    factory = containerViewModelFactory { ChangelogViewModel(container) },
+                )
+                SubScreenScaffold(stringResource(R.string.changelog_title), onBack = navController::popBackStack) {
+                    ChangelogScreen(vm)
+                }
+            }
 
             composable(SubRoutes.NOTIFICATIONS) {
                 SubScreenScaffold(stringResource(R.string.sub_notifications), onBack = navController::popBackStack) {
@@ -687,12 +699,22 @@ fun AppNavHost(container: AppContainer, modifier: Modifier = Modifier) {
                 route = SubRoutes.LAB_DETAIL,
                 arguments = listOf(navArgument("entry") { type = NavType.StringType }),
             ) { backStackEntry ->
-                // 一级页的 ViewModel 提供状态，二级页只读它 —— 判定、读数、句柄
-                // 都归一处，两个页面才不会各显示各的。
+                // **必须复用一级页的 ViewModel**：`viewModel()` 默认按当前
+                // NavBackStackEntry 建实例，详情页会拿到另一个 LabViewModel ——
+                // 它的 onCleared 在返回列表时把所有请求释放掉，而用户只是点开看了一眼。
+                // 这里显式取 LAB 那一层的 owner，两个页面共享同一份状态和生命周期。
                 val labEntry = backStackEntry.arguments?.getString("entry").orEmpty()
-                val vm: LabViewModel = viewModel(
-                    factory = containerViewModelFactory { LabViewModel(container) },
-                )
+                // 正常栈是 LAB → LAB_DETAIL；深链、标签还原或异常返回可能只剩详情页。
+                // 取不到父条目时退回详情页自己的 ViewModel，至少不崩。
+                val labOwner = runCatching { navController.getBackStackEntry(SubRoutes.LAB) }.getOrNull()
+                val vm: LabViewModel = if (labOwner != null) {
+                    viewModel(
+                        viewModelStoreOwner = labOwner,
+                        factory = containerViewModelFactory { LabViewModel(container) },
+                    )
+                } else {
+                    viewModel(factory = containerViewModelFactory { LabViewModel(container) })
+                }
                 val state by vm.state.collectAsStateWithLifecycle()
                 // 入口可能对应多项（mergeKey），所以按一级列表用的同一个键反查。
                 // 先落到 val 再取下标：`链式调用` 换行后紧跟 `[key]` 会被 Kotlin
@@ -709,6 +731,9 @@ fun AppNavHost(container: AppContainer, modifier: Modifier = Modifier) {
                     LabDetailScreen(
                         items = items,
                         clusters = state.clusters.map { it.policy },
+                        physicalMaxByCluster = state.clusters.mapNotNull { cluster ->
+                            cluster.availableFreqs.maxOrNull()?.let { cluster.index to (it / 1000).toInt() }
+                        }.toMap(),
                         liveThermal = state.thermalAppliedIndex
                             ?.takeIf { state.thermalAppliedSource != null }
                             ?.let { it to state.thermalAppliedSource!! },
@@ -803,6 +828,9 @@ fun AppNavHost(container: AppContainer, modifier: Modifier = Modifier) {
                         onSetRecordingLevel = vm::setRecordingLevel,
                         onDiscardRecovered = vm::discardRecovered,
                         onExport = vm::export,
+                        onStartAdaptation = vm::startAdaptation,
+                        onStopAdaptation = vm::stopAdaptation,
+                        onSetBlindWrites = vm::setBlindWrites,
                         onShare = {
                             // 分享可能因为系统没有可接收的应用而失败，
                             // 所以界面上同时给了"保存到文件"和"复制路径"两条退路。
@@ -966,7 +994,7 @@ private const val NAV_BAR_HIDE_AFTER_PX = 56f
 private const val TABS_ROUTE = "tabs"
 
 /** 标签顺序。底栏与 Pager 都用它，避免两处各排一次而错位。 */
-private val tabs: List<Destination> = Destination.entries
+private val tabs: List<Destination> = FeatureFlags.tabs
 
 /**
  * 把 ViewModel 和导航控制器接成设置页要用的那一包回调。
@@ -983,8 +1011,12 @@ private fun settingsActions(
     onSetDefaultTab = vm::setDefaultTab,
     onSetApplyMode = vm::setApplyMode,
     onSetReapplyInterval = vm::setReapplyIntervalMs,
+    onSetScreenOffPolicy = vm::setScreenOffPolicy,
+    onSetHideFromRecents = vm::setHideFromRecents,
+    onSetApplyOnBoot = vm::setApplyOnBoot,
     onSetFreqRangeMode = vm::setFreqRangeMode,
     onSetFreqHardLimits = vm::setFreqHardLimits,
+    onSetFreqThermalCompanion = vm::setFreqThermalCompanion,
     onSetTouchBackend = vm::setTouchBackend,
     onSetBrightnessBackend = vm::setBrightnessBackend,
     onSetThemeMode = vm::setThemeMode,
@@ -1001,21 +1033,35 @@ private fun settingsActions(
     onSetCustomHue = vm::setCustomHue,
     onSetCustomConcentration = vm::setCustomConcentration,
     onSetBatteryWhitelist = vm::setBatteryWhitelist,
+    onRefreshBatteryWhitelist = vm::refreshBatteryWhitelist,
     // 打开系统界面要 Context，而设置页只拿得到 navController ——
     // 导航层有 Context，所以这一步在导航层做，ViewModel 仍然不碰 Android 的界面类。
     onOpenBatterySettings = {
+        vm.clearBatteryMessage()
         val opened = magicau.mtkcontroller.data.power.BatteryWhitelist.openSystemSettings(context)
-        if (!opened) AppLog.w("Nav", "打不开系统电池设置页")
+        if (!opened) {
+            AppLog.w("Nav", "打不开系统电池设置页")
+            vm.reportBatterySettingsFailure()
+        }
     },
     onOpenDisplayTweaks = { navController.navigate(SubRoutes.TWEAKS) },
+    onOpenPerformanceMode = { navController.navigate(SubRoutes.CONFIG) },
     onOpenLab = { navController.navigate(SubRoutes.LAB) },
     onOpenAppThermal = { navController.navigate(SubRoutes.APP_THERMAL) },
     onOpenTests = { navController.navigate(SubRoutes.TESTS) },
     onOpenArchive = { navController.navigate(SubRoutes.ARCHIVE) },
     onOpenExport = { navController.navigate(SubRoutes.EXPORT) },
     onOpenNotifications = { navController.navigate(SubRoutes.NOTIFICATIONS) },
+    onOpenChangelog = { navController.navigate(SubRoutes.CHANGELOG) },
+    onCheckUpdate = { magicau.mtkcontroller.data.update.UpdateCenter.checkNow(vm.container) },
+    onSetKeepAlive = vm::setKeepAlive,
+    onSetNotifShowProfile = vm::setNotifShowProfile,
+    onSetNotifShowCpu = vm::setNotifShowCpu,
+    onSetNotifShowTemp = vm::setNotifShowTemp,
+    onSetNotifQuickSwitch = vm::setNotifQuickSwitch,
     onOpenDiagnostics = { navController.navigate(SubRoutes.DIAGNOSTICS) },
     onOpenLogs = { navController.navigate(SubRoutes.LOGS) },
+    onResetAllToDefaults = vm::resetAllToDefaults,
     onSetLogLevel = vm::setLogLevel,
     onOpenSmartBackup = { navController.navigate(SubRoutes.SMART_BACKUP) },
     onExportBackup = vm::exportBackup,

@@ -128,6 +128,30 @@ enum class NavBarVisibility {
     }
 }
 
+/**
+ * 锁屏时 CPU 频率请求怎么处理。
+ *
+ * 厂商服务会在熄屏后重排频率限制，有些机型上亮屏后用户设的范围已经丢了。
+ * 两种处理都包含“亮屏后重新下发一次”，区别只在熄屏期间是否主动释放：
+ *
+ *  - [OFF]：不联动，保持原有行为。
+ *  - [KEEP]：息屏不释放，亮屏后重新下发。默认值，不改动已有请求。
+ *  - [RELEASE]：锁屏先释放，亮屏后重新下发。适合担心熄屏时高频下限耗电的场景。
+ *
+ * 这里只涉及频率请求；温控档位、实验室请求、GPU 不跟着释放。
+ */
+enum class ScreenOffPolicy {
+    OFF,
+    KEEP,
+    RELEASE,
+    ;
+
+    companion object {
+        fun fromName(name: String?): ScreenOffPolicy =
+            entries.firstOrNull { it.name == name } ?: KEEP
+    }
+}
+
 /** How the bottom navigation bar is coloured. */
 enum class NavBarStyle {
     COLORFUL,

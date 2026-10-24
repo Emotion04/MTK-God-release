@@ -22,6 +22,7 @@ import magicau.mtkcontroller.R
 import magicau.mtkcontroller.data.Message
 import magicau.mtkcontroller.data.privilege.PrivilegeManager
 import magicau.mtkcontroller.data.settings.RecoverySnapshot
+import magicau.mtkcontroller.data.settings.SettingChannel
 
 private val Context.tweakStore: DataStore<Preferences> by preferencesDataStore(name = "mtk_optimizer_tweaks")
 
@@ -53,12 +54,11 @@ class TweakRepository(
     }
 
     val vivo = VivoTweaks(context, onPerformanceModePause)
-    val gameBoost = GameBoost(context)
+    val gameBoost = GameBoost(context) { entry, table, key -> rememberOwned(entry, table, key) }
     private val touchMutex = Mutex()
     @Volatile var touchRevision: Long = 0
         private set
     private val touchBackendKey = stringPreferencesKey("touch_backend")
-    private val lastVersionKey = intPreferencesKey("last_version_code")
     val touchBackend: Flow<TouchBackend> = context.tweakStore.data.map { prefs ->
         TouchBackend.entries.firstOrNull { it.name == prefs[touchBackendKey] } ?: TouchBackend.LEGACY
     }
@@ -91,7 +91,7 @@ class TweakRepository(
      * 现在只保留编码（一个键一行），快照/释放的逻辑全在 `RecoverySnapshot`。
      */
     private val touchOriginalsKey = stringSetPreferencesKey("touch_originals")
-    private val touchSnapshot = RecoverySnapshot(
+    private val snapshots = RecoverySnapshot(
         store = context.tweakStore.data.map { prefs ->
             prefs[touchOriginalsKey].orEmpty().mapNotNull { entry ->
                 val sep = entry.indexOf('=')
@@ -263,10 +263,11 @@ class TweakRepository(
             val raw = PrivilegeManager.exec("$command 2>&1")
             if (VivoReply.output(raw) == null) {
                 failures += command
-                reasons += if (raw == null) {
+                val reply = magicau.mtkcontroller.data.exec.DaemonExec.parse(raw)
+                reasons += if (reply == null) {
                     "$command → exec returned null — privilege service unavailable"
                 } else {
-                    "$command → " + raw.trim().substringBeforeLast("[exit]").trim().ifBlank { "<empty reply>" }
+                    "$command → " + (reply.stderr.ifBlank { reply.stdout }).trim().ifBlank { "<empty reply>" }
                 }
             }
         }
@@ -529,7 +530,7 @@ class TweakRepository(
         // 只给"即将打开且没有快照"的项取原值。已有快照的不能再取 —— 那时读到的是上一轮
         // 写入值，覆盖掉它就永远恢复不到出厂值了。[RecoverySnapshot.capture] 自己保证这一点。
         for (item in TouchItems.all(rateHz).filter { it.id in onIds }) {
-            touchSnapshot.capture(RecoverySnapshot.TOUCH, item.id, item.knobs.map { it.storeKey }) { stored ->
+            snapshots.capture(RecoverySnapshot.TOUCH, item.id, item.knobs.map { it.storeKey }) { stored ->
                 readKnobValue(item, stored)
             }
         }
@@ -583,7 +584,7 @@ class TweakRepository(
      */
     private suspend fun dropRestoredOriginals(onIds: Set<String>, originals: TouchOriginals) {
         for (item in TouchItems.all().filter { it.id in onIds }) {
-            touchSnapshot.release(RecoverySnapshot.TOUCH, item.id, item.knobs.map { it.storeKey })
+            snapshots.release(RecoverySnapshot.TOUCH, item.id, item.knobs.map { it.storeKey })
         }
     }
 
@@ -596,55 +597,135 @@ class TweakRepository(
     private fun Map<String, String>.toEncoded(): Set<String> =
         map { "${it.key}=${it.value}" }.toSet()
 
-    // ---------------------------------------------------------------- 升级迁移
-    //
-    // 同一个版本进程被杀，和换了一个版本，两者在数据上长得一样（快照表里有几行、
-    // 开关记着开着），但要做的正好相反：
-    //
-    // - **进程被杀**：设置还在系统里，快照是写之前取的真原值 —— **保留**。
-    // - **换了版本**：上一次的值未必可靠（功能可能已经没了、写法可能变了）。
-    //   让它继续兼任"原值"是错的方向 —— 用户改错了就没法回到系统默认。
-    //   所以升级后**丢弃旧快照**，状态尽量还原，还原不了的就明确报告出来。
+    /**
+     * 全部触控项的设备状态，一次读完。
+     *
+     * 逐项一条命令的话最贵的一项要四个旋钮四条 shell 往返；这里合成一条 `sh -c`，
+     * 一次往返读完全部。**不读本地集合** —— 本地集合是"上次点了什么"，
+     * 用户或系统把键改掉之后它就和设备分叉了。
+     */
+    /** 不带参数的入口：读当前上报率和用户填过的数。 */
+    suspend fun touchDeviceState(): Map<String, Boolean?> =
+        touchDeviceState(currentTouchRate(), readTouchValues())
+
+    suspend fun touchDeviceState(rateHz: Int, onValues: Map<String, Int>): Map<String, Boolean?> =
+        withContext(Dispatchers.IO) {
+            val items = TouchItems.all(rateHz)
+            val knobs = items.flatMap { it.knobs }
+            if (knobs.isEmpty()) return@withContext emptyMap()
+            val script = knobs.joinToString("; ") { knob ->
+                "echo '${knob.storeKey}'; ${if (knob.ns == TouchNs.PROP) "getprop ${knob.key}" else "settings get ${knob.ns.name.lowercase()} ${knob.key}"}"
+            }
+            val raw = VivoReply.output(PrivilegeManager.exec("sh -c ${VivoReply.quote(script)}"))
+            val read = mutableMapOf<String, String?>()
+            if (raw != null) {
+                val lines = raw.lines()
+                var i = 0
+                while (i < lines.size) {
+                    val marker = lines[i].trim()
+                    if (knobs.any { it.storeKey == marker }) {
+                        read[marker] = lines.getOrNull(i + 1)?.trim()
+                        i += 2
+                    } else {
+                        i++
+                    }
+                }
+            }
+            items.associate { item ->
+                val values = item.knobs.map { read[it.storeKey] }
+                item.id to if (values.any { it == null }) {
+                    null // 有一个旋钮没读到，整项状态就是未知
+                } else {
+                    item.knobs.indices.any { index ->
+                        val knob = item.knobs[index]
+                        val text = values[index]!!.takeIf { it != "null" }.orEmpty()
+                        text.isNotEmpty() &&
+                            text == (onValues["${item.id}|${knob.key}"]?.toString() ?: knob.onValue)
+                    }
+                }
+            }
+        }
 
     /**
-     * 应用升级后的处理结果。
+     * 全部恢复系统默认：触控 + 厂商功能。
      *
-     * @param restored 成功写回原值的项数
-     * @param stale 还原不了、但仍然留在系统里的项（名称）。界面必须把这些报出来，
-     *   否则用户以为已经干净了，而系统里还带着上一版写的东西。
+     * 判据是**有原值快照**，不是"界面记着开着" —— 快照才证明本软件写过这个键。
+     * 删掉之后系统用自己的 defaults 回退；删不掉的项保留快照，可以再试。
      */
-    data class Migration(val restored: Int, val stale: List<String>)
-
-    /**
-     * 版本号变了就还原上一版留下的改动。
-     *
-     * **不做"把旧值认作当前默认"。** 那条路一旦走了，用户就再也回不到系统默认 ——
-     * 原值被覆盖成我们自己写进去的值，此后每一次恢复都在恢复自己。
-     * 还原失败的项不悄悄丢掉快照：快照留着，用户仍可手动恢复；同时把名称报出来。
-     */
-    suspend fun migrateIfVersionChanged(): Migration? = touchMutex.withLock {
-        val recorded = context.tweakStore.data.first()[lastVersionKey]
-        if (recorded == BuildConfig.VERSION_CODE) return@withLock null
-        // 第一次安装：既没有快照也没有记录，没什么可还原的。
-        if (recorded == null && touchItemIds().isEmpty()) {
-            context.tweakStore.edit { it[lastVersionKey] = BuildConfig.VERSION_CODE }
-            return@withLock null
-        }
-        var restored = 0
-        val stale = mutableListOf<String>()
-        val on = touchItemIds()
-        for (item in TouchItems.all().filter { it.id in on }) {
-            val outcome = applyTouchState(on - item.id, currentTouchRate(), readTouchValues())
-            if (outcome.success) restored++ else stale += item.id
-        }
+    suspend fun resetAllToSystemDefaults(): Outcome {
+        val touch = resetTouchToSystemDefaults(currentTouchRate())
+        var vivoOk = 0
+        var vivoFailed = 0
         for (feature in VivoFeature.entries) {
             if (!vivo.hasSnapshot(feature)) continue
-            // force：升级后系统可能在期间改过这些键，漂移保护会拒绝恢复；这里是有意还原。
-            val outcome = vivo.apply(feature, restore = true, force = true)
-            if (outcome.success) restored++ else stale += feature.name
+            if (vivo.resetToSystemDefault(feature)) vivoOk++ else vivoFailed++
         }
-        context.tweakStore.edit { it[lastVersionKey] = BuildConfig.VERSION_CODE }
-        Migration(restored, stale)
+        // 直接写的开关只有在**有原值记录**时才删 —— 记录才是"本软件写过它"的证据。
+        // 没有记录的键属于用户或系统，恢复默认不该动它。
+        for (owned in OwnedKeys.directKeys()) {
+            if (!snapshots.hasEntry(RecoverySnapshot.DIRECT, owned.key)) continue
+            val raw = PrivilegeManager.exec("${SettingChannel.deleteCommand(owned.table, owned.key)} 2>&1")
+            val after = SettingChannel.get(owned.table, owned.key)
+            if (VivoReply.output(raw) == null || after != null) {
+                vivoFailed++
+            } else {
+                snapshots.release(RecoverySnapshot.DIRECT, owned.key, listOf(owned.key))
+                vivoOk++
+            }
+        }
+        val failed = (if (touch.success) 0 else 1) + vivoFailed
+        return Outcome(
+            failed == 0,
+            if (failed == 0) {
+                Message(R.string.reset_defaults_done, listOf(vivoOk))
+            } else {
+                Message(R.string.reset_defaults_partial, listOf(vivoOk, failed))
+            },
+        )
+    }
+
+    /**
+     * 恢复系统默认：删掉本软件写进去的键，让系统回到自己的默认值。
+     *
+     * **为什么删而不是写一个数值**：settings 的默认值不是存成行的，而是 ROM 里
+     * 的 defaults；行不存在时系统自动回退到默认值。所以"删除"才是最准确的重置。
+     * prop 用 `setprop ''` 清空，效果等同未设置。
+     *
+     * 只处理**有原值快照**的项 —— 那是本软件确实写过的证据。没写过的键不碰。
+     * 删除成功后释放快照；删除失败的保留快照，用户还能再试一次。
+     */
+    suspend fun resetTouchToSystemDefaults(rateHz: Int): Outcome = touchMutex.withLock {
+        if (!PrivilegeManager.state.value.mode.canElevate) {
+            return@withLock Outcome(false, Message(R.string.tweak_need_shizuku))
+        }
+        var ok = 0
+        var failed = 0
+        val on = touchItemIds()
+        for (item in TouchItems.all(rateHz).filter { it.id in on }) {
+            var itemOk = true
+            for (knob in item.knobs) {
+                val delete = if (knob.ns == TouchNs.PROP) {
+                    "setprop ${knob.key} ''"
+                } else {
+                    SettingChannel.deleteCommand(knob.ns.name.lowercase(), knob.key)
+                }
+                val raw = PrivilegeManager.exec("$delete 2>&1")
+                // 回读确认：键真的不在了才算删掉。只看退出码会把静默失败当成功。
+                val after = VivoReply.output(PrivilegeManager.exec(knob.readCommand()))
+                    ?.trim()?.let { if (it == "null") "" else it }.orEmpty()
+                if (VivoReply.output(raw) == null || after.isNotEmpty()) itemOk = false
+            }
+            if (itemOk) {
+                snapshots.release(RecoverySnapshot.TOUCH, item.id, item.knobs.map { it.storeKey })
+                ok++
+            } else failed++
+        }
+        if (ok > 0) context.tweakStore.edit { prefs -> prefs[touchItemsKey] = emptySet() }
+        Outcome(
+            failed == 0,
+            if (failed == 0) Message(R.string.touch_reset_done, listOf(ok))
+            else Message(R.string.touch_reset_partial, listOf(ok, failed)),
+        )
     }
 
     private suspend fun readTouchOriginals(): TouchOriginals =
@@ -673,11 +754,13 @@ class TweakRepository(
     suspend fun touchItemIds(): Set<String> = touchItems.first()
 
     suspend fun setFrameInterpolation(enabled: Boolean, superResolution: Boolean): Outcome {
+        // 写之前记原值：这是"本软件写过这个键"的唯一证据，恢复默认靠它。
+        val key = TweakCommands.keyFor(superResolution)
+        rememberOwned(key, "system", key)
         // 之前这里只查 `settings put` 的退出码，而它对任何值都返回 0，于是"开启"写的是
         // 关闭哨兵也照样报成功。现在写后必须回读，读到的值不是目标值就算失败。
         val command = TweakCommands.frameInterpolation(enabled, superResolution)
         val raw = PrivilegeManager.exec(command) ?: return Outcome(false, Message(R.string.tweak_no_service_interp))
-        val key = TweakCommands.keyFor(superResolution)
         val expected = TweakCommands.interpValue(enabled)
         val actual = VivoReply.output(PrivilegeManager.exec("settings get system $key"))
         if (actual != expected) {
@@ -699,23 +782,79 @@ class TweakRepository(
     }
 
     suspend fun setRotationSuggestion(enabled: Boolean): Outcome {
+        rememberOwned("show_rotation_suggestions", "secure", "show_rotation_suggestions")
         val outcome = runAll(listOf(TweakCommands.rotationSuggestion(enabled)))
         if (outcome.success) context.tweakStore.edit { it[rotationSuggestionKey] = enabled }
         return outcome
     }
 
     suspend fun setAutoRotate(enabled: Boolean): Outcome {
+        rememberOwned("accelerometer_rotation", "system", "accelerometer_rotation")
         val outcome = runAll(listOf(TweakCommands.autoRotate(enabled)))
         if (outcome.success) context.tweakStore.edit { it[autoRotateKey] = enabled }
         return outcome
     }
 
-    suspend fun forceRotation(rotation: Int): Outcome = runAll(TweakCommands.forceRotation(rotation))
-
-    suspend fun readAutoRotate(): Boolean {
-        val out = PrivilegeManager.exec(TweakCommands.readAutoRotate()) ?: return false
-        return out.substringBefore("[exit]").trim() == "1"
+    suspend fun forceRotation(rotation: Int): Outcome {
+        rememberOwned("accelerometer_rotation", "system", "accelerometer_rotation")
+        return runAll(TweakCommands.forceRotation(rotation))
     }
+
+    /**
+     * 直接写系统键之前，把这个键的原值记下来。
+     *
+     * **这是"本软件写过它"的唯一证据**：恢复默认只删有记录的键，
+     * 没有记录的键属于用户或系统，不碰。新增同类开关时记得在写之前调它。
+     */
+    private suspend fun rememberOwned(entry: String, table: String, key: String) {
+        runCatching {
+            snapshots.capture(RecoverySnapshot.DIRECT, entry, listOf(key)) {
+                SettingChannel.get(table, key)?.takeIf { v -> v != "null" }
+            }
+        }.onFailure {
+            // 不阻断写入（用户要的动作仍然执行），但必须留痕：
+            // 没有记录 = 这一项以后不会被"恢复默认"删掉。
+            magicau.mtkcontroller.data.log.AppLog.w(
+                "Tweaks",
+                "原值记录失败 $table $key: ${it.javaClass.simpleName}: ${it.message}",
+            )
+        }
+    }
+
+    // --- 相位偏移原值 -------------------------------------------------------
+    //
+    // 这些属性的原值必须在**第一次写之前**取，之后不再取：第二次读到的已经是我们
+    // 写进去的值。原来 ViewModel 每次进页面都覆盖一次内存快照，于是"恢复原值"
+    // 恢复的是自己写进去的值（按钮看起来没反应）；进程一死则连这份错的都没有。
+    // 现在用共享快照的首次写入语义，持久化在 DataStore 里。
+
+    suspend fun capturePhaseOffsets() {
+        for (key in PhaseOffset.keys) {
+            snapshots.capture(RecoverySnapshot.DIRECT, key.prop, listOf(key.prop)) {
+                PhaseOffset.readProp(it)
+            }
+        }
+    }
+
+    /** 有记录的原值；没记录的 prop 不出现在结果里。 */
+    suspend fun phaseOriginals(): Map<String, String?> = buildMap {
+        for (key in PhaseOffset.keys) {
+            if (!snapshots.hasEntry(RecoverySnapshot.DIRECT, key.prop)) continue
+            put(key.prop, snapshots.original(RecoverySnapshot.DIRECT, key.prop, key.prop))
+        }
+    }
+
+    /** 恢复成功后释放记录。 */
+    suspend fun releasePhaseOffsets() {
+        for (key in PhaseOffset.keys) {
+            snapshots.release(RecoverySnapshot.DIRECT, key.prop, listOf(key.prop))
+        }
+    }
+
+    /** 亮度守护在设备上的状态（VIVO 后端读系统键）。读不到返回 null。 */
+    suspend fun vivoBrightnessOn(): Boolean? =
+        vivo.currentValues()["system vivo_lcm_brightness_policy_disable"]
+            ?.trim()?.let { it == "1" }
 
     suspend fun setThermalBrightnessWatch(enabled: Boolean): Outcome = touchMutex.withLock {
         if (brightnessBackend.first() == BrightnessBackend.VIVO) {

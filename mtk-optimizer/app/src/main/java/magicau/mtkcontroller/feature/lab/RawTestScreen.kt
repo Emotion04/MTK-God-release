@@ -169,14 +169,17 @@ fun RawTestScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(stringResource(R.string.lab_hold_long), style = MaterialTheme.typography.bodyMedium)
+                        Text(stringResource(R.string.lab_send_mode), style = MaterialTheme.typography.bodyMedium)
                         Text(
                             stringResource(if (state.hold) R.string.lab_raw_hold_on else R.string.lab_raw_hold_off),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    Switch(checked = state.hold, onCheckedChange = onHold)
+                    FilterChip(selected = !state.hold, onClick = { onHold(false) },
+                        label = { Text(stringResource(R.string.lab_send_temporary)) })
+                    FilterChip(selected = state.hold, onClick = { onHold(true) },
+                        label = { Text(stringResource(R.string.lab_send_hold)) })
                 }
 
                 Button(

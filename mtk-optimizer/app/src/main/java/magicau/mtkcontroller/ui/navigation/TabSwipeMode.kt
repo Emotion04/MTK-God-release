@@ -20,10 +20,10 @@ import magicau.mtkcontroller.R
  * 两种模式下滑动过程完全一样（页面实时跟随），**区别只在松手那一刻**。
  * 所以这里不涉及两套手势逻辑，只是同一个手势的两种收尾。
  */
-enum class TabSwipeMode(val labelRes: Int, val descriptionRes: Int) {
+enum class TabSwipeMode(val labelRes: Int, val descriptionRes: Int?) {
 
     /** 松手即切到最近的一页。 */
-    NEAREST(R.string.tab_swipe_nearest, R.string.tab_swipe_nearest_desc),
+    NEAREST(R.string.tab_swipe_nearest, null),
 
     /**
      * 松手弹回原页；**停住不动满半秒再松手**才切换。
@@ -32,7 +32,7 @@ enum class TabSwipeMode(val labelRes: Int, val descriptionRes: Int) {
      * 手停下来之后的那段时间，否则快速拖到一半再按住也算切换，与"停一下确认"的
      * 本意相反。
      */
-    HOLD(R.string.tab_swipe_hold, R.string.tab_swipe_hold_desc),
+    HOLD(R.string.tab_swipe_hold, null),
 
     ;
 

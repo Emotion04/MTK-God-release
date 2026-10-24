@@ -2,6 +2,34 @@
 <resources>
     <string name="app_name">MTK God</string>
 
+    <!-- 版本有效期 -->
+    <string name="expiry_title">此版本已过期</string>
+    <string name="expiry_version">当前版本 %1$s</string>
+    <string name="expiry_body">请安装新版本。现在可以释放请求。</string>
+    <string name="expiry_release">释放全部请求</string>
+    <string name="expiry_restore">恢复全部设置为默认</string>
+    <string name="expiry_action_failed">操作失败，请重试</string>
+    <string name="update_title">发现新版本</string>
+    <string name="update_new_version">v%1$s</string>
+    <string name="update_version_code">版本号 %1$d</string>
+    <string name="update_separator">"  ·  "</string>
+    <string name="update_current_version">当前 v%1$s（versionCode %2$d）</string>
+    <string name="update_package_size">%1$s</string>
+    <string name="update_required">此版本需要更新后才能继续使用</string>
+    <string name="update_download">下载</string>
+    <string name="update_downloading_button">下载中</string>
+    <string name="update_downloading">%1$s / %2$s</string>
+    <string name="update_downloading_unknown">已下载 %1$s</string>
+    <string name="update_download_failed">下载失败，请重试或前往下载页</string>
+    <string name="update_install">安装</string>
+    <string name="update_open_page">前往下载</string>
+    <string name="update_later">稍后</string>
+    <string name="update_open_failed">打不开下载地址</string>
+    <string name="unit_gb">GB</string>
+    <string name="unit_mb">MB</string>
+    <string name="unit_kb">KB</string>
+    <string name="unit_b">B</string>
+
     <!-- ============ vivo 配置项 ============ -->
     <!-- 命名：vivo_feature_<项> / vivo_feature_<项>_detail。
          文案遵循 AGENTS.md 的文案规范：一句说完，只讲用户能感知的事实，
@@ -19,7 +47,7 @@
     <string name="perf_level_monster_plus">Monster+</string>
 
     <string name="vivo_feature_performance_mode">性能模式</string>
-    <string name="vivo_feature_performance_mode_detail">切换到厂商性能档，会改变频率和温控策略，发热和耗电明显增加。开启时会停止本软件的 CPU 频率控制。</string>
+    <string name="vivo_feature_performance_mode_detail">切换到 vivo 性能模式，会改变频率和温控策略，发热和耗电增加。切换时会短暂释放并重新应用本软件的 CPU 控制。</string>
 
     <string name="vivo_feature_frame_unlock">游戏帧率解锁</string>
     <string name="vivo_feature_frame_unlock_detail">解除系统对游戏帧率的限制。不是强制提高，游戏本身跑 60 帧时仍是 60 帧。</string>
@@ -27,20 +55,20 @@
     <string name="vivo_feature_preload">AI 预加载</string>
     <string name="vivo_feature_preload_detail">开启预加载，后台内存占用会增加。</string>
 
-    <string name="vivo_feature_ai">AI 加速配置</string>
+    <string name="vivo_feature_ai">AI 加速引擎</string>
     <string name="vivo_feature_ai_detail">修改 AI 加速配置，影响应用预测和耗电。</string>
 
     <string name="vivo_feature_memory">内存优化</string>
-    <string name="vivo_feature_memory_detail">开启内存优化，后台保活会变。</string>
+    <string name="vivo_feature_memory_detail">开启内存优化，后台驻留会变。</string>
 
     <string name="vivo_feature_animation">动画时长倍率</string>
-    <string name="vivo_feature_animation_detail">调整动画时长，0 为关闭。</string>
+
 
     <string name="vivo_feature_window_animation">窗口动画倍率</string>
-    <string name="vivo_feature_window_animation_detail">调整开关窗口动画，1 为标准速度。</string>
+
 
     <string name="vivo_feature_transition_animation">过渡动画倍率</string>
-    <string name="vivo_feature_transition_animation_detail">调整页面切换动画，1 为标准速度。</string>
+
 
     <string name="vivo_feature_game_thermal">游戏温控配置</string>
     <string name="vivo_feature_game_thermal_detail">改游戏温控配置，20 秒后自动恢复。</string>
@@ -157,6 +185,14 @@
     <string name="touch_item_sf_latch_detail">系统在排帧时不再等上一帧排好，新画面可能更快上屏；也可能造成轻微卡顿。</string>
 
     <string name="touch_items_heading">逐项调整</string>
+    <string name="touch_state_unknown">读不到当前状态</string>
+    <string name="reset_defaults_title">恢复全部设置为默认</string>
+    <string name="reset_defaults_sub">删掉本软件写过的系统设置，让系统回到自己的默认值</string>
+    <string name="reset_defaults_confirm">会删除本软件写进系统的全部设置：触控、厂商功能、旋转与插帧。系统会回退到自己的默认值；已经打开的功能会一并关闭。</string>
+    <string name="reset_defaults_done">已恢复系统默认（厂商功能 %1$d 项）</string>
+    <string name="reset_defaults_partial">厂商功能恢复了 %1$d 项，%2$d 项没删掉</string>
+    <string name="touch_reset_done">已恢复系统默认（%1$d 项）</string>
+    <string name="touch_reset_partial">恢复了 %1$d 项，%2$d 项没删掉</string>
     <string name="touch_number_current">设备现在：%1$s</string>
     <string name="touch_number_range">可填 %1$d–%2$d</string>
     <string name="touch_items_backend_note">当前触控方案不支持逐项控制，切换到默认方案后可逐项开关。</string>
@@ -215,17 +251,18 @@
     <string name="freq_companion_uclamp">前台优先升频</string>
 
     <!-- ============ 频率请求带不带上限 ============ -->
+    <string name="freq_thermal_companion_title">应用时一并放开温控</string>
+    <string name="freq_thermal_companion_on">同时放开温控并下发硬限</string>
+    <string name="freq_thermal_companion_off">不改温控档位</string>
     <string name="freq_ceiling_title">频率范围模式</string>
     <string name="freq_ceiling_both">限区间</string>
     <string name="freq_ceiling_floor_only">只保下限</string>
     <string name="freq_ceiling_only">只压上限</string>
     <string name="freq_hard_limits_title">附带硬上下限</string>
     <!-- 实测软硬等效后才默认关的。说清"换机型可能用得上"，别让人以为关了是残缺。 -->
-    <string name="freq_hard_limits_on">同时下发硬上下限（换机型时若只认硬限再开）</string>
-    <string name="freq_hard_limits_off">只发软上下限（本机实测已够）</string>
-    <string name="freq_ceiling_hint">“限区间”把频率限制在选定范围内，低于系统默认值时用它。
-“只保下限”不限制最高频率，想突破系统默认上限时用它 —— 厂商的高性能场景就是只发下限。
-“只压上限”不抬下限，用于压住发热。</string>
+    <string name="freq_hard_limits_on">同时下发硬限</string>
+    <string name="freq_hard_limits_off">只发软限</string>
+    <string name="freq_ceiling_hint">低于系统默认上限时用。</string>
 
     <!-- ============ 开关前后的实际变化 ============ -->
     <!-- ============ 实验室 ============ -->
@@ -235,10 +272,13 @@
              不属于"实验室"。将来这一页搬到哪儿，名字都不用改。 -->
         <!-- %1$d 是档位编号，补零成两位，和文件名里的编号一致。 -->
         <string name="battery_whitelist_title">电池优化白名单</string>
-    <string name="battery_whitelist_sub">加入后系统不会因为长时间不用而把它切掉。</string>
     <string name="battery_whitelist_unknown">读不到</string>
     <string name="battery_whitelist_open">系统电池优化</string>
-    <string name="battery_whitelist_open_sub">弹出系统自带的电池优化授权，需要你点允许。</string>
+    <string name="battery_whitelist_open_joined">已加入，点击在系统页关闭</string>
+    <string name="battery_whitelist_open_not_joined">未加入，点击在系统页开启</string>
+    <string name="battery_whitelist_change_failed">未能修改白名单，请确认 Shizuku 已授权</string>
+    <string name="battery_whitelist_not_changed">系统没有接受这次修改</string>
+    <string name="battery_whitelist_open_failed">打不开系统电池设置</string>
         <string name="app_thermal_channel_name">按应用温控</string>
     <string name="app_thermal_title">按应用温控</string>
     <string name="app_thermal_sub">前台应用命中表里的规则时，切换到指定的温控策略。只在本软件运行时生效。</string>
@@ -257,6 +297,9 @@
     <string name="lab_reset">恢复</string>
     <string name="lab_clear_observations">清空全部记录</string>
     <string name="lab_hold_long">长期保持</string>
+    <string name="lab_send_mode">发送方式（测试参数）</string>
+    <string name="lab_send_temporary">临时</string>
+    <string name="lab_send_hold">长期保持</string>
 
     <string name="touch_change_heading">本次改动</string>
     <string name="touch_change_moved">有变化 %1$d 项</string>
@@ -432,18 +475,25 @@
     <string name="thermal_source_app_rule">按应用温控</string>
     <string name="thermal_source_lab">实验室测试</string>
     <!-- 原始错误弹窗。标题说"这是什么"，不复述摘要。 -->
-    <string name="raw_error_title">原始错误</string>
+    <string name="raw_error_title">详细信息</string>
     <!-- 日志行。温控档位读取的结果，%1$d 是个数。 -->
     <string name="thermal_log_count">温控档位读到 %1$d 个</string>
     <string name="thermal_no_pressure">这一档不做温度压频</string>
+    <string name="thermal_mapping_disabled">CPU 频率表已关闭（mode=disabled），温度不会压频</string>
+    <string name="thermal_chart_hint">拖动曲线查看对应温度下的上限</string>
+    <string name="thermal_axis_temp">温度 °C</string>
+    <string name="thermal_view_absolute">绝对值</string>
+    <string name="thermal_view_ratio">占比</string>
+    <string name="thermal_selected_temp">%1$d°C 时的上限</string>
+    <string name="thermal_gpu_title">GPU 频率</string>
+    <string name="thermal_charger_title">充电限流</string>
+    <string name="thermal_table_temp">温度</string>
     <!-- 传感器的原始名称是设备原文，照原样显示；这里只说"数据来自哪一路"。 -->
     <string name="thermal_sensor_from">取自 %1$s</string>
     <string name="thermal_target_temp">目标温度 %1$d°C</string>
     <string name="thermal_target_temp_range">目标温度 %1$d°C（可调 %2$d–%3$d）</string>
     <string name="thermal_isolate_from">%1$s°C 起关部分核心</string>
     <!-- 冒号后面那串"温度→频率"是本机实测数据，格式保持紧凑，不翻译。 -->
-    <string name="thermal_gpu_ladder">GPU：%1$s</string>
-    <string name="thermal_charger_limit">充电限流：%1$s</string>
     <string name="governor_title">CPU 调速器</string>
     <string name="governor_read_only">不可改</string>
     <string name="governor_unsupported">设备未报告</string>
@@ -541,19 +591,19 @@
     <string name="home_freq_title">频率</string>
 
     <!-- ============ 性能页（CPU）============ -->
-    <string name="cpu_no_clusters_title">未检测到 CPU 簇</string>
+    <string name="cpu_no_clusters_title">未检测到任何 CPU 簇</string>
     <string name="cpu_no_clusters_body">设备上没有找到频率策略目录。</string>
     <string name="cpu_range_title">频率区间</string>
     <!-- %1$s = 形如 "40/42/45/48/60/80 °C" 的阈值串 -->
-    <string name="cpu_thermal_skin">当前皮肤温控阈值 %1$s</string>
+    <string name="cpu_thermal_skin">当前skin温控阈值 %1$s</string>
     <string name="cpu_thermal_badge">温控 %1$02d</string>
     <string name="cpu_thermal_badge_none">温控未选</string>
+    <string name="cpu_thermal_badge_empty">温控 —</string>
     <string name="cpu_pending_suffix">（未应用）</string>
     <string name="cpu_core_count">%1$d 核</string>
     <string name="cpu_no_freq_table">%1$s：没有可用频率表</string>
-    <string name="cpu_gauge_blocked">红色是够不着的部分</string>
     <string name="cpu_load_stop">停止负载 %1$d 秒</string>
-    <string name="cpu_load_start">加满载负载</string>
+    <string name="cpu_load_start">运行满载负载</string>
     <string name="cpu_emergency_restore">强制恢复</string>
     <string name="cpu_save_profile">保存为方案</string>
     <string name="cpu_unavailable">调频当前不可用</string>
@@ -586,7 +636,7 @@
 
     <!-- ============ 诊断页 ============
          提权详情那一块是排错用的：**标签进资源，值保持设备原文**。 -->
-    <string name="diag_hint">首次运行后把结果截图发我，即可确认探测是否准确。</string>
+    <string name="diag_hint">可确认探测是否准确。</string>
     <string name="diag_refresh">重新探测</string>
     <string name="diag_read_limits">读取实时频率上下限</string>
     <string name="diag_privilege_detail">提权详情</string>
@@ -615,7 +665,7 @@
     <string name="diag_priv_note">备注: %1$s</string>
 
     <!-- ============ 通知管理 ============ -->
-    <string name="notif_hint">点击应用进入 Android 原生通知设置。</string>
+    <string name="notif_hint">进入 Android 原生通知设置。</string>
     <string name="notif_search">搜索应用</string>
     <string name="notif_app_settings">本应用的通知设置</string>
 
@@ -629,12 +679,34 @@
          这里放的是两级页面上反复出现的行标题与说明。 -->
     <string name="settings_default_tab">默认标签页</string>
     <string name="settings_default_tab_sub">打开 App 时显示</string>
+    <!-- 二级页的灰字分组标题。分类按“用户想做什么”，不按数据存在哪。 -->
+    <string name="settings_group_startup">启动与任务</string>
+    <string name="settings_group_interaction">交互</string>
+    <string name="settings_group_background">后台与电池</string>
+    <string name="settings_group_theme">主题</string>
+    <string name="settings_group_nav">底栏</string>
+    <string name="settings_group_cpu_apply">CPU控制</string>
+    <string name="settings_group_cpu_page">控制页</string>
+    <string name="settings_group_input">触控与显示</string>
+    <string name="settings_group_vendor_perf">厂商性能档位</string>
+    <string name="settings_group_keepalive">常驻通知</string>
+    <string name="settings_group_notif_content">显示内容</string>
+    <string name="settings_group_notif_system">系统设置</string>
+    <string name="settings_group_lab">实验入口</string>
+    <string name="settings_group_diagnostics">诊断与日志</string>
+    <string name="settings_group_backup">配置备份</string>
     <string name="settings_apply_mode">应用方式</string>
     <string name="settings_reapply_interval">间隔</string>
-    <string name="settings_reapply_interval_note">间隔越短越费电，也越容易和温控顶撞。</string>
+    <string name="settings_reapply_interval_note">短间隔消耗更多资源。</string>
+    <!-- 放在“CPU 下发”分组里，不再重复 CPU 前缀。 -->
+    <string name="settings_screen_policy_short">锁屏时</string>
+    <string name="settings_hide_recents">隐藏最近任务卡片</string>
+    <string name="settings_hide_recents_sub">不在最近任务列表中显示</string>
+    <string name="settings_apply_on_boot">开机后自动应用</string>
+    <string name="settings_apply_on_boot_sub">Shizuku 就绪后恢复上次cpu控制</string>
     <string name="settings_touch_backend">触控实现方案</string>
     <string name="settings_brightness_backend">亮度实现方案</string>
-    <string name="settings_theme_mode">深色 / 浅色模式</string>
+    <string name="settings_theme_mode">深色/浅色模式</string>
     <string name="settings_motion_speed">动画时长</string>
     <string name="settings_shape">圆角</string>
     <string name="settings_shape_sub">卡片与控件的圆角大小</string>
@@ -642,10 +714,14 @@
     <string name="settings_nav_visibility">底栏滚动行为</string>
     <string name="settings_nav_style">底栏样式</string>
     <string name="settings_nav_custom_palette">底栏色系</string>
-    <string name="settings_cpu_layout">CPU 页控制区</string>
-    <string name="settings_range_control">频率区间调节方式</string>
+    <string name="settings_cpu_page_layout">页面布局</string>
+    <string name="settings_range_control_short">区间调节方式</string>
     <string name="settings_tools">实用工具</string>
     <string name="settings_tools_sub">触控优化、插帧、旋转建议、高温降亮度</string>
+    <string name="settings_display_tweaks">显示与交互</string>
+    <string name="settings_performance_mode">性能模式</string>
+    <string name="settings_performance_mode_sub">BOOST / BOOST+ / Monster；打开工具页的“系统与网络配置”</string>
+    <string name="settings_performance_mode_note">普通档还有厂商自己的频率上限；需要更高时切到这里，代价是本应用交出控制。</string>
     <!-- 切回标签时：二级/三级页面保留还是回到主页。 -->
     <string name="settings_tab_restore">切换底栏标签时</string>
     <string name="tab_restore_keep">回到上次的页面</string>
@@ -657,8 +733,6 @@
     <string name="settings_app_thermal_sub">按前台应用切换温控策略</string>
     <string name="settings_tests">测试中心</string>
     <string name="settings_tests_sub">接口验证、配置采集与历史测试</string>
-    <string name="settings_notifications">通知管理</string>
-    <string name="settings_notifications_sub">按应用管理 Android 原生通知</string>
     <string name="settings_diagnostics">诊断信息</string>
     <string name="settings_diagnostics_sub">授权状态与功能探测结果</string>
     <string name="settings_log_level">日志记录级别</string>
@@ -786,36 +860,45 @@
     <string name="phase_offset_zero">%1$s归零</string>
     <string name="value_empty">空</string>
     <string name="cpu_no_replay_settings">没有可重放的设置</string>
+    <string name="cpu_no_last_range">没有可恢复的上一次范围</string>
+    <string name="cpu_floor_not_enforced_short">系统当前上限低于请求下限</string>
+    <string name="cpu_floor_retry_failed_kept_short">系统当前上限低于请求下限；已保留原请求</string>
     <string name="cpu_replay_cluster_gone">重放设置中的 CPU 簇已不可用</string>
     <string name="cpu_limit_still_in_range">当前限制仍在请求范围内</string>
     <string name="cpu_release_done">释放操作已完成</string>
     <string name="cpu_release_done_current">释放操作已完成 · 当前 %1$s</string>
     <!-- 读回判定。单簇的原因与整批的摘要。 -->
-    <string name="cpu_verify_unreadable">上下限读回不完整</string>
-    <string name="cpu_verify_constrained">范围被进一步收窄</string>
+    <string name="cpu_verify_unreadable">没读到上下限</string>
+    <string name="cpu_verify_constrained">读回的范围比请求更窄</string>
     <string name="cpu_verify_ok">本次读回符合</string>
     <string name="cpu_verify_summary_ok">本次读回符合请求</string>
-    <string name="cpu_verify_summary_unreadable">请求已发送，部分簇无法验证</string>
-    <string name="cpu_verify_summary_constrained">请求已发送，实际范围被收窄</string>
-    <string name="cpu_verify_summary_conflict">请求已发送，实际范围冲突</string>
+    <string name="result_ok">成功</string>
+    <string name="result_warning">注意</string>
+    <string name="result_error">失败</string>
+    <string name="result_detail_toggle">详细信息</string>
+    <string name="cpu_verify_summary_unreadable">已发送，但没有读到全部簇的上下限</string>
+    <string name="cpu_verify_summary_constrained">已发送，系统把范围收得更窄</string>
+    <string name="cpu_verify_summary_conflict">已发送，但系统没有按请求执行</string>
     <string name="cpu_poll_exception">轮询异常: %1$s</string>
     <string name="cpu_governor_done">调速器已切换</string>
     <!-- 温控档位摘要：现读现解设备上的 thermal_policy_NN.conf，不随包静态说明。 -->
     <string name="lab_brief_loading">正在读这一档的规则…</string>
+    <string name="lab_state_unknown">未读</string>
     <string name="lab_thermal_selected">第 %1$d 档的规则</string>
     <string name="lab_released_all">已释放实验室的所有请求</string>
     <string name="cpu_governor_all_failed">调速器切换失败:节点不可写,需要 root</string>
     <string name="cpu_governor_partial">调速器部分失败:%1$s 不可写</string>
     <!-- 读回冲突的具体原因。 -->
-    <string name="cpu_conflict_max_below_min">实际上限低于请求下限（限制来源未确定）</string>
-    <string name="cpu_conflict_min_above_max">实际下限高于请求上限（限制来源未确定）</string>
-    <string name="cpu_conflict_collapsed">范围塌缩</string>
-    <string name="cpu_conflict_partial">当前频率超出请求范围，上下限读回不完整</string>
-    <string name="cpu_conflict_out_of_range">读回超出请求范围</string>
+    <string name="cpu_conflict_max_below_min">读到的上限低于你设的下限</string>
+    <string name="cpu_conflict_min_above_max">读到的下限高于你设的上限</string>
+    <string name="cpu_conflict_collapsed">上下限被压成同一个值</string>
+    <string name="cpu_conflict_partial">当前频率不在设定范围内，也没读到上下限</string>
+    <string name="cpu_conflict_out_of_range">读到的范围超出你的设定</string>
     <!-- 逐簇读回行：%1$s 是读数描述，%4$s 是判定原因。这是报告字段，同时也是给用户看的结论。 -->
     <string name="cpu_verify_row">%1$s 请求=%2$d-%3$dMHz %4$s</string>
     <!-- 把两条结论并成一行。读回结果、调速器提示都用它。 -->
-    <string name="cpu_outcome_join">%1$s · %2$s</string>
+    <string name="cpu_outcome_join">%1$s
+%2$s</string>
 
     <!-- ============ 工具页的结果说明 ============ -->
     <string name="tweak_display_no_hz">未读取到支持的刷新率</string>
@@ -839,8 +922,8 @@
     <string name="tweaks_task_status">任务状态</string>
     <!-- ============ 本机状态与工具 ============ -->
     <string name="state_read_failed">读取失败，请重新进入本页</string>
-    <string name="gpu_empty_title">未检测到 GPU 调频接口</string>
-    <string name="gpu_empty_body">已尝试 /proc/gpufreqv2、/proc/gpufreq 与 /sys/class/devfreq/mtk-mali。\n本机没有可用的 GPU 调频接口。</string>
+    <string name="gpu_empty_title">这台机器不支持 GPU 调频</string>
+    <string name="gpu_empty_body">GPU 频率由系统管理，本软件不提供控制。</string>
     <string name="gpu_page_title">GPU 调频</string>
     <string name="gpu_page_info">选择范围后点击应用；释放可撤销本应用请求。厂商电源服务可能覆盖设置，效果依设备而定。</string>
     <string name="gpu_current_freq">当前频率</string>
@@ -864,6 +947,15 @@
     <string name="reapply_channel_desc">按设定间隔反复下发 CPU 频率上下限</string>
     <string name="reapply_title">正在维持 CPU 频率限制</string>
     <string name="reapply_every">每 %1$s 秒重新下发一次</string>
+    <string name="reapply_boot_waiting">等待 Shizuku 就绪后应用上一次设置</string>
+
+    <!-- 状态栏快捷开关 -->
+    <string name="tile_state_on">控制中</string>
+    <string name="tile_state_off">未控制</string>
+    <string name="tile_released">已释放 CPU 控制</string>
+    <string name="tile_applied">已恢复 CPU 控制</string>
+    <string name="tile_no_range">还没有可恢复的频率范围</string>
+    <string name="tile_failed">操作失败：%1$s</string>
     <!-- 二级页标题。 -->
     <string name="sub_tests">测试中心</string>
     <string name="sub_feature_trial">功能逐个试用</string>
@@ -1237,38 +1329,43 @@
 
     <!-- 深色 / 浅色模式 -->
     <string name="theme_mode_system">跟随系统</string>
-    <string name="theme_mode_system_desc">与系统深色模式保持一致</string>
     <string name="theme_mode_light">浅色</string>
-    <string name="theme_mode_light_desc">始终使用浅色界面</string>
     <string name="theme_mode_dark">深色</string>
-    <string name="theme_mode_dark_desc">始终使用深色界面</string>
 
     <!-- 应用方式 -->
     <string name="apply_mode_single">单次设置</string>
-    <string name="apply_mode_single_desc">只在点击应用时下发一次</string>
+    <string name="apply_mode_single_desc">只在点击应用时执行一次</string>
     <string name="apply_mode_polling">轮询修改</string>
-    <string name="apply_mode_polling_desc">按间隔反复下发，防止被系统覆盖</string>
+    <string name="apply_mode_polling_desc">定时下发目标频率，防止被系统覆盖</string>
+
+    <!-- 锁屏联动 -->
+    <string name="screen_policy_off">不处理</string>
+    <string name="screen_policy_keep">保持并重发</string>
+    <string name="screen_policy_keep_desc">锁屏不释放，且亮屏后重发</string>
+    <string name="screen_policy_release">释放并重发</string>
+    <string name="screen_policy_release_desc">锁屏恢复系统调度，亮屏后重发</string>
+    <string name="screen_policy_service_note">保持和释放会启动后台服务。</string>
 
     <!-- CPU 页控制区 -->
     <string name="cpu_layout_per_cluster">分卡片</string>
-    <string name="cpu_layout_per_cluster_desc">温控、调速器、每个核心各一张卡片</string>
+    <string name="cpu_layout_per_cluster_desc">每簇各一张卡片</string>
     <string name="cpu_layout_unified">合并卡片</string>
-    <string name="cpu_layout_unified_desc">全部控件收进一张卡片，突出方案切换</string>
+    <string name="cpu_layout_unified_desc">合并卡片，紧凑视图</string>
 
     <!-- 频率区间调节方式 -->
     <string name="range_control_segment">分段条</string>
-    <string name="range_control_segment_desc">点一下锁频，再点一下取范围，拖动划一段</string>
+    <string name="range_control_segment_desc">特色，点一下选择频率，再点一下取范围；同时可以拖动以选择范围</string>
     <string name="range_control_slider">双向滑块</string>
-    <string name="range_control_slider_desc">两个滑块分别代表下限和上限，拖动两端</string>
+    <string name="range_control_slider_desc">经典，拖动两端指针选定范围</string>
 
     <!-- 底栏滚动行为 -->
     <string name="nav_visibility_fixed">固定</string>
     <string name="nav_visibility_fixed_desc">内容在底栏之上，底栏一直在</string>
-    <string name="nav_visibility_auto_hide">上滑隐藏</string>
-    <string name="nav_visibility_auto_hide_desc">内容铺满；向上滚时底栏隐去，向下滚时回来</string>
+    <string name="nav_visibility_auto_hide">自动隐藏</string>
+    <string name="nav_visibility_auto_hide_desc">内容铺满；向上滚动自动隐藏底栏</string>
 
     <!-- 底栏样式 -->
-    <string name="nav_style_colorful">彩色</string>
+    <string name="nav_style_colorful">默认</string>
     <string name="nav_style_colorful_desc">每个标签使用自己的颜色</string>
     <string name="nav_style_follow_theme">跟随主题色</string>
     <string name="nav_style_follow_theme_desc">全部使用当前主题的强调色</string>
@@ -1282,31 +1379,57 @@
     <string name="nav_tools">工具</string>
     <string name="nav_settings">设置</string>
     <string name="settings_cat_general">通用</string>
-    <string name="settings_cat_general_sub">启动页面、实现方案、下发方式</string>
-    <string name="settings_cat_appearance">外观与行为</string>
-    <string name="settings_cat_appearance_sub">主题、圆角、动画、底栏与手势</string>
+    <string name="settings_cat_general_sub">启动页、交互与后台、最近任务隐藏</string>
+    <string name="settings_cat_appearance">外观</string>
+    <string name="settings_cat_appearance_sub">主题、样式、动画与底栏</string>
+    <string name="settings_cat_performance">性能</string>
+    <string name="settings_cat_performance_sub">CPU控制、触控与显示</string>
     <string name="settings_cat_lab">实验室</string>
-    <string name="settings_cat_lab_sub">按应用温控、逐 ID 测试、归档</string>
+    <string name="settings_cat_lab_sub">[谨慎使用]实验性/废弃功能、开发工具</string>
+    <!-- 通知与常驻服务 -->
+    <string name="keepalive_channel">通知</string>
+    <string name="keepalive_channel_desc">常驻通知</string>
+    <string name="keepalive_idle">空闲</string>
+    <string name="keepalive_next">下一方案</string>
+    <string name="keepalive_release">释放</string>
+    <string name="keepalive_apply">应用</string>
+    <string name="keepalive_stop">结束</string>
+    <string name="keepalive_no_profile">没有方案</string>
+    <string name="keepalive_no_control">未控制</string>
+    <string name="keepalive_switched">已切换到 %1$s</string>
+    <string name="keepalive_switch_failed">切换失败：%1$s</string>
+    <string name="keepalive_released">已释放 CPU 控制</string>
+    <string name="keepalive_release_failed">释放失败</string>
+    <string name="keepalive_applied">已应用 CPU 控制</string>
+    <string name="keepalive_apply_failed">应用失败</string>
+    <string name="settings_keepalive">通知</string>
+    <string name="settings_keepalive_sub">常驻通知，可快捷应用或释放控制</string>
+    <string name="settings_notif_profile">当前方案</string>
+    <string name="settings_notif_cpu">CPU 频率</string>
+    <string name="settings_notif_temp">电池温度</string>
+    <string name="settings_notif_quick">快速切换方案</string>
+    <string name="settings_notif_quick_sub">「下一方案」按钮，点击可轮换方案</string>
+    <string name="settings_notif_system">系统通知设置</string>
+    <string name="settings_notif_system_sub">管理所有APP的通知设置</string>
+    <string name="settings_keepalive_need_permission">请授予通知权限</string>
     <string name="settings_cat_notifications">通知</string>
-    <string name="settings_cat_notifications_sub">按应用管理通知</string>
+    <string name="settings_cat_notifications_sub">常驻通知与快捷控制</string>
     <string name="settings_cat_maintenance">维护与诊断</string>
-    <string name="settings_cat_maintenance_sub">诊断信息、日志、导出报告</string>
+    <string name="settings_cat_maintenance_sub">日志、诊断信息、调试报告</string>
     <string name="settings_cat_backup">备份与恢复</string>
     <string name="settings_cat_backup_sub">方案与偏好的导出、导入</string>
 
     <!-- 拖底栏松手后的行为 -->
     <string name="tab_swipe_nearest">松手即切换</string>
-    <string name="tab_swipe_nearest_desc">拖到目标后松手，直接切过去</string>
+    <string name="tab_swipe_nearest_desc">松手后直接切换</string>
     <string name="tab_swipe_hold">停留后切换</string>
-    <string name="tab_swipe_hold_desc">松手弹回；停住半秒再松手才切换</string>
+    <string name="tab_swipe_hold_desc">松手弹回原位；停留半秒才切换</string>
 
     <!-- 动画时长 -->
     <string name="motion_system">跟随系统</string>
-    <string name="motion_system_desc">由系统动画设置决定</string>
     <string name="motion_fast">轻快</string>
-    <string name="motion_fast_desc">在系统设置之上再快一点</string>
     <string name="motion_relaxed">舒缓</string>
-    <string name="motion_relaxed_desc">在系统设置之上再慢一点</string>
+
 
     <!-- 主题色。group 是选择列表里的分组小标题。 -->
     <string name="palette_group_standard">标准</string>
@@ -1335,7 +1458,7 @@
     <string name="palette_custom">自定义</string>
     <string name="custom_hue">色相</string>
     <string name="custom_concentration">浓度</string>
-    <string name="custom_note">只调色相和浓度。亮度由可读性决定，所以怎么调都是莫兰迪，按钮上的白字也始终清楚。</string>
+    <string name="custom_note">莫兰迪色系</string>
 
     <!-- 圆角 -->
     <string name="shape_compact">紧凑</string>
@@ -1485,7 +1608,6 @@
 <string name="lab_state_working">生效</string>
 <string name="lab_state_no_effect">未见效</string>
 <string name="lab_state_unsupported">本机不支持</string>
-<string name="lab_state_unknown">无法判断</string>
 <string name="lab_probe_section_limiter">谁在限制</string>
 <string name="lab_probe_section_limiter_note">硬限范围 vs 当前范围；仅用于判断是否被压，不是当前读数</string>
 <string name="lab_probe_section_enforced">当前生效的限制</string>
@@ -1578,7 +1700,29 @@
 <string name="lab_verdict_all_invalid">%1$d 个 ID 全部无效 —— 节点仍是 "%2$s"</string>
 <string name="lab_verdict_changed">节点 \"%1$s\" → \"%2$s\"</string>
     <!-- strings_feature_rest.xml -->
-<string name="about_version_line">versionCode %1$d，%2$s</string>
+<string name="about_author_display">酷安@卷猫</string>
+<string name="about_author_line">by %1$s</string>
+<string name="about_channel_canary">Canary</string>
+<string name="changelog_title">更新日志</string>
+<string name="changelog_source_remote">来自远程</string>
+<string name="changelog_source_local">本地记录</string>
+<string name="changelog_refresh">刷新</string>
+<string name="changelog_empty">暂无更新日志</string>
+<string name="changelog_remote_failed">远端更新日志读取失败，显示本地记录</string>
+<string name="changelog_version">版本 %1$s</string>
+<string name="changelog_current">当前版本</string>
+<string name="changelog_type_feat">新增</string>
+<string name="changelog_type_fix">修复</string>
+<string name="changelog_type_perf">优化</string>
+<string name="changelog_type_refactor">重构</string>
+<string name="changelog_type_docs">文档</string>
+<string name="changelog_type_chore">杂项</string>
+<string name="changelog_type_other">其他</string>
+<string name="about_version_line">versionCode %1$d</string>
+    <string name="about_check_update">检查更新</string>
+    <string name="about_check_update_checking">正在检查…</string>
+    <string name="about_check_update_latest">已是最新版本</string>
+    <string name="about_check_update_failed">检查失败，请检查网络</string>
 <string name="app_thermal_foreground">当前前台：%1$s</string>
 <string name="app_thermal_rules_title">规则表</string>
 <string name="app_thermal_more_indices">还有 %1$d 个编号，含义见「性能 → 高级设置 → 温控档位」。</string>
@@ -1692,6 +1836,8 @@
     <string name="tweaks_trial_msg_restoring">正在恢复…</string>
     <string name="tweaks_trial_msg_reading_config">正在读取本机配置…</string>
     <string name="tweaks_trial_err_write_failed">无法写入所选文件</string>
+    <string name="tweaks_trial_msg_read_failed">读不到系统设置，未生成备份</string>
+    <string name="tweaks_trial_msg_backup_partial">%1$d 个键读不到，这份备份不包含它们</string>
     <string name="tweaks_trial_msg_exported">已导出 %1$d 个键的当前值</string>
     <string name="tweaks_trial_msg_reading_backup">正在读取备份…</string>
     <string name="tweaks_trial_msg_none_selected">没有勾选任何一项</string>
@@ -1764,6 +1910,13 @@
 <string name="compile_status_no_service">命令没能送到用户服务，请确认 Shizuku 已连接</string>
     <string name="compile_status_no_path">读不到 %1$s 的安装路径</string>
 <string name="lab_verdict_unreadable_no_write">读不到判据节点，未下发。</string>
+<string name="adapt_title">适配测试</string>
+<string name="adapt_hint">点开始后，去复现问题（应用频率或实验室下发），再回来点结束。报告会自动生成。</string>
+<string name="adapt_blind">允许无回读下发</string>
+<string name="adapt_blind_sub">仅 CPU 频率，5 秒自动释放；结果记为未知</string>
+<string name="adapt_start">开始适配测试</string>
+<string name="adapt_stop">结束并生成报告</string>
+<string name="lab_verdict_blind_sent">已做 %1$d 秒有界下发；判据节点读不到，效果需要体感或报告判断。</string>
 <string name="maintenance_bad_package">应用包名无效</string>
     <string name="maintenance_no_install_path">无法读取应用安装路径</string>
     <string name="maintenance_apk_unreadable">应用不存在或 APK 不可读</string>

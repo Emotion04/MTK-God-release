@@ -6,18 +6,35 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.compose.BackHandler
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import magicau.mtkcontroller.data.AppExpiry
 import magicau.mtkcontroller.data.privilege.PrivilegeManager
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import magicau.mtkcontroller.data.RecentsHider
+import magicau.mtkcontroller.data.update.UpdateCenter
 import magicau.mtkcontroller.domain.model.ThemeMode
+import magicau.mtkcontroller.di.containerViewModelFactory
+import magicau.mtkcontroller.feature.expiry.ExpiryScreen
+import magicau.mtkcontroller.feature.expiry.ExpiryViewModel
+import magicau.mtkcontroller.feature.settings.UpdateCenterDialog
 import magicau.mtkcontroller.ui.navigation.AppNavHost
 import magicau.mtkcontroller.ui.theme.AppPalette
 import magicau.mtkcontroller.ui.theme.MtkOptimizerTheme
@@ -31,12 +48,20 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         PrivilegeManager.refresh()
         if (PrivilegeManager.state.value.permissionGranted) PrivilegeManager.bindUserService()
+        // 每次回到前台重新应用一次：进程重启或从启动器新建任务后，任务标记需要重新带上。
+        // 只影响本应用自己的任务，失败只记日志。
+        val container = (application as MtkApp).container
+        container.applicationScope.launch {
+            val hidden = container.settingsRepository.hideFromRecents.first()
+            RecentsHider.apply(this@MainActivity.applicationContext, hidden)
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val container = (application as MtkApp).container
+        UpdateCenter.maybeCheck(container)
         setContent {
             val paletteName by container.settingsRepository.themePalette
                 .collectAsStateWithLifecycle(initialValue = AppPalette.SYSTEM.name)
@@ -72,7 +97,18 @@ class MainActivity : ComponentActivity() {
                 shapeStyle = ShapeStyle.fromName(shapeStyleName),
                 motionSpeed = MotionSpeed.fromName(motionSpeedName),
             ) {
+                if (AppExpiry.isExpired()) {
+                    // 过期：主界面根本不组合，所以没有返回或深链可以绕过去。
+                    // 只留释放/恢复两个安全出口，见 ExpiryScreen。
+                    BackHandler(enabled = true) { }
+                    val expiryVm: ExpiryViewModel = viewModel(
+                        factory = containerViewModelFactory { ExpiryViewModel(container) },
+                    )
+                    ExpiryScreen(expiryVm, Modifier.fillMaxSize())
+                    return@MtkOptimizerTheme
+                }
                 AppNavHost(container = container, modifier = Modifier.fillMaxSize())
+                UpdateCenterDialog(container)
                 val privilege by PrivilegeManager.state.collectAsStateWithLifecycle()
                 var dismissed by rememberSaveable { mutableStateOf(false) }
                 if (!dismissed && !privilege.permissionGranted) {
@@ -97,3 +133,4 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+

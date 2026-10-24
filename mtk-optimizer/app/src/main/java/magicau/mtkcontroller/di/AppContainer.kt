@@ -7,6 +7,7 @@ import magicau.mtkcontroller.data.cpu.CpuScanner
 import magicau.mtkcontroller.data.cpu.CpuControl
 import magicau.mtkcontroller.data.cpu.CpuControlStore
 import magicau.mtkcontroller.data.lab.LabController
+import magicau.mtkcontroller.data.log.AppLog
 import magicau.mtkcontroller.data.powerhal.PerfHandlerStore
 import magicau.mtkcontroller.data.powerhal.PerfLockController
 import magicau.mtkcontroller.data.diag.CapabilityProbe
@@ -24,6 +25,7 @@ import magicau.mtkcontroller.data.powerhal.RequestOutcome
 import magicau.mtkcontroller.data.thermal.ThermalPolicyController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -59,6 +61,7 @@ class AppContainer(appContext: Context) {
     @Volatile
     private var freqRangeMode: TweakCommands.RangeMode = TweakCommands.RangeMode.RANGE
     private var freqHardLimits = false
+    private var freqThermalCompanion = true
 
     val cpuControl = CpuControl(
         context,
@@ -68,26 +71,44 @@ class AppContainer(appContext: Context) {
         // 用户选"只设下限"时不为真。厂商高性能场景就是这么做的，见
         // TweakCommands.RangeMode。
         rangeMode = { freqRangeMode },
-        hardLimits = { freqHardLimits },
+        // 放开温控时**必须**同时发硬限：软限会被厂商 boost 抬回硬件最高频，
+        // 只有 MIN_HL/MAX_HL 能压住。用户手动关掉放开温控时，仍按他的硬限开关。
+        hardLimits = { freqHardLimits || freqThermalCompanion },
     )
 
     /**
-     * 性能模式切换时交出/收回 CPU 频率控制。
+     * 性能模式切换时**短暂**交出 CPU 频率控制，切换完成后再按上一次范围恢复。
      *
-     * 厂商性能档会让平台重推自己的一套频率限制。本软件若还持着一个请求，两者叠在一起，
-     * 用户此后释放时上限收不回来（PowerHAL 的合并规则只能收紧）。所以切档前先把轮询服务
-     * 停掉、把请求释放；切换失败再还回来。
-     *
-     * 恢复原档位时**不**自动重启 —— 原来的频率设置已经丢了，应由用户重新应用，而不是
-     * 让服务拿着空设置空跑。
+     * 厂商性能档会让平台重推自己的一套频率限制。切换瞬间如果还持着旧请求，两边叠在
+     * 一起容易收不回来；但切换后不恢复，就等于“开性能档 = 丢掉用户的频率设置” ——
+     * 2026-10-23 的处理是：先释放（保留 lastRequested / controlEnabled），写完设置
+     * 等平台稳定一下，再重新下发一次。这样 BOOST 和本应用的区间可以共存。
      */
     private val onPerformanceModePause: suspend (Boolean) -> Unit = { pause ->
         if (pause) {
             CpuReapplyService.stop(context)
             val clusters = runCatching { cpuScanner.scan(deep = false) }.getOrDefault(emptyList())
-            if (cpuControl.lastApplied().isNotEmpty()) cpuControl.release(clusters)
+            // release 不 disable：保留“用户还想要控制”的意图和上一次范围。
+            if (cpuControl.controlEnabled()) cpuControl.release(clusters)
         } else {
-            syncCpuReapply()
+            // 设置写入成功只代表命令被接受，平台重推可能更晚。
+            // 先等 800ms 恢复一次，2.5 秒后再核对/补一次；不把 UI 卡在这几秒里。
+            applicationScope.launch {
+                delay(800)
+                if (cpuControl.controlEnabled() && cpuControl.lastRequested().isNotEmpty()) {
+                    val clusters = runCatching { cpuScanner.scan(deep = false) }.getOrDefault(emptyList())
+                    val first = runCatching { cpuControl.applyLastRequested(clusters) }.getOrNull()
+                    AppLog.i(
+                        "PerfMode",
+                        "性能档切换后恢复 CPU 控制: ${first?.success} " +
+                            first?.let { AppLog.text(it.message) }.orEmpty(),
+                    )
+                    delay(2_500)
+                    // reapply 会先核对读回值，仍在范围内就跳过，减少和厂商 boost 抢写。
+                    runCatching { cpuControl.reapply(clusters) }
+                }
+                syncCpuReapply()
+            }
         }
     }
 
@@ -96,20 +117,31 @@ class AppContainer(appContext: Context) {
     /**
      * 必须在 [tweakRepository] 之后：Kotlin 按声明顺序初始化，放前面会拿到未初始化的引用。
      */
+    /**
+     * 比 ViewModel 活得久的协程作用域。
+     *
+     * 页面关闭时 `viewModelScope` 已经被取消，在那里 launch 的清理动作**一步都跑不了**。
+     * 释放 PowerHAL 请求这类"必须跑完"的动作放这里。
+     */
+    val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
     init {
         // 只在容器活着时收集；用户改选项时 TweakRepository 的 Flow 会推新值过来。
-        CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
+        applicationScope.launch {
             tweakRepository.freqSchedCompanion.collect { companion ->
                 freqCompanionPairs = companion?.pairs.orEmpty()
             }
         }
-        CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
+        applicationScope.launch {
             tweakRepository.freqRangeMode.collect { freqRangeMode = it }
+        }
+        applicationScope.launch {
+            settingsRepository.freqThermalCompanion.collect { freqThermalCompanion = it }
         }
         // **单独一个 launch。** DataStore 的 Flow 不会结束，和上面那个串在同一个
         // launch 里写成两句 collect，第二句就是死代码 —— 于是开关写进去了、
         // CpuControl 永远看不到，硬上下限静默不发。实测踩过。
-        CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
+        applicationScope.launch {
             tweakRepository.freqHardLimits.collect { freqHardLimits = it }
         }
     }
@@ -159,7 +191,9 @@ class AppContainer(appContext: Context) {
         val scanned = clusters.ifEmpty {
             runCatching { cpuScanner.scan(deep = false) }.getOrDefault(emptyList())
         }
-        val cpu = cpuControl.release(scanned)
+        // disable 而不是 release：这里是用户主动“全部释放”，
+        // 要让锁屏联动/快捷开关知道用户不再需要控制，不能亮屏后又放回来。
+        val cpu = cpuControl.disable(scanned)
         notes += context.getString(
             if (cpu.success) R.string.release_all_cpu_ok else R.string.release_all_cpu_failed,
         )
@@ -182,13 +216,13 @@ class AppContainer(appContext: Context) {
         AppThermalService.stop(context)
         ThermalBrightnessService.stop(context)
 
-        // 5. GPU。没有记录过的句柄就整段跳过，不为它白扫一次 GPU。
-        val gpuHandler = runCatching { profileRepository.gpuHandler() }.getOrDefault(0)
-        if (gpuHandler > 0) {
+        // 5. GPU。没有"应用过"的记录就整段跳过，不为它白扫一次 GPU。
+        val gpuApplied = runCatching { profileRepository.gpuApplied() }.getOrDefault(false)
+        if (gpuApplied) {
             val info = runCatching { gpuScanner.scan() }.getOrNull()
             if (info != null) {
-                val gpu = gpuTuner.release(info, gpuHandler)
-                if (gpu.success) profileRepository.setGpuHandler(0)
+                val gpu = gpuTuner.release(info, runCatching { profileRepository.gpuBaseline() }.getOrNull())
+                if (gpu.success) profileRepository.clearGpu()
                 notes += context.getString(
                     if (gpu.success) R.string.release_all_gpu_ok else R.string.release_all_gpu_failed,
                 )
@@ -240,12 +274,90 @@ class AppContainer(appContext: Context) {
      * because all three ViewModels that can apply CPU limits need it, and the
      * mode/interval live in preferences rather than in any of them.
      */
+    /** 按 id 应用一份方案。通知栏的快捷切换和界面走同一条路。 */
+    suspend fun applyProfileById(id: String): magicau.mtkcontroller.data.powerhal.RequestOutcome {
+        val profile = profileRepository.profiles.first().firstOrNull { it.id == id }
+            ?: return magicau.mtkcontroller.data.powerhal.RequestOutcome(
+                false, magicau.mtkcontroller.data.Message(magicau.mtkcontroller.R.string.profile_missing),
+            )
+        val clusters = cpuScanner.scan()
+        // 和 CPU 页同一条规则：方案写了档位就用它；没写且设置里开着放开温控，
+        // 现挑最宽松的一档。**先切档位、再发频率** —— 切档会重推平台限制。
+        val thermalIndex = profile.thermalIndex ?: run {
+            if (runCatching { settingsRepository.freqThermalCompanion.first() }.getOrDefault(true)) {
+                runCatching { magicau.mtkcontroller.data.lab.ThermalPolicyCatalog.looseIndex() }
+                    .getOrNull()
+            } else null
+        }
+        thermalIndex?.let { index ->
+            val thermal = runCatching { ThermalPolicyController.applyUserIndex(index) }.getOrNull()
+            if (thermal?.success == false) AppLog.w("Cpu", "方案温控档位切换失败，继续下发频率")
+        }
+        val outcome = cpuControl.apply(clusters, profile.clusters)
+        if (outcome.success) {
+            profileRepository.setActiveProfile(profile.id)
+            syncCpuReapply()
+        }
+        return outcome
+    }
+
+    /**
+     * 切到下一份方案（循环）。返回新方案名和结果；没有方案时返回 null。
+     *
+     * 顺序跟界面里列出来的一致：`profiles` 的顺序。
+     */
+    suspend fun cycleProfile(): Pair<String, magicau.mtkcontroller.data.powerhal.RequestOutcome>? {
+        val profiles = profileRepository.profiles.first()
+        if (profiles.isEmpty()) return null
+        val activeId = profileRepository.activeProfileId.first()
+        val next = profiles.getOrNull(profiles.indexOfFirst { it.id == activeId } + 1)
+            ?: profiles.first()
+        return next.name to applyProfileById(next.id)
+    }
+
     suspend fun syncCpuReapply() {
         val mode = ApplyMode.fromName(settingsRepository.applyMode.first())
-        if (mode == ApplyMode.POLLING) {
+        // 锁屏联动在 App 进程里听广播，不需要这个前台服务。只有轮询才起服务。
+        val needed = cpuControl.controlEnabled() && mode == ApplyMode.POLLING
+        if (needed) {
             CpuReapplyService.start(context, settingsRepository.reapplyIntervalMs.first())
         } else {
             CpuReapplyService.stop(context)
         }
+    }
+
+    /**
+     * 快捷开关“开”：按上一次范围重新下发。
+     *
+     * 与 CPU 页应用不同，这里不碰温控档位 —— 开关只管频率请求，避免在一次误触里
+     * 把用户设好的温控一起改掉。完整行为仍在 CPU 页。
+     */
+    suspend fun enableCpuQuickControl(): RequestOutcome {
+        val clusters = runCatching { cpuScanner.scan(deep = false) }.getOrDefault(emptyList())
+        val outcome = cpuControl.applyLastRequested(clusters)
+        if (outcome.success) syncCpuReapply()
+        return outcome
+    }
+
+    /** 快捷开关“关”：释放频率请求，并让锁屏联动停止自动恢复。 */
+    suspend fun disableCpuQuickControl(): RequestOutcome {
+        val clusters = runCatching { cpuScanner.scan(deep = false) }.getOrDefault(emptyList())
+        val outcome = cpuControl.disable(clusters)
+        CpuReapplyService.stop(context)
+        return outcome
+    }
+
+    /**
+     * 亮屏后恢复一次。后台服务走这里，不重新同步服务自身。
+     *
+     * 没有活动请求（锁屏释放过）时用 [CpuControl.applyLastRequested]，
+     * 否则优先用 [CpuControl.reapply]：它先核对读回值，仍在范围内就不重复下发，
+     * 减少和厂商 boost 抢写的机会。
+     */
+    suspend fun resumeCpuControl(): RequestOutcome {
+        val clusters = runCatching { cpuScanner.scan(deep = false) }.getOrDefault(emptyList())
+        val applied = cpuControl.lastApplied()
+        return if (applied.isNotEmpty()) cpuControl.reapply(clusters)
+        else cpuControl.applyLastRequested(clusters)
     }
 }

@@ -41,10 +41,34 @@ object SettingChannel {
 
     private fun quote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
 
-    /** @return 读回的值；读不到返回 null。 */
-    suspend fun get(namespace: String, key: String): String? =
-        DaemonExec.runArgv(listOf("/system/bin/settings", "get", namespace, key))?.stdout?.trim()
-            ?.takeIf { it.isNotBlank() }
+    /**
+     * 一次读取的三种结果。**「没有这个键」和「读不到」必须分开** ——
+     * 前者是设备事实，后者是"我们现在不知道"；把两者都折成 null，导出备份时
+     * 会写成"键不存在"，之后再恢复就会把用户的键删掉。
+     */
+    sealed interface ReadResult {
+        /** 读到了，[text] 是设备上的值（可能是空串）。 */
+        data class Value(val text: String) : ReadResult
+        /** 设备上确实没有这个键。 */
+        data object Absent : ReadResult
+        /** 读不到：服务没连、命令失败。**不等于没有这个键。** */
+        data object Unreadable : ReadResult
+    }
+
+    suspend fun read(namespace: String, key: String): ReadResult {
+        val out = DaemonExec.runArgv(listOf("/system/bin/settings", "get", namespace, key))
+            ?: return ReadResult.Unreadable
+        if (out.exit != 0) return ReadResult.Unreadable
+        val text = out.stdout.trim()
+        // `settings get` 对不存在的键打印字面量 "null"。
+        return if (text == "null") ReadResult.Absent else ReadResult.Value(text)
+    }
+
+    /** @return 读回的值；不存在或读不到都返回 null。需要区分时用 [read]。 */
+    suspend fun get(namespace: String, key: String): String? = when (val result = read(namespace, key)) {
+        is ReadResult.Value -> result.text
+        else -> null
+    }
 
     /**
      * 写一个值，然后读回确认。

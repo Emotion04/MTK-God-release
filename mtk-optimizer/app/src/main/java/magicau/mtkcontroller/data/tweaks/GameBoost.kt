@@ -7,6 +7,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import magicau.mtkcontroller.R
+import magicau.mtkcontroller.data.settings.SettingChannel
 import magicau.mtkcontroller.data.Message
 import magicau.mtkcontroller.data.exec.DaemonExec
 import magicau.mtkcontroller.data.privilege.PrivilegeManager
@@ -32,7 +33,11 @@ import magicau.mtkcontroller.data.privilege.PrivilegeManager
  * **关键安全性质：任何一项读不到原值，就整项不写。** 宁可少放开一个开关，也不要留下
  * 一个没有回头路的授予。
  */
-class GameBoost(private val context: Context) {
+class GameBoost(
+    private val context: Context,
+    /** 写系统键之前记原值；由 TweakRepository 注入，恢复默认靠它。 */
+    private val rememberOwned: suspend (String, String, String) -> Unit = { _, _, _ -> },
+) {
 
     companion object {
         private const val PREFS = "game_boost_baselines"
@@ -99,12 +104,20 @@ class GameBoost(private val context: Context) {
                 )
             }
 
-            val editor = prefs.edit()
+            // **先落盘原值，再动系统。** 原来这些只写进未提交的 editor，
+            // 失败分支里的 restoreLocked 从 prefs 读，什么也读不到 ——
+            // 等于"回滚"是空转，然后把 active 清掉，快照彻底丢失。
+            val saved = prefs.edit()
                 .putString("appops_bg", appopsBg!!)
                 .putString("appops_any", appopsAny!!)
                 .putString("bucket", bucket!!)
                 .putBoolean("whitelisted", whitelisted)
                 .putString("game_drivers", driversValue ?: "")
+                .putBoolean("active", true)
+                .commit()
+            if (!saved) {
+                return@withContext TweakRepository.Outcome(false, Message(R.string.game_boost_save_failed))
+            }
 
             val failures = mutableListOf<String>()
             val reasons = mutableListOf<String>()
@@ -121,9 +134,17 @@ class GameBoost(private val context: Context) {
             if (driversValue != null) step("Game Driver", setGameDrivers(driversValue, pkg, add = true))
 
             if (failures.isNotEmpty()) {
-                restoreLocked(pkg)
-                editor.remove("active")
-                if (!editor.commit()) failures += context.getString(R.string.tweaks_game_boost_step_cleanup)
+                // 回滚。**只有全部恢复成功才清快照**；否则保留原值，
+                // 用户还能点一次"恢复"，而不是被卡在一个改过、又没有记录的状态里。
+                val (restoreFailures, restoreReasons) = restoreLocked(pkg)
+                if (restoreFailures.isEmpty()) {
+                    prefs.edit().remove("active")
+                        .remove("appops_bg").remove("appops_any").remove("bucket")
+                        .remove("whitelisted").remove("game_drivers").commit()
+                } else {
+                    failures += context.getString(R.string.tweaks_game_boost_step_cleanup)
+                    reasons += restoreReasons
+                }
                 return@withContext TweakRepository.Outcome(
                     false,
                     Message(R.string.game_boost_partial, listOf(failures.joinToString("、"))),
@@ -131,9 +152,7 @@ class GameBoost(private val context: Context) {
                     failures = failures,
                 )
             }
-            if (!editor.commit()) {
-                return@withContext TweakRepository.Outcome(false, Message(R.string.game_boost_save_failed))
-            }
+
 
             TweakRepository.Outcome(
                 true,
@@ -227,11 +246,19 @@ class GameBoost(private val context: Context) {
      * 两者都是设备自己说的话，正是"显示更多"里该出现的东西。
      */
     private suspend fun setGameDrivers(original: String, pkg: String, add: Boolean): Run {
+        // 写之前记原值：恢复默认只删有记录的键。这一条和触控/厂商功能同一条规矩。
+        rememberOwned("game_driver_opt_in_apps", "global", "game_driver_opt_in_apps")
         val list = original.split(',').map { it.trim() }.filter { it.isNotEmpty() }
         val updated = if (add) (list + pkg).distinct() else list.filter { it != pkg }
         val value = updated.joinToString(",")
-        val wrote = if (value.isEmpty()) run(listOf("/system/bin/settings", "delete", "global", "game_driver_opt_in_apps"))
-        else run(listOf("/system/bin/settings", "put", "global", "game_driver_opt_in_apps", value))
+        // 走 SettingChannel：这台 ROM 上 `settings put` 退出 0 但不落库，
+        // 只有 `content insert` 真的写进去。原来这里直接用 settings put，
+        // 靠后面那次读回兜住 —— 能发现失败，但那等于明知有失效路径还先用它。
+        val wrote = if (value.isEmpty()) {
+            run(listOf("/system/bin/sh", "-c", SettingChannel.deleteCommand("global", "game_driver_opt_in_apps")))
+        } else {
+            run(listOf("/system/bin/sh", "-c", SettingChannel.putCommand("global", "game_driver_opt_in_apps", value)))
+        }
         if (!wrote.ok) return wrote
         val readback = run(listOf("/system/bin/settings", "get", "global", "game_driver_opt_in_apps"))
         val read = readback.output.trim()

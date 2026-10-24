@@ -38,11 +38,17 @@ class CpuControlTest {
 
     private class Memory : CpuSettingsStore, PerfHandleStorage {
         var saved = emptyList<ClusterSetting>()
+        var requested = emptyList<ClusterSetting>()
+        var enabled = false
         var handle = 0
         override suspend fun baseline(): String? = null
         override suspend fun setBaseline(value: String?) = Unit
         override suspend fun lastApplied() = saved
         override suspend fun setLastApplied(settings: List<ClusterSetting>) { saved = settings }
+        override suspend fun lastRequested() = requested.ifEmpty { saved }
+        override suspend fun setLastRequested(settings: List<ClusterSetting>) { requested = settings }
+        override suspend fun controlEnabled() = enabled || saved.isNotEmpty()
+        override suspend fun setControlEnabled(enabled: Boolean) { this.enabled = enabled }
         override suspend fun get(name: String) = handle
         override suspend fun set(name: String, value: Int) { handle = value }
     }
@@ -59,17 +65,23 @@ class CpuControlTest {
 
     @Test fun `collapsed high range is not reported as verified`() = runBlocking {
         val memory = Memory()
-        val lock = PerfLockController(memory, "cpu", { _, _ -> PowerHal.Result.Success(1, Message(R.string.powerhal_applied)) })
+        val lock = PerfLockController(
+            memory, "cpu",
+            { _, _ -> PowerHal.Result.Success(1, Message(R.string.powerhal_applied)) },
+            { PowerHal.Result.Success(0, Message(R.string.powerhal_applied)) },
+        )
         val cpu = CpuControl(context, memory, lock, { nodes(2400000, 2400000) }, {})
         val result = cpu.apply(listOf(cluster), listOf(high))
         assertTrue(result.success) // The request is held and must remain releasable.
         assertEquals(CpuVerification.CONFLICT, cpu.status.value.verification)
         // 冲突原因属于**证据**，走 detail（界面里默认收起、点"显示更多"才看）。
         // 结论那一句只说"冲突"，不把逐簇读数摊在首页。
-        assertTrue("冲突原因必须在 detail 里", result.detail.orEmpty().contains("实际上限低于请求下限"))
-        assertEquals(
-            context.getString(R.string.cpu_verify_summary_conflict),
-            result.message.resolve(context),
+        assertTrue("冲突原因必须在 detail 里", result.detail.orEmpty().contains(context.getString(R.string.cpu_conflict_max_below_min)))
+        assertTrue(
+            "结论第一行仍是冲突摘要",
+            result.message.resolve(context).startsWith(
+                context.getString(R.string.cpu_verify_summary_conflict),
+            ),
         )
     }
 
@@ -197,7 +209,7 @@ class CpuControlTest {
             { nodes(1100000, 2400000, 2000000) }, {})
         cpu.apply(listOf(cluster), listOf(low))
         assertEquals(CpuVerification.CONFLICT, cpu.status.value.verification)
-        assertTrue(cpu.status.value.verificationDetail!!.contains("读回超出请求范围"))
+        assertTrue(cpu.status.value.verificationDetail!!.contains(context.getString(R.string.cpu_conflict_out_of_range)))
     }
 
     @Test fun `satisfied bounds are observed without reacquiring`() = runBlocking {
@@ -210,6 +222,73 @@ class CpuControlTest {
         repeat(3) { cpu.reapply(listOf(cluster)) }
         assertEquals(1, acquisitions)
         assertEquals(CpuVerification.VERIFIED, cpu.status.value.verification)
+    }
+
+    @Test fun `range pinned by lower system ceiling retries without floor`() = runBlocking {
+        val memory = Memory()
+        val sent = mutableListOf<List<Pair<String, String>>>()
+        val lock = PerfLockController(
+            memory, "cpu",
+            { pairs, _ -> sent += pairs; PowerHal.Result.Success(sent.size, Message(R.string.powerhal_applied)) },
+            { PowerHal.Result.Success(0, Message(R.string.powerhal_applied)) },
+        )
+        // 第一次读回被系统上限压成 2700-2700；重试（只压上限）后能读到 1200-2700。
+        val cpu = CpuControl(context, memory, lock, {
+            if (sent.size <= 1) nodes(2700000, 2700000) else nodes(1200000, 2700000)
+        }, {})
+        val result = cpu.apply(listOf(cluster), listOf(high))
+
+        assertTrue(result.success)
+        assertEquals("应当自动重试一次", 2, sent.size)
+        assertTrue(
+            "第一次带下限: ${sent[0]}",
+            sent[0].any { it.first == "0x00400100" },
+        )
+        assertFalse(
+            "重试不能继续锁下限，否则仍会钉在系统上限",
+            sent[1].any { it.first == "0x00400100" || it.first == "0x00408100" },
+        )
+        assertTrue("重试仍要压上限", sent[1].any { it.first == "0x00404100" })
+        assertTrue(result.message.resolve(context).contains("系统当前上限低于请求下限"))
+        // 重放状态跟着实际下发走（不再锁下限），但“上次要求”保留用户原始下限，
+        // 供快捷开关/亮屏恢复重新尝试。
+        assertEquals(1_100_000, memory.saved.single().minFreqKhz)
+        assertEquals(2_700_000, memory.requested.single().minFreqKhz)
+    }
+
+    @Test fun `quick toggle remembers last request after release`() = runBlocking {
+        val memory = Memory()
+        var acquisitions = 0
+        val lock = PerfLockController(
+            memory, "cpu",
+            { _, _ -> acquisitions++; PowerHal.Result.Success(acquisitions, Message(R.string.powerhal_applied)) },
+            { PowerHal.Result.Success(0, Message(R.string.powerhal_applied)) },
+        )
+        val cpu = CpuControl(context, memory, lock, { nodes(1100000, 1400000) }, {})
+        assertTrue(cpu.apply(listOf(cluster), listOf(low)).success)
+        assertTrue(cpu.release(listOf(cluster)).success)
+
+        assertTrue("释放后没有活动请求", cpu.lastApplied().isEmpty())
+        assertEquals("快捷开关要能拿回上一次范围", listOf(low), cpu.lastRequested())
+        assertTrue("锁屏自动释放不应清掉用户意图", cpu.controlEnabled())
+
+        assertTrue(cpu.applyLastRequested(listOf(cluster)).success)
+        assertEquals(listOf(low), cpu.lastApplied())
+    }
+
+    @Test fun `disable clears intent but keeps last requested`() = runBlocking {
+        val memory = Memory()
+        val lock = PerfLockController(
+            memory, "cpu",
+            { _, _ -> PowerHal.Result.Success(1, Message(R.string.powerhal_applied)) },
+            { PowerHal.Result.Success(0, Message(R.string.powerhal_applied)) },
+        )
+        val cpu = CpuControl(context, memory, lock, { nodes(1100000, 1400000) }, {})
+        assertTrue(cpu.apply(listOf(cluster), listOf(low)).success)
+        assertTrue(cpu.disable(listOf(cluster)).success)
+
+        assertFalse("用户主动释放后不应再自动恢复", cpu.controlEnabled())
+        assertEquals("范围仍留给下一次手动开启", listOf(low), cpu.lastRequested())
     }
 
     @Test fun `failed release prevents acquire and retains settings and handle`() = runBlocking {
@@ -242,7 +321,7 @@ class CpuControlTest {
     @Test fun `missing limits cannot hide observed frequency outside request`() {
         val reading = CpuLimitReading("policy4", null, null, 2400000)
         assertEquals(CpuVerification.CONFLICT, reading.verify(high))
-        assertTrue(reading.conflictReason(high).resolve(context).contains("上下限读回不完整"))
+        assertTrue(reading.conflictReason(high).resolve(context).contains(context.getString(R.string.cpu_conflict_partial)))
     }
 
     @Test fun `crossing a lower effective ceiling is constrained rather than verified`() {

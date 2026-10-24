@@ -13,7 +13,7 @@
 | 设备能力、兼容差异、重要发现 | 对应主题 `facts.md`；命令、协议和配置细节放其参考页 |
 | 仍决定要做的工作 | [dev/todo.md](dev/todo.md) |
 | 值得复用的实验条件和结果 | [experiments/](experiments/README.md) |
-| 固定版本的外部实现摘录 | [reference/](reference/README.md) |
+| 固定版本的外部实现摘录 | [docs/reference/](reference/README.md) |
 | 已被替代但仍有排障、回归或决策价值的记录 | [archive/](archive/README.md) |
 
 先搜索功能名、问题关键词或已有事实 ID，更新原位置。新增长文档时在最近的目录入口加链接。
@@ -45,7 +45,7 @@
 | 归属 | 文件 |
 |---|---|
 | 规范维护 | `docs/dev/**`、`README.md`、`mtk-optimizer/README.md`、`docs/README.md`、`docs/CONTRIBUTING.md`、`AGENTS.md`、`tools/**` |
-| 内容维护 | `docs/cpu/**`、`docs/thermal/**`、`docs/device/**`、`docs/tools/**`、`docs/reference/**`、`docs/experiments/**`、`docs/archive/**` |
+| 内容维护 | `docs/cpu/**`、`docs/thermal/**`、`docs/device/**`、`docs/tools/**`、`docs/experiments/**`、`docs/archive/**`；外部实现摘录在 `docs/reference/**` |
 | 共同边界 | `docs/dev/wording.md` 与 `tools/check_strings.py`；修改 `feature/**` 的用户文案时同时核对两边 |
 
 并行修改期间，同一文件由一位维护者编辑，交接时说明已改文件和结论。

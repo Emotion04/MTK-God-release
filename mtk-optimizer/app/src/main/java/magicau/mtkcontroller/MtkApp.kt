@@ -4,6 +4,7 @@ import android.app.Application
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import magicau.mtkcontroller.data.log.AppLog
 import magicau.mtkcontroller.data.log.CrashLog
@@ -28,6 +29,8 @@ class MtkApp : Application() {
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
+        // 锁屏联动只在本进程存活时生效；没有通知、没有额外前台服务。
+        magicau.mtkcontroller.data.cpu.ScreenPolicyController.install(this, container)
         // 日志落盘与崩溃捕获必须最先装上：后面任何一步出问题，都要能在磁盘上留下痕迹。
         AppLog.attach(this)
         CrashLog.install()
@@ -49,12 +52,12 @@ class MtkApp : Application() {
         )
         // 首次启动的代表性状态只采一次，之后不再覆盖 —— 见 BaselineSnapshot 的说明。
         appScope.launch { container.baselineSnapshot.captureIfAbsent() }
-        // 换了版本号：把上一版留在系统里的改动还原成原值。还原不了的不留旧快照，
-        // 也不假装干净 —— 记进日志，用户导出报告时能看到。只做一次。
+        // 保活开着但服务没在跑（进程被杀 / 刚开机没收到广播）：启动时补上。
         appScope.launch {
-            runCatching { container.tweakRepository.migrateIfVersionChanged() }.onSuccess { result ->
-                if (result != null && result.stale.isNotEmpty()) {
-                    AppLog.w("App", "升级后未能还原: ${result.stale.joinToString()}（原值快照已保留，可手动恢复）")
+            runCatching {
+                if (!magicau.mtkcontroller.data.AppExpiry.isExpired() &&
+                    container.settingsRepository.keepAlive.first()) {
+                    magicau.mtkcontroller.feature.notifications.KeepAliveService.start(this@MtkApp)
                 }
             }
         }

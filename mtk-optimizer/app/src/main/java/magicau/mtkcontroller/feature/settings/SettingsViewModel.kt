@@ -26,6 +26,7 @@ import magicau.mtkcontroller.domain.model.ApplyMode
 import magicau.mtkcontroller.domain.model.Backup
 import magicau.mtkcontroller.domain.model.CpuLayoutMode
 import magicau.mtkcontroller.domain.model.RangeControlMode
+import magicau.mtkcontroller.domain.model.ScreenOffPolicy
 import magicau.mtkcontroller.domain.model.NavBarStyle
 import magicau.mtkcontroller.domain.model.NavBarVisibility
 import magicau.mtkcontroller.domain.model.TabRestoreMode
@@ -46,6 +47,12 @@ data class SettingsUiState(
     val navBarCustomPalette: AppPalette = AppPalette.TEAL,
     val applyMode: ApplyMode = ApplyMode.SINGLE,
     val reapplyIntervalMs: Long = SettingsRepository.DEFAULT_REAPPLY_INTERVAL_MS,
+    /** 锁屏时释放还是保持 CPU 频率请求。 */
+    val screenOffPolicy: ScreenOffPolicy = ScreenOffPolicy.KEEP,
+    /** 是否从最近任务列表隐藏本应用。 */
+    val hideFromRecents: Boolean = false,
+    /** 开机后 Shizuku 就绪时自动按上一次范围下发一次。 */
+    val applyOnBoot: Boolean = false,
     val logLevel: LogLevel = LogLevel.INFO,
     val logEntries: List<LogEntry> = emptyList(),
     /** Parsed but not yet applied; non-null while the confirm dialog shows. */
@@ -84,6 +91,16 @@ data class SettingsUiState(
     /** Latest capability probe, so the exported report is complete. */
     val report: CapabilityReport? = null,
     val backupMessage: Failure? = null,
+    /** 「恢复全部设置为默认」的结果。 */
+    val resetMessage: Failure? = null,
+    /** 常驻通知与快捷控制。 */
+    val keepAlive: Boolean = false,
+    val notifShowProfile: Boolean = true,
+    val notifShowCpu: Boolean = true,
+    val notifShowTemp: Boolean = true,
+    val notifQuickSwitch: Boolean = true,
+    /** 应用频率时一并放开温控。 */
+    val freqThermalCompanion: Boolean = true,
     val busy: Boolean = false,
     /**
      * 在不在电池优化白名单里。
@@ -93,12 +110,64 @@ data class SettingsUiState(
      * 去拨一个我们并不知道状态的开关。
      */
     val batteryWhitelisted: Boolean? = null,
+    /** 只有白名单读写时置位；不要复用全局 busy，否则别的开关会跟着闪。 */
+    val batteryBusy: Boolean = false,
+    /** 电池白名单读写失败的原因；成功或重新读取后清空。 */
+    val batteryMessage: Failure? = null,
 )
 
-class SettingsViewModel(private val container: AppContainer) : ViewModel() {
+class SettingsViewModel(val container: AppContainer) : ViewModel() {
 
     private val _state = MutableStateFlow(SettingsUiState())
     val state: StateFlow<SettingsUiState> = _state.asStateFlow()
+
+    fun setFreqThermalCompanion(enabled: Boolean) =
+        viewModelScope.launch { container.settingsRepository.setFreqThermalCompanion(enabled) }
+
+    fun setKeepAlive(enabled: Boolean) {
+        viewModelScope.launch {
+            if (enabled &&
+                androidx.core.content.ContextCompat.checkSelfPermission(
+                    container.context,
+                    android.Manifest.permission.POST_NOTIFICATIONS,
+                ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                _state.value = _state.value.copy(
+                    resetMessage = Failure(Message(R.string.settings_keepalive_need_permission)),
+                )
+                return@launch
+            }
+            container.settingsRepository.setKeepAlive(enabled)
+            if (enabled) {
+                // 常驻通知的另一半是电池优化白名单：只开前台服务，系统仍可能把它冻掉。
+                if (!magicau.mtkcontroller.data.power.BatteryWhitelist.isWhitelisted(container.context)) {
+                    magicau.mtkcontroller.data.power.BatteryWhitelist.set(true)
+                }
+                magicau.mtkcontroller.feature.notifications.KeepAliveService.start(container.context)
+            } else {
+                magicau.mtkcontroller.feature.notifications.KeepAliveService.stop(container.context)
+            }
+        }
+    }
+
+    fun setNotifShowProfile(on: Boolean) = viewModelScope.launch { container.settingsRepository.setNotifShowProfile(on) }
+    fun setNotifShowCpu(on: Boolean) = viewModelScope.launch { container.settingsRepository.setNotifShowCpu(on) }
+    fun setNotifShowTemp(on: Boolean) = viewModelScope.launch { container.settingsRepository.setNotifShowTemp(on) }
+    fun setNotifQuickSwitch(on: Boolean) = viewModelScope.launch { container.settingsRepository.setNotifQuickSwitch(on) }
+
+    /** 全部恢复系统默认。删键而不是写值，见 [TweakRepository.resetAllToSystemDefaults]。 */
+    fun resetAllToDefaults() {
+        viewModelScope.launch {
+            if (!PrivilegeManager.state.value.mode.canElevate) {
+                _state.value = _state.value.copy(
+                    resetMessage = Failure(Message(R.string.tweak_need_shizuku)),
+                )
+                return@launch
+            }
+            val outcome = container.tweakRepository.resetAllToSystemDefaults()
+            _state.value = _state.value.copy(resetMessage = Failure(outcome.message, outcome.detail))
+        }
+    }
 
     fun setBrightnessBackend(backend: magicau.mtkcontroller.data.tweaks.BrightnessBackend) {
         if (_state.value.busy) return
@@ -222,6 +291,7 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
             container.settingsRepository.defaultTabRoute.collect { route ->
                 _state.value = _state.value.copy(
                     loading = false,
+                    // 配置的标签可能已被功能开关隐藏；fromRoute 会落到第一个可见标签。
                     defaultTab = Destination.fromRoute(route),
                 )
             }
@@ -231,12 +301,35 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
                 _state.value = _state.value.copy(loading = false, themeMode = ThemeMode.fromName(name))
             }
         }
+        // 白名单用 PowerManager 就能读，**不需要 Shizuku**。先读一次，
+        // 否则没授权时这个开关会一直显示“读不到”，用户点了也没有东西可点。
+        refreshBatteryWhitelist()
         viewModelScope.launch {
             magicau.mtkcontroller.data.privilege.PrivilegeManager.state.collect { p ->
                 _state.value = _state.value.copy(privilege = p)
-                // 授权状态一变就重读白名单：没授权时读不到，刚授权完立刻就能读到。
-                if (p.mode.canElevate) refreshBatteryWhitelist()
+                // 白名单读取不依赖 Shizuku；不要在这里并发重读，否则可能用旧值
+                // 覆盖刚从系统授权页返回后的新值。
             }
+        }
+        viewModelScope.launch {
+            container.settingsRepository.freqThermalCompanion.collect { on ->
+                _state.value = _state.value.copy(freqThermalCompanion = on)
+            }
+        }
+        viewModelScope.launch {
+            container.settingsRepository.keepAlive.collect { on -> _state.value = _state.value.copy(keepAlive = on) }
+        }
+        viewModelScope.launch {
+            container.settingsRepository.notifShowProfile.collect { v -> _state.value = _state.value.copy(notifShowProfile = v) }
+        }
+        viewModelScope.launch {
+            container.settingsRepository.notifShowCpu.collect { v -> _state.value = _state.value.copy(notifShowCpu = v) }
+        }
+        viewModelScope.launch {
+            container.settingsRepository.notifShowTemp.collect { v -> _state.value = _state.value.copy(notifShowTemp = v) }
+        }
+        viewModelScope.launch {
+            container.settingsRepository.notifQuickSwitch.collect { v -> _state.value = _state.value.copy(notifQuickSwitch = v) }
         }
         viewModelScope.launch {
             container.settingsRepository.tabSwipeMode.collect { name ->
@@ -320,6 +413,21 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
             }
         }
         viewModelScope.launch {
+            container.settingsRepository.screenOffPolicy.collect { name ->
+                _state.value = _state.value.copy(screenOffPolicy = ScreenOffPolicy.fromName(name))
+            }
+        }
+        viewModelScope.launch {
+            container.settingsRepository.hideFromRecents.collect { hidden ->
+                _state.value = _state.value.copy(hideFromRecents = hidden)
+            }
+        }
+        viewModelScope.launch {
+            container.settingsRepository.applyOnBoot.collect { on ->
+                _state.value = _state.value.copy(applyOnBoot = on)
+            }
+        }
+        viewModelScope.launch {
             AppLog.entries.collect { entries ->
                 _state.value = _state.value.copy(logEntries = entries)
             }
@@ -360,6 +468,25 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
             // Restart the service so the new interval takes effect immediately.
             container.syncCpuReapply()
         }
+    }
+
+    fun setScreenOffPolicy(policy: ScreenOffPolicy) {
+        viewModelScope.launch {
+            container.settingsRepository.setScreenOffPolicy(policy.name)
+            // 关掉联动时要停服务；打开时若已有活动请求则立刻开始听屏幕广播。
+            container.syncCpuReapply()
+        }
+    }
+
+    fun setHideFromRecents(enabled: Boolean) {
+        viewModelScope.launch {
+            container.settingsRepository.setHideFromRecents(enabled)
+            magicau.mtkcontroller.data.RecentsHider.apply(container.context, enabled)
+        }
+    }
+
+    fun setApplyOnBoot(enabled: Boolean) {
+        viewModelScope.launch { container.settingsRepository.setApplyOnBoot(enabled) }
     }
 
     fun setLogLevel(level: LogLevel) {
@@ -497,12 +624,16 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     /** 现读白名单状态。**不缓存**：它是系统事实，存下来就会和真实状态不一致。 */
-    private fun refreshBatteryWhitelist() {
+    fun refreshBatteryWhitelist() {
+        if (_state.value.batteryBusy) return
         viewModelScope.launch {
             val inWhitelist = withContext(Dispatchers.IO) {
-                magicau.mtkcontroller.data.power.BatteryWhitelist.isWhitelisted()
+                magicau.mtkcontroller.data.power.BatteryWhitelist.isWhitelisted(container.context)
             }
-            _state.value = _state.value.copy(batteryWhitelisted = inWhitelist)
+            // 写入过程中不要用旧值覆盖刚刚的回读结果。
+            if (!_state.value.batteryBusy) {
+                _state.value = _state.value.copy(batteryWhitelisted = inWhitelist)
+            }
         }
     }
 
@@ -514,13 +645,47 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
      */
     fun setBatteryWhitelist(enabled: Boolean) {
         viewModelScope.launch {
-            _state.value = _state.value.copy(busy = true)
-            val accepted = withContext(Dispatchers.IO) {
-                magicau.mtkcontroller.data.power.BatteryWhitelist.set(enabled)
+            _state.value = _state.value.copy(batteryBusy = true, batteryMessage = null)
+            try {
+                val accepted = withContext(Dispatchers.IO) {
+                    magicau.mtkcontroller.data.power.BatteryWhitelist.set(enabled)
+                }
+                val actual = withContext(Dispatchers.IO) {
+                    magicau.mtkcontroller.data.power.BatteryWhitelist.isWhitelisted(container.context)
+                }
+                if (!accepted) AppLog.w("Settings", "白名单${if (enabled) "加入" else "移出"}命令未被接受")
+                _state.value = _state.value.copy(
+                    batteryBusy = false,
+                    batteryWhitelisted = actual,
+                    batteryMessage = when {
+                        !accepted -> Failure(Message(R.string.battery_whitelist_change_failed))
+                        actual != enabled -> Failure(Message(R.string.battery_whitelist_not_changed))
+                        else -> null
+                    },
+                )
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                AppLog.w("Settings", "白名单操作异常: ${e.javaClass.simpleName}: ${e.message}")
+                _state.value = _state.value.copy(
+                    batteryBusy = false,
+                    batteryMessage = Failure(Message(R.string.battery_whitelist_change_failed)),
+                )
+            } finally {
+                // 任何路径都不能把界面留在 busy，否则开关再也点不动。
+                if (_state.value.batteryBusy) _state.value = _state.value.copy(batteryBusy = false)
             }
-            if (!accepted) AppLog.w("Settings", "白名单${if (enabled) "加入" else "移出"}命令未被接受")
-            refreshBatteryWhitelist()
-            _state.value = _state.value.copy(busy = false)
         }
+    }
+
+    fun clearBatteryMessage() {
+        _state.value = _state.value.copy(batteryMessage = null)
+    }
+
+    /** 系统电池设置页打不开时给用户一个明确结果，而不是只写日志。 */
+    fun reportBatterySettingsFailure() {
+        _state.value = _state.value.copy(
+            batteryMessage = Failure(Message(R.string.battery_whitelist_open_failed)),
+        )
     }
 }

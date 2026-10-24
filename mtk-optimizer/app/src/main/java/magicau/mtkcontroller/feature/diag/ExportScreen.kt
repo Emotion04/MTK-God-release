@@ -22,6 +22,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.Switch
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -59,6 +60,9 @@ fun ExportScreen(
     onSave: () -> Unit,
     onClearLogs: () -> Unit,
     onDismissMessage: () -> Unit,
+    onStartAdaptation: () -> Unit = {},
+    onStopAdaptation: () -> Unit = {},
+    onSetBlindWrites: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val clipboard = LocalClipboardManager.current
@@ -83,6 +87,45 @@ fun ExportScreen(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(start = 6.dp, bottom = 6.dp),
         )
+
+        // --- 适配测试 ---------------------------------------------------
+        SectionLabel(stringResource(R.string.adapt_title))
+        SettingsCard {
+            Column(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    stringResource(R.string.adapt_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                SettingsRow(
+                    icon = Icons.Filled.Build,
+                    iconTint = MaterialTheme.colorScheme.primary,
+                    title = stringResource(R.string.adapt_blind),
+                    subtitle = stringResource(R.string.adapt_blind_sub),
+                    trailing = {
+                        Switch(
+                            checked = state.blindWrites,
+                            onCheckedChange = onSetBlindWrites,
+                            enabled = !state.adaptationRunning,
+                        )
+                    },
+                )
+                Button(
+                    onClick = if (state.adaptationRunning) onStopAdaptation else onStartAdaptation,
+                    enabled = !state.busy,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        stringResource(
+                            if (state.adaptationRunning) R.string.adapt_stop else R.string.adapt_start,
+                        ),
+                    )
+                }
+            }
+        }
 
         // --- 基线状态 ---------------------------------------------------
         SettingsCard {

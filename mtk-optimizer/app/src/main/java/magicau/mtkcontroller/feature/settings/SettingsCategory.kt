@@ -18,10 +18,14 @@ import magicau.mtkcontroller.R
  * 用户找设置时想的是"我要改什么行为"，不是"这个键归哪个类"。
  */
 enum class SettingsCategory(val labelRes: Int, val subtitleRes: Int) {
+    /** App 自身：启动、最近任务、标签交互、后台白名单。 */
     GENERAL(R.string.settings_cat_general, R.string.settings_cat_general_sub),
+    /** 视觉：主题、配色、形状、动画、底栏。 */
     APPEARANCE(R.string.settings_cat_appearance, R.string.settings_cat_appearance_sub),
-    LAB(R.string.settings_cat_lab, R.string.settings_cat_lab_sub),
+    /** 设备行为：CPU 下发、控制页、触控与显示、厂商性能档。 */
+    PERFORMANCE(R.string.settings_cat_performance, R.string.settings_cat_performance_sub),
     NOTIFICATIONS(R.string.settings_cat_notifications, R.string.settings_cat_notifications_sub),
+    LAB(R.string.settings_cat_lab, R.string.settings_cat_lab_sub),
     MAINTENANCE(R.string.settings_cat_maintenance, R.string.settings_cat_maintenance_sub),
     BACKUP(R.string.settings_cat_backup, R.string.settings_cat_backup_sub),
 

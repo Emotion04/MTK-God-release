@@ -42,6 +42,7 @@ fun TweaksScreen(
     onFrameInterpolation: (Boolean) -> Unit,
     onFrameInterpolationSr: (Boolean) -> Unit,
     onRotationSuggestion: (Boolean) -> Unit,
+    onAutoRotate: (Boolean) -> Unit = {},
     onThermalBrightness: (Boolean) -> Unit,
     onRequestPermission: () -> Unit,
     onOpenNotifications: () -> Unit,
@@ -129,8 +130,13 @@ fun TweaksScreen(
         item { SectionLabel(stringResource(R.string.tweaks_section_display)) }
         item {
             ToolCard {
-                ToggleRow(stringResource(R.string.tweaks_touch_title), checked = state.touchEnabled, onCheckedChange = onTouch,
-                    enabled = state.canRun, info = stringResource(R.string.touch_info))
+                // 总开关由逐项**设备读数**汇总，不再看本地集合。
+                ToggleRow(stringResource(R.string.tweaks_touch_title), checked = state.touchOn == true,
+                    onCheckedChange = onTouch,
+                    // 读不到也允许操作：没有回读不等于不能下发（这是本项目的既有规矩）。
+                    enabled = state.canRun,
+                    info = stringResource(R.string.touch_info),
+                    unknown = state.touchOn == null)
                 Text(stringResource(state.touchBackend.labelRes), style = MaterialTheme.typography.bodySmall)
                 // 档位芯片之前被 `touchBackend == LEGACY` 挡住，用 vivo 后端的用户根本看不到、
                 // 也调不了。两个后端都有档位可言，所以只看是否已开启。
@@ -145,7 +151,7 @@ fun TweaksScreen(
                 // 固件触控方案是一次原子服务调用，没有逐项可言 —— 置灰并说明，别让它
                 // 看起来能点。切回默认方案即可逐项控制。
                 val perItem = state.canRun && state.touchBackend != TouchBackend.VIVO
-                state.touchItemsById.forEach { (item, on) ->
+                state.touchItemsById.forEach { (item, on, _) ->
                     TouchItemRow(item, on, perItem, onTouchItem, onTouchNumber,
                         knobValues = item.knobs.mapNotNull { knob ->
                             state.touchReadout["${item.id}|${knob.key}"]?.let { knob to it }
@@ -201,8 +207,10 @@ fun TweaksScreen(
         item {
             ToolCard {
                 ToggleRow(brightnessTitle,
-                    checked = state.thermalBrightness,
+                    // 读服务/设备，不读偏好：进程被杀之后偏好还是 true，而守护早就停了。
+                    checked = state.brightnessOn == true,
                     enabled = state.canRun,
+                    unknown = state.brightnessOn == null,
                     subtitle = stringResource(
                         R.string.tweaks_brightness_current,
                         stringResource(state.brightnessBackend.labelRes),
@@ -228,6 +236,9 @@ fun TweaksScreen(
             ToggleRow(stringResource(R.string.tweak_rotation_suggestion), checked = state.rotationSuggestion, onCheckedChange = onRotationSuggestion,
                 enabled = state.canRun,
                 info = stringResource(R.string.tweaks_rotation_info))
+            // 自动旋转以前只同步不显示：读回来一个值却没有地方用它。
+            ToggleRow(stringResource(R.string.tweak_auto_rotate), checked = state.autoRotate, onCheckedChange = onAutoRotate,
+                enabled = state.canRun)
         } }
         }
         if (group == "config") {
@@ -496,7 +507,7 @@ fun TweaksScreen(
                 style = MaterialTheme.typography.bodySmall,
             )
             TextButton(onClick = { onRestorePhaseOffsets() }, enabled = state.canRun &&
-                (state.phaseOriginal.isNotEmpty() || state.phaseMessage.isNotBlank())) {
+                (state.phaseHasOriginal || state.phaseMessage.isNotBlank())) {
                 Text(stringResource(R.string.tweaks_phase_restore))
             }
             if (state.phaseMessage.isNotBlank()) Text(state.phaseMessage, style = MaterialTheme.typography.bodySmall,
@@ -584,7 +595,8 @@ private fun ToolCard(content: @Composable ColumnScope.() -> Unit) {
 @Composable
 private fun TouchItemRow(
     item: TouchItem,
-    on: Boolean,
+    /** 设备上的真实状态；null = 读不到。 */
+    on: Boolean?,
     enabled: Boolean,
     onChange: (String, Boolean) -> Unit,
     onNumber: (String, String, Int) -> Unit,
@@ -603,7 +615,13 @@ private fun TouchItemRow(
     val detail = buildString {
         append(stringResource(item.detailRes))
         append('\n')
-        append(if (on) stringResource(R.string.touch_item_state_on) else stringResource(R.string.touch_item_state_off))
+        append(
+            when (on) {
+                true -> stringResource(R.string.touch_item_state_on)
+                false -> stringResource(R.string.touch_item_state_off)
+                null -> stringResource(R.string.touch_state_unknown)
+            },
+        )
         if (item.evidence != Evidence.CONFIRMED) {
             append("，")
             append(stringResource(item.evidence.labelRes))
@@ -621,11 +639,13 @@ private fun TouchItemRow(
         return
     }
     Column {
-        ToggleRow(label, checked = on, onCheckedChange = { onChange(item.id, it) },
-            enabled = enabled, info = detail)
+        // 读不到只影响"显示什么"，不影响"能不能写" —— 没有回读不等于不能下发。
+        // 开关照旧可点，旁边写明"未读"，不把未知画成"关"。
+        ToggleRow(label, checked = on == true, onCheckedChange = { onChange(item.id, it) },
+            enabled = enabled, info = detail, unknown = on == null)
         // 带数值的项：每个键一个可填的框。开关只决定"这一族用不用"，
         // 具体写多少由这里决定 —— 出厂预设只是起点，不是唯一选项。
-        NumericFields(item, enabled, on, knobNumbers, knobValues) { knob, value ->
+        NumericFields(item, enabled, on == true, knobNumbers, knobValues) { knob, value ->
             onNumber(item.id, knob.key, value)
         }
         // 取值来自外部记录、语义未公开的项，把当前值摊开 —— 那是判断

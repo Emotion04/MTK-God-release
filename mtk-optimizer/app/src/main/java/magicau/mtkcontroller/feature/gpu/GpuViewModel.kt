@@ -10,6 +10,7 @@ import magicau.mtkcontroller.di.AppContainer
 import magicau.mtkcontroller.data.Failure
 import magicau.mtkcontroller.data.Message
 
+import magicau.mtkcontroller.domain.model.GpuChannel
 import magicau.mtkcontroller.domain.model.GpuInfo
 
 data class GpuUiState(
@@ -59,7 +60,15 @@ class GpuViewModel(private val container: AppContainer) : ViewModel() {
         if (!s.info.controllable) return
         viewModelScope.launch {
             _state.value = s.copy(busy = true, message = null)
+            // 写之前落盘原值：恢复靠它，进程被杀也不会丢。
+            val alreadyApplied = container.profileRepository.gpuApplied()
+            if (!alreadyApplied && s.info.channel == GpuChannel.DEVFREQ) {
+                val baseline = container.gpuTuner.sampleDevfreqBaseline()
+                container.profileRepository.setGpuBaseline(baseline?.first, baseline?.second)
+            }
             val outcome = container.gpuTuner.apply(s.info, s.minKhz, s.maxKhz)
+            // 第一次应用就失败：没有东西需要恢复，把刚记下的原值撤掉。
+            if (!outcome.success && !alreadyApplied) container.profileRepository.clearGpu()
             _state.value = _state.value.copy(busy = false, message = Failure(outcome.message, outcome.detail))
         }
     }
@@ -67,9 +76,9 @@ class GpuViewModel(private val container: AppContainer) : ViewModel() {
     fun release() {
         viewModelScope.launch {
             _state.value = _state.value.copy(busy = true, message = null)
-            val handler = container.profileRepository.gpuHandler()
-            val outcome = container.gpuTuner.release(_state.value.info, handler)
-            if (outcome.success) container.profileRepository.setGpuHandler(0)
+            val baseline = container.profileRepository.gpuBaseline()
+            val outcome = container.gpuTuner.release(_state.value.info, baseline)
+            if (outcome.success) container.profileRepository.clearGpu()
             _state.value = _state.value.copy(busy = false, message = Failure(outcome.message, outcome.detail))
         }
     }

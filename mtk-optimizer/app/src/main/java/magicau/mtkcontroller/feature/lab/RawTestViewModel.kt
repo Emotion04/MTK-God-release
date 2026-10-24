@@ -158,12 +158,11 @@ class RawTestViewModel(private val container: AppContainer) : ViewModel() {
      * 与 CPU 页「释放」撤的是同一套东西。
      */
     override fun onCleared() {
-        // onCleared 不在协程里，而 reset() 要跑 binder。用 applicationScope 之类
-        // 长寿命作用域会越过 ViewModel 寿命，所以这里起一个一次性的：
-        // ViewModel 已死，但释放必须跑完。
-        viewModelScope.launch {
+        // **不能在这个 ViewModel 的 scope 上 launch**：`viewModelScope` 在 clear() 时
+        // 先于 onCleared 被取消，launch 出来的协程来不及跑第一句就被取消 ——
+        // 释放看起来执行了，实际一个请求都没撤。用容器级作用域，ViewModel 死了它也继续跑。
+        container.applicationScope.launch {
             runCatching { container.labController.reset() }
-                .onFailure { if (it is CancellationException) throw it }
         }
         super.onCleared()
     }

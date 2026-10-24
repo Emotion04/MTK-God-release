@@ -31,6 +31,8 @@ content insert --uri content://settings/system --bind name:s:pointer_speed --bin
 
 原键缺失、属性为空和数值 0 是不同状态。恢复使用操作前快照；
 重启后的 Settings 仍可能是此前写入的持久值，不能称为出厂值。
+2026-10-18 带前后读数的复核：`settings` 键跨重启保留，`debug.*` 属性重启即清，
+强停 App 两者都不影响 —— 见 [persistence.md](persistence.md)。
 
 依据：2026-09-23，给从未设置的属性写空串曾非零退出。
 目标已经为空时可以跳过写入并核对读回；需要清空已设置的属性时保留空字符串参数：

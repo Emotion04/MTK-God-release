@@ -50,12 +50,27 @@ object StateBackup {
     )
 
     /**
-     * 读出全部登记键的当前值。读不到的记 null，不猜。
+     * 读出全部登记键的当前值。
      *
-     * 不需要 Shizuku：`settings get` 在 App 进程里就能读，只有写才需要提权。
+     * **读不到的键不写进备份**，而不是记成"不存在"：后者在恢复时会被当成
+     * "删掉这个键"，于是一次在没授权时导出的备份，恢复时会删光所有键。
+     * 调用方拿到 [Capture.unreadable] 后要告诉用户这次备份不完整。
+     *
+     * 读取需要 Shizuku —— 走的是用户服务里的 `/system/bin/settings`。
      */
-    suspend fun capture(): List<Entry> = OwnedKeys.all.map { owned ->
-        Entry(owned, SettingChannel.get(owned.table, owned.key)?.trim())
+    data class Capture(val entries: List<Entry>, val unreadable: Int)
+
+    suspend fun capture(): Capture {
+        val entries = mutableListOf<Entry>()
+        var unreadable = 0
+        for (owned in OwnedKeys.all) {
+            when (val result = SettingChannel.read(owned.table, owned.key)) {
+                is SettingChannel.ReadResult.Value -> entries += Entry(owned, result.text)
+                SettingChannel.ReadResult.Absent -> entries += Entry(owned, null)
+                SettingChannel.ReadResult.Unreadable -> unreadable++
+            }
+        }
+        return Capture(entries, unreadable)
     }
 
     /**

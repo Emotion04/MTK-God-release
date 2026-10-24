@@ -1,9 +1,10 @@
 package magicau.mtkcontroller.feature.cpu
 
-import magicau.mtkcontroller.ui.components.FailureNote
+import magicau.mtkcontroller.ui.components.OutcomeNote
 import magicau.mtkcontroller.ui.components.LocalNavBarClearance
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
@@ -49,9 +51,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
@@ -546,6 +550,15 @@ private fun CapsPanel(state: CpuUiState, onReadCaps: suspend () -> Unit, active:
 
     // 并排一行：几簇放一起才能横向比较"哪一簇被压得更狠"。
     Card(modifier = Modifier.fillMaxWidth()) {
+        Column {
+        // 右上角的温控档位徽章：倒梯形，左边斜、右边竖，顶部略宽。
+        // 显示**当前生效**的档位，不是编辑区里选中未应用的那个。
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 8.dp, top = 6.dp),
+            horizontalArrangement = Arrangement.End,
+        ) {
+            ThermalBadge(state.thermalPolicyIndex)
+        }
         Row(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -575,16 +588,61 @@ private fun CapsPanel(state: CpuUiState, onReadCaps: suspend () -> Unit, active:
                 }
             }
         }
-        // 只有画了红弧才解释红弧。读不到时不画红也不画绿，环是中性灰 ——
-        // 那不需要一句话去解释，环下面的"上限 —"已经说完了。
-        if (state.caps.any { it.maxKhz != null }) {
-            Text(
-                stringResource(R.string.cpu_gauge_blocked),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 10.dp),
-            )
         }
+    }
+}
+
+/** 倒梯形：上宽下窄，左边斜、右边竖直，四角带小圆角。 */
+private class KeystoneShape(
+    private val slant: androidx.compose.ui.unit.Dp = 7.dp,
+    private val corner: androidx.compose.ui.unit.Dp = 3.dp,
+) : Shape {
+    override fun createOutline(
+        size: androidx.compose.ui.geometry.Size,
+        layoutDirection: androidx.compose.ui.unit.LayoutDirection,
+        density: androidx.compose.ui.unit.Density,
+    ): androidx.compose.ui.graphics.Outline {
+        val s = with(density) { slant.toPx() }
+        val r = with(density) { corner.toPx() }
+        val w = size.width
+        val h = size.height
+        val len = kotlin.math.sqrt(s * s + h * h)
+        // **右侧是真正的直角**：上边与右边、下边与右边都直接交于 (w,0)/(w,h)；
+        // 只把左侧斜边的两个角做成小圆角。四角都圆会让它看起来像普通圆角矩形，
+        // 直角梯形的形状就没了。
+        val path = Path().apply {
+            moveTo(r, 0f)
+            lineTo(w, 0f)
+            lineTo(w, h)
+            lineTo(s + r, h)
+            quadraticBezierTo(s, h, s - r * s / len, h - r * h / len)
+            lineTo(r * s / len, r * h / len)
+            quadraticBezierTo(0f, 0f, r, 0f)
+            close()
+        }
+        return androidx.compose.ui.graphics.Outline.Generic(path)
+    }
+}
+
+/** 环形图卡片右上角的温控档位徽章。 */
+@Composable
+private fun ThermalBadge(index: Int?) {
+    val shape = androidx.compose.runtime.remember { KeystoneShape() }
+    Row(
+        modifier = Modifier
+            .height(19.dp)
+            .shadow(2.dp, shape, clip = false)
+            .background(MaterialTheme.colorScheme.secondaryContainer, shape)
+            .padding(start = 8.dp, end = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            if (index == null) stringResource(R.string.cpu_thermal_badge_empty)
+            else stringResource(R.string.cpu_thermal_badge, index),
+            style = MaterialTheme.typography.labelSmall,
+            fontFamily = FontFamily.Monospace,
+            color = MaterialTheme.colorScheme.onSecondaryContainer,
+        )
     }
 }
 
@@ -672,7 +730,7 @@ private fun ActionsSection(
             )
         }
 
-        state.message?.let { FailureNote(failure = it) }
+        state.message?.let { OutcomeNote(message = it, kind = state.messageKind) }
     }
 }
 

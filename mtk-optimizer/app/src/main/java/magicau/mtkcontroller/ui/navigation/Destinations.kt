@@ -30,8 +30,14 @@ enum class Destination(
     ;
 
     companion object {
-        fun fromRoute(route: String?): Destination =
-            if (route == "gpu") CPU else entries.firstOrNull { it.route == route } ?: HOME
+        /**
+         * 路由 → 标签。配置的标签如果被开关隐藏，落到第一个可见标签 ——
+         * 不能回到一个用户到不了的页面。
+         */
+        fun fromRoute(route: String?): Destination {
+            val target = if (route == "gpu") CPU else entries.firstOrNull { it.route == route }
+            return target?.takeIf(FeatureFlags::tabEnabled) ?: FeatureFlags.defaultTab()
+        }
     }
 }
 
@@ -57,6 +63,7 @@ object SubRoutes {
     const val FEATURE_TRIAL = "settings/tests/trial"
     const val DIAGNOSTICS = "settings/diagnostics"
     const val NOTIFICATIONS = "settings/notifications"
+    const val CHANGELOG = "settings/changelog"
     const val TWEAKS = "tools/display"
     const val GAME = "tools/game"
     const val STATUS = "tools/status"

@@ -18,6 +18,23 @@ data class FreqLadder(
     val sensor: String? = null,
 ) {
     val isEmpty: Boolean get() = thresholdsC.isEmpty() || freqsMHz.isEmpty()
+
+    /**
+     * 某一温度下这张表允许的最高频率。
+     *
+     * 配置是**阶梯**：温度超过某一档后沿用那一档的频率，直到下一档。
+     * 表格/曲线都必须用这个函数取值，不能只看“这个温度有没有写在同一行” ——
+     * 各核簇的阈值点并不相同，直接 indexOf 会把仍在生效的上一档显示成“—”。
+     */
+    fun freqAt(tempC: Int): Int? {
+        if (isEmpty) return null
+        val pairs = thresholdsC.zip(freqsMHz).sortedBy { it.first }
+        var value = pairs.first().second
+        for ((threshold, freq) in pairs) {
+            if (threshold <= tempC) value = freq else break
+        }
+        return value
+    }
 }
 
 /**

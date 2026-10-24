@@ -152,6 +152,39 @@ class CpuControl(
 
     suspend fun lastApplied(): List<ClusterSetting> = store.lastApplied()
 
+    /** 用户最后一次要求的范围；释放后仍保留，供快捷开关和亮屏重发使用。 */
+    suspend fun lastRequested(): List<ClusterSetting> = store.lastRequested()
+
+    /** 用户是否还希望由本软件控制频率。锁屏自动释放不会清掉它。 */
+    suspend fun controlEnabled(): Boolean = store.controlEnabled()
+
+    /**
+     * 按上一次要求的范围重新下发，不先读 [lastApplied]。
+     *
+     * 锁屏释放后 [lastApplied] 是空的，但 [lastRequested] 还在；这就是“一键恢复”
+     * 和普通 [reapply] 的区别。
+     */
+    suspend fun applyLastRequested(clusters: List<CpuCluster>): RequestOutcome =
+        operationMutex.withLock {
+            val settings = store.lastRequested()
+            if (settings.isEmpty()) {
+                return@withLock RequestOutcome(false, Message(R.string.cpu_no_last_range))
+            }
+            applyLocked(clusters, settings)
+        }
+
+    /**
+     * 释放并标记“用户不再需要控制”。
+     *
+     * 供界面上的释放/恢复默认、快捷开关关闭使用。**锁屏自动释放不走这里** ——
+     * 它只调用 [release]，保留用户意图，亮屏后才能恢复。
+     */
+    suspend fun disable(clusters: List<CpuCluster>): RequestOutcome = operationMutex.withLock {
+        val result = releaseLocked(clusters)
+        if (result.success) store.setControlEnabled(false)
+        result
+    }
+
     /** Exclusive, finite probe. Never persists an experimental setting for polling. */
     suspend fun probe(
         clusters: List<CpuCluster>, policy: String, low: Long, high: Long,
@@ -302,6 +335,7 @@ class CpuControl(
             if (!released.success) return RequestOutcome(false, released.message, detail = released.detail)
         }
         store.setLastApplied(emptyList())
+        store.setControlEnabled(false)
         _status.value = _status.value.copy(handler = 0, applied = emptyList(),
             verification = CpuVerification.UNVERIFIED, verificationDetail = null)
 
@@ -411,7 +445,12 @@ class CpuControl(
         applyLocked(clusters, settings)
     }
 
-    private suspend fun applyLocked(clusters: List<CpuCluster>, settings: List<ClusterSetting>): RequestOutcome {
+    private suspend fun applyLocked(
+        clusters: List<CpuCluster>,
+        settings: List<ClusterSetting>,
+        /** 这些簇只压上限、不锁下限。用于系统当前上限已经低于请求下限的区间。 */
+        omitFloorPolicies: Set<String> = emptySet(),
+    ): RequestOutcome {
         if (clusters.isEmpty()) return RequestOutcome(false, Message(R.string.cpu_no_clusters))
         if (settings.isEmpty()) return RequestOutcome(false, Message(R.string.cpu_no_cluster_selected))
 
@@ -431,10 +470,11 @@ class CpuControl(
                 return RequestOutcome(false, Message(R.string.cpu_freq_out_of_range))
             }
             normalized += setting.copy(minFreqKhz = floor, maxFreqKhz = ceiling)
+            val includeFloor = setting.policy !in omitFloorPolicies
 
             // Soft ceilings can be raised by another scenario's soft floor.
             // Keep an independent hard ceiling; only a point also requests a hard floor.
-            if (rangeMode() != TweakCommands.RangeMode.CEILING_ONLY) {
+            if (includeFloor && rangeMode() != TweakCommands.RangeMode.CEILING_ONLY) {
                 pairs += PowerHal.commandId(PowerHal.BASE_MIN, cluster.index) to floor.toString()
             }
             // 上限可省。见 [rangeMode] 与 [TweakCommands.RangeMode]。
@@ -459,7 +499,7 @@ class CpuControl(
             // 只压上限时不发下限 —— 低频段交给系统自己调度。
             // 硬的那一对默认不发 —— 实测与软的等效，见 [hardLimits]。
             if (hardLimits()) {
-                if (rangeMode() != TweakCommands.RangeMode.CEILING_ONLY) {
+                if (includeFloor && rangeMode() != TweakCommands.RangeMode.CEILING_ONLY) {
                     pairs += PowerHal.commandId(PowerHal.BASE_HARD_MIN, cluster.index) to floor.toString()
                 }
                 if (rangeMode() != TweakCommands.RangeMode.FLOOR_ONLY) {
@@ -469,7 +509,8 @@ class CpuControl(
             AppLog.i(TAG, "${cluster.policy} " + if (floor == ceiling) {
                 "单值请求 ${floor / 1000}MHz"
             } else {
-                "频率范围 ${floor / 1000}-${ceiling / 1000}MHz"
+                "频率范围 ${floor / 1000}-${ceiling / 1000}MHz" +
+                    if (includeFloor) "" else "（不锁下限）"
             } + "（${rangeMode().name}${if (hardLimits()) " +硬限" else ""}）")
         }
         // 附带下发调度器配合项（用户显式开启时才非空）。
@@ -490,6 +531,9 @@ class CpuControl(
             lock.apply(all, durationMs = 0).also { result ->
                 if (result.success) {
                     store.setLastApplied(normalized)
+                    // 释放后仍要记得“上次调的是什么”，快捷开关和亮屏恢复都靠它。
+                    store.setLastRequested(normalized)
+                    store.setControlEnabled(true)
                     _status.value = _status.value.copy(handler = lock.handler(), applied = normalized,
                         observedLimits = null, verification = CpuVerification.UNVERIFIED)
                 } else {
@@ -510,6 +554,75 @@ class CpuControl(
 
         val observed = sampleSnapshot(clusters, "应用 handler=${lock.handler()}")
         val verification = updateVerification(normalized, observed)
+
+        // 系统当前上限已经低于请求下限时，继续锁下限只会把簇钉在那个上限上。
+        // 对这种区间再下发一次“只压上限”：用户仍得到上限约束，但 CPU 可以降下来。
+        // 只重试一次；点请求（min == max）是用户明确要钉住，不在此列。
+        val pinned = if (omitFloorPolicies.isEmpty() &&
+            rangeMode() == TweakCommands.RangeMode.RANGE
+        ) {
+            normalized.filter { setting ->
+                setting.minFreqKhz < setting.maxFreqKhz &&
+                    observed.any { reading ->
+                        reading.policy == setting.policy &&
+                            reading.max != null &&
+                            setting.minFreqKhz >= reading.max
+                    }
+            }
+        } else {
+            emptyList()
+        }
+        if (pinned.isNotEmpty()) {
+            val names = pinned.joinToString(", ") { it.policy }
+            val pinnedPolicies = pinned.map { it.policy }.toSet()
+            AppLog.w(TAG, "系统当前上限低于请求下限，改为只压上限: $names")
+            val retry = applyLocked(
+                clusters,
+                normalized,
+                omitFloorPolicies = pinnedPolicies,
+            )
+            // 只把一句人话放进摘要；逐簇 policy 读回全部留在 detail 里，默认收起。
+            val short = Message(
+                if (retry.success) R.string.cpu_floor_not_enforced_short
+                else R.string.cpu_floor_retry_failed_kept_short,
+            )
+            // 重试没成，但原请求还在（释放失败，或 PerfLockController 已把上一份放回）：
+            // 不能把“请求仍然持有”报成失败，否则用户以为已经完全释放。
+            if (!retry.success && lock.handler() > 0) {
+                return RequestOutcome(
+                    success = true,
+                    message = Message(
+                        R.string.cpu_outcome_join,
+                        listOf(verification.summary, short),
+                    ),
+                    detail = listOfNotNull(verification.detail, retry.detail).joinToString("\n"),
+                )
+            }
+            if (retry.success) {
+                // 重放状态必须和**实际下发**一致：这些簇已经不再锁下限。
+                // 否则轮询会拿原始下限再次下发，把刚拆掉的钉子重新钉回去。
+                val effective = normalized.map { setting ->
+                    if (setting.policy !in pinnedPolicies) setting
+                    else setting.copy(
+                        // 用可用频率表的最低档，而不是 CpuCluster.minFreqKhz ——
+                        // 后者在没有单独填充时可能是 0，会写出一个伪造的下限。
+                        minFreqKhz = byPolicy[setting.policy]?.availableFreqs?.firstOrNull()
+                            ?: setting.minFreqKhz,
+                    )
+                }
+                store.setLastApplied(effective)
+                _status.value = _status.value.copy(applied = effective)
+            }
+            return RequestOutcome(
+                success = retry.success,
+                message = if (retry.success) {
+                    Message(R.string.cpu_outcome_join, listOf(verification.summary, short))
+                } else {
+                    Message(R.string.cpu_outcome_join, listOf(retry.message, short))
+                },
+                detail = retry.detail,
+            )
+        }
 
         _status.value = _status.value.copy(
             handler = lock.handler(),

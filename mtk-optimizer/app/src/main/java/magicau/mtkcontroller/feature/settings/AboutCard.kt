@@ -8,6 +8,7 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,10 +20,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -49,6 +53,7 @@ import kotlinx.coroutines.withContext
 import magicau.mtkcontroller.BuildConfig
 import magicau.mtkcontroller.ui.components.InsetDivider
 import magicau.mtkcontroller.ui.components.SettingsCard
+import magicau.mtkcontroller.ui.components.SettingsRow
 import java.net.URL
 import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.res.stringResource
@@ -61,7 +66,9 @@ import androidx.compose.ui.text.AnnotatedString
 /** Everything shown in the about block. One place to edit contact details. */
 private object Author {
     const val NAME = "Emotion04"
-    const val QQ = "1695617871"
+    /** 暂时隐藏 GitHub 入口，代码保留，以后要开只改这一处。 */
+    const val SHOW_GITHUB = false
+    const val QQ = "259669649"
     const val WECHAT = "1695617871"
     const val EMAIL = "infpc@msn.com"
     const val GITHUB = "https://github.com/Emotion04"
@@ -77,8 +84,18 @@ private object Author {
  * and each row is tappable, opening the matching app where one exists (QQ has
  * a URL scheme; WeChat does not, so the id is copied instead).
  */
+/** 关于页「检查更新」的显示状态；结果本身由 UpdateCenter 弹窗呈现。 */
+enum class UpdateCheckResult { Idle, Checking, Latest, Failed }
+
 @Composable
-fun AboutCard(modifier: Modifier = Modifier) {
+fun AboutCard(
+    modifier: Modifier = Modifier,
+    onOpenChangelog: () -> Unit = {},
+    updateCheck: UpdateCheckResult = UpdateCheckResult.Idle,
+    onCheckUpdate: () -> Unit = {},
+) {
+    val checking = updateCheck == UpdateCheckResult.Checking
+    val result = updateCheck
     val context = LocalContext.current
     // 头像打包在 res/drawable 里，不走网络。
     // 曾经的做法是每次打开这一页去 GitHub 拉一次，结果网络一抽风就只剩一个字母兜底，
@@ -94,19 +111,29 @@ fun AboutCard(modifier: Modifier = Modifier) {
             Avatar(bitmap = avatar)
             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(
-                    "MTK Controller",
+                    stringResource(R.string.app_name),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    "by ${Author.NAME}",
+                    stringResource(R.string.about_author_line, stringResource(R.string.about_author_display)),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.clickable {
+                        if (!context.tryOpen("coolmarket://u/${Author.COOLAPK_UID}")) {
+                            context.openUrl(Author.COOLAPK_URL)
+                        }
+                    },
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     AssistChip(
-                        onClick = {},
-                        label = { Text("v${BuildConfig.VERSION_NAME}") },
+                        onClick = onOpenChangelog,
+                        label = {
+                            Text(
+                                "v${BuildConfig.VERSION_NAME}" +
+                                    if (BuildConfig.DEBUG) " " + stringResource(R.string.about_channel_canary) else "",
+                            )
+                        },
                     )
                 }
             }
@@ -167,16 +194,18 @@ fun AboutCard(modifier: Modifier = Modifier) {
             onClick = { context.openUrl("mailto:${Author.EMAIL}") },
         )
 
-        InsetDivider()
-        ContactRow(
-            icon = Icons.Filled.Star,
-            tint = Color(0xFF6A4C93),
-            label = stringResource(R.string.about_label_github),
-            value = Author.NAME,
-            actionHint = stringResource(R.string.about_action_homepage),
-            copyValue = Author.GITHUB,
-            onClick = { context.openUrl(Author.GITHUB) },
-        )
+        if (Author.SHOW_GITHUB) {
+            InsetDivider()
+            ContactRow(
+                icon = Icons.Filled.Star,
+                tint = Color(0xFF6A4C93),
+                label = stringResource(R.string.about_label_github),
+                value = Author.NAME,
+                actionHint = stringResource(R.string.about_action_homepage),
+                copyValue = Author.GITHUB,
+                onClick = { context.openUrl(Author.GITHUB) },
+            )
+        }
 
         InsetDivider()
         ContactRow(
@@ -195,9 +224,52 @@ fun AboutCard(modifier: Modifier = Modifier) {
             },
         )
 
+        InsetDivider()
+        // 手动检查更新：结果直接复用启动检查的弹窗（见 UpdateCenterDialog）。
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(enabled = !checking, onClick = onCheckUpdate)
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Icon(
+                Icons.Filled.Refresh,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(22.dp),
+            )
+            Column(Modifier.weight(1f)) {
+                Text(stringResource(R.string.about_check_update))
+                when (result) {
+                    UpdateCheckResult.Idle -> Unit
+                    UpdateCheckResult.Checking -> Text(
+                        stringResource(R.string.about_check_update_checking),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    UpdateCheckResult.Latest -> Text(
+                        stringResource(R.string.about_check_update_latest),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    UpdateCheckResult.Failed -> Text(
+                        stringResource(R.string.about_check_update_failed),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+            if (checking) {
+                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+            }
+        }
+
         InsetDivider(startIndent = 16.dp)
+        // 版本行只保留 versionCode：包名是内部标识，对用户没有信息量。
         Text(
-            text = stringResource(R.string.about_version_line, BuildConfig.VERSION_CODE, BuildConfig.APPLICATION_ID),
+            text = stringResource(R.string.about_version_line, BuildConfig.VERSION_CODE),
             style = MaterialTheme.typography.bodySmall,
             fontFamily = FontFamily.Monospace,
             color = MaterialTheme.colorScheme.onSurfaceVariant,

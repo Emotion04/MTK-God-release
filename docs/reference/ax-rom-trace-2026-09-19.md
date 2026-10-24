@@ -2,7 +2,7 @@
 
 ## 材料核实
 
-实际存在 `reference/rom/PD2430D_A_16.1.12.0.W10/implementation-build19/normal/`，不是只有配置。重新校验 manifest 中 171 个文件的长度与 SHA256，全部一致；包含 framework/vivo-framework/vivo-services JAR、Vivo/MTK 原生客户端与接口库。AX 的六个 jar 也在本地。未重新采集手机，未执行控制命令。
+实际存在 `../MTK-reference/rom/PD2430D_A_16.1.12.0.W10/implementation-build19/normal/`，不是只有配置。重新校验 manifest 中 171 个文件的长度与 SHA256，全部一致；包含 framework/vivo-framework/vivo-services JAR、Vivo/MTK 原生客户端与接口库。AX 的六个 jar 也在本地。未重新采集手机，未执行控制命令。
 
 ## CPU 私有参数：当前受阻
 
@@ -39,7 +39,7 @@ AX `common.sh:2283` 全局请求只有 11 个 int，游戏请求有 14 个。与
 
 ## 亮度：接口语义已进一步明确
 
-从 `28-framework.jar` 用 JADX 单类提取 `vivo.common.ILcmBrightnessInterface`，本地结果 `reference/derived/rom-analysis/lcm-interface.java`：
+从 `28-framework.jar` 用 JADX 单类提取 `vivo.common.ILcmBrightnessInterface`，本地结果 `../MTK-reference/derived/rom-analysis/lcm-interface.java`：
 
 - 事务 8：`setBrightnessPolicyLimitPercent(float)`，返回 boolean。
 - 事务 10：`getBrightnessPolicyPercent(int brightnessNit, int envLux)`，返回 int。

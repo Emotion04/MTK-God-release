@@ -108,8 +108,8 @@ android {
 
     buildTypes {
         release {
-            // 逆向成本必须高于重新推导的成本：本项目 data/ 层的平台知识是数月真机
-            // 实测的结果，而 release 包此前完全未混淆，反编译产物与源码几乎一致。
+            // release 开混淆与资源压缩：data/ 层的平台知识来自数月真机实测，
+            // 明文打包等于把结论直接送人。
             // 规则见 proguard-rules.pro，只 keep 跨进程契约与序列化这些必需项。
             //
             // 混淆只在 release 生效：debug 保持原样，方便日常调试与抓栈。

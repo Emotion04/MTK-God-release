@@ -48,6 +48,19 @@ class SettingsRepository(private val context: Context) {
     private val logLevelKey = stringPreferencesKey("log_level")
     private val applyModeKey = stringPreferencesKey("apply_mode")
     private val reapplyIntervalKey = longPreferencesKey("reapply_interval_ms")
+    private val screenOffPolicyKey = stringPreferencesKey("screen_off_policy")
+    private val hideFromRecentsKey = booleanPreferencesKey("hide_from_recents")
+    private val applyOnBootKey = booleanPreferencesKey("apply_on_boot")
+    private val updateLastCheckKey = longPreferencesKey("update_last_check_ms")
+    private val updateDismissedKey = intPreferencesKey("update_dismissed_version")
+
+    // --- 保活与常驻通知 ------------------------------------------------------
+    private val keepAliveKey = booleanPreferencesKey("keep_alive")
+    private val notifProfileKey = booleanPreferencesKey("notif_show_profile")
+    private val notifCpuKey = booleanPreferencesKey("notif_show_cpu")
+    private val notifTempKey = booleanPreferencesKey("notif_show_temp")
+    private val notifQuickSwitchKey = booleanPreferencesKey("notif_quick_switch")
+    private val freqThermalCompanionKey = booleanPreferencesKey("freq_thermal_companion")
 
     val defaultTabRoute: Flow<String?> = context.settingsStore.data.map { it[defaultTabKey] }
 
@@ -156,8 +169,83 @@ class SettingsRepository(private val context: Context) {
 
     val applyMode: Flow<String> = context.settingsStore.data.map { it[applyModeKey] ?: "SINGLE" }
 
+    /**
+     * 锁屏时的处理方式，默认“保持并重发”。
+     *
+     * 默认不释放：原有行为是熄屏期间只把轮询放慢，并没有主动撤销请求。
+     * 需要靠熄屏省电的用户可以在设置里改成“释放”。
+     */
+    val screenOffPolicy: Flow<String> =
+        context.settingsStore.data.map { it[screenOffPolicyKey] ?: "KEEP" }
+
+    /** 是否把当前任务从最近任务列表里隐藏。 */
+    val hideFromRecents: Flow<Boolean> =
+        context.settingsStore.data.map { it[hideFromRecentsKey] ?: false }
+
+    /** 开机后 Shizuku 就绪时，按上一次范围自动下发一次。默认关。 */
+    val applyOnBoot: Flow<Boolean> =
+        context.settingsStore.data.map { it[applyOnBootKey] ?: false }
+
+    /** 上次检查更新的时间；0 = 从没检查过。 */
+    val updateLastCheckMs: Flow<Long> =
+        context.settingsStore.data.map { it[updateLastCheckKey] ?: 0L }
+
+    /** 用户点过“稍后”的版本；同一版本不再弹窗。 */
+    val updateDismissedVersion: Flow<Int?> =
+        context.settingsStore.data.map { it[updateDismissedKey] }
+
+    // --- 保活与常驻通知 ------------------------------------------------------
+
+    val keepAlive: Flow<Boolean> = context.settingsStore.data.map { it[keepAliveKey] ?: false }
+    val notifShowProfile: Flow<Boolean> = context.settingsStore.data.map { it[notifProfileKey] ?: true }
+    val notifShowCpu: Flow<Boolean> = context.settingsStore.data.map { it[notifCpuKey] ?: true }
+    val notifShowTemp: Flow<Boolean> = context.settingsStore.data.map { it[notifTempKey] ?: true }
+    /** 通知栏里是否给出"切到下一个方案"的按钮。 */
+    val notifQuickSwitch: Flow<Boolean> = context.settingsStore.data.map { it[notifQuickSwitchKey] ?: true }
+
+    /**
+     * 应用频率区间时是否一并切到"放开温控"的档位。
+     *
+     * **默认开。** 本机实测软上限被厂商温控压到 2.3 GHz 左右，只调频率区间常常看不出
+     * 效果；放开温控后频率请求才能真正落地。代价是移除系统温度保护，更热也更耗电 ——
+     * 这是用户明确选择的行为，不做默认路径上的“优化”。
+     * 用户手动选过温控档位时，以手动档位为准（见 `CpuViewModel.apply`）。
+     */
+    val freqThermalCompanion: Flow<Boolean> =
+        context.settingsStore.data.map { it[freqThermalCompanionKey] ?: true }
+
+    suspend fun setKeepAlive(enabled: Boolean) = context.settingsStore.edit { it[keepAliveKey] = enabled }
+    suspend fun setNotifShowProfile(enabled: Boolean) = context.settingsStore.edit { it[notifProfileKey] = enabled }
+    suspend fun setNotifShowCpu(enabled: Boolean) = context.settingsStore.edit { it[notifCpuKey] = enabled }
+    suspend fun setNotifShowTemp(enabled: Boolean) = context.settingsStore.edit { it[notifTempKey] = enabled }
+    suspend fun setNotifQuickSwitch(enabled: Boolean) = context.settingsStore.edit { it[notifQuickSwitchKey] = enabled }
+    suspend fun setFreqThermalCompanion(enabled: Boolean) =
+        context.settingsStore.edit { it[freqThermalCompanionKey] = enabled }
+
     suspend fun setApplyMode(name: String) {
         context.settingsStore.edit { it[applyModeKey] = name }
+    }
+
+    suspend fun setScreenOffPolicy(name: String) {
+        context.settingsStore.edit { it[screenOffPolicyKey] = name }
+    }
+
+    suspend fun setHideFromRecents(enabled: Boolean) {
+        context.settingsStore.edit { it[hideFromRecentsKey] = enabled }
+    }
+
+    suspend fun setApplyOnBoot(enabled: Boolean) {
+        context.settingsStore.edit { it[applyOnBootKey] = enabled }
+    }
+
+    suspend fun setUpdateLastCheckMs(value: Long) {
+        context.settingsStore.edit { it[updateLastCheckKey] = value }
+    }
+
+    suspend fun setUpdateDismissedVersion(value: Int?) {
+        context.settingsStore.edit {
+            if (value == null) it.remove(updateDismissedKey) else it[updateDismissedKey] = value
+        }
     }
 
     /** Bounded so a typo cannot turn into a binder hammering loop. */

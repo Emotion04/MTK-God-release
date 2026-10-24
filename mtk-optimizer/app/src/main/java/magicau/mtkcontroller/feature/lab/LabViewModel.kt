@@ -15,10 +15,12 @@ import magicau.mtkcontroller.data.lab.LabPlacement
 import magicau.mtkcontroller.data.lab.LabCatalog
 import magicau.mtkcontroller.data.lab.LabCategory
 import magicau.mtkcontroller.data.lab.LabCores
+import magicau.mtkcontroller.data.lab.LabControl
 import magicau.mtkcontroller.data.lab.LabController
 import magicau.mtkcontroller.data.lab.ThermalPolicyCatalog
 import magicau.mtkcontroller.data.Failure
 import magicau.mtkcontroller.data.log.AppLog
+import magicau.mtkcontroller.data.thermal.ThermalPolicy
 import magicau.mtkcontroller.data.thermal.ThermalPolicyReader
 import magicau.mtkcontroller.data.thermal.ThermalPolicyController
 import magicau.mtkcontroller.data.thermal.ThermalPolicySummary
@@ -55,11 +57,28 @@ data class LabItemState(
     val readout: String? = null,
     /** 各档位的中文摘要（只有温度和频率），key = 档位编号。 */
     val briefs: Map<Int, String> = emptyMap(),
+    /** 各档位的结构化策略；只有温控功能有。 */
+    val policies: Map<Int, ThermalPolicy> = emptyMap(),
+    /**
+     * 控件显示的初值是不是从设备读来的。
+     *
+     * false = 读不到（或这个功能本来就没有可读节点）。界面必须写成「未读」，
+     * **不能画成"关"** —— 那会让用户以为功能没开，点一下"打开"却什么都没发生。
+     */
+    val stateKnown: Boolean = false,
 ) {
     /** 当前选中的那一档的摘要，按 [values] 现取 —— 换档立刻跟着变。 */
     val selectedBrief: String?
         get() = if (feature.key == THERMAL_POLICY_KEY) {
             values.values.firstOrNull()?.let { briefs[it] }
+        } else {
+            null
+        }
+
+    /** 当前选中的那一档的结构化策略。 */
+    val selectedPolicy: ThermalPolicy?
+        get() = if (feature.key == THERMAL_POLICY_KEY) {
+            values.values.firstOrNull()?.let { policies[it] }
         } else {
             null
         }
@@ -155,9 +174,12 @@ class LabViewModel(private val container: AppContainer) : ViewModel() {
             // One batched read for every declared node, so the UI can grey out
             // what this device lacks instead of offering a control that cannot
             // work — without paying a shell spawn per feature.
-            val nodes = LabCatalog.features
-                .mapNotNull { displayNode(it, clusters) }
-                .distinct()
+            val nodes = (
+                LabCatalog.features.mapNotNull { displayNode(it, clusters) } +
+                    // 逐核功能要看**每一簇**的 affected_cpus：只看第一簇会把别的簇掉核当成没掉。
+                    LabCatalog.features.filter { it.perCore }
+                        .flatMap { feature -> clusters.mapNotNull { feature.node?.replace("%s", it.policy) } }
+            ).distinct()
             val values = Sysfs.readMany(nodes)
 
             // A node we cannot read is not a node the device lacks. Only a
@@ -180,10 +202,12 @@ class LabViewModel(private val container: AppContainer) : ViewModel() {
             }
             // 温控策略索引各档的中文摘要：现读现解，不预写任何档位的含义。
             val briefs = mutableMapOf<Int, String>()
+            val thermalPolicies = mutableMapOf<Int, ThermalPolicy>()
             runCatching {
                 for (index in ThermalPolicyReader.availableIndices()) {
                     val policy = ThermalPolicyReader.read(index)
                     briefs[index] = ThermalPolicySummary.brief(policy)
+                    thermalPolicies[index] = policy
                 }
             }
 
@@ -195,15 +219,23 @@ class LabViewModel(private val container: AppContainer) : ViewModel() {
                     states[node] == Sysfs.NodeState.ABSENT -> false
                     else -> null
                 }
+                // 开关类控件读设备：读得到就用设备值当初值，读不到标成未知。
+                // 滑杆/选项不在这里读 —— 它们的量程和节点单位不是一回事，
+                // 硬套会把"读完是 2350 MHz"塞进 0..3500000 的滑杆里。
+                val deviceValues = if (feature.control == LabControl.TOGGLE) {
+                    toggleValuesFromDevice(feature, clusters, values)
+                } else null
                 LabItemState(
                     feature = feature,
                     supported = supported,
                     nodeValue = node,
                     verdict = verdicts[feature.key],
-                    values = defaultValues(feature, dynamic[feature.key]),
+                    values = deviceValues ?: defaultValues(feature, dynamic[feature.key]),
+                    stateKnown = feature.control != LabControl.TOGGLE || deviceValues != null,
                     choices = dynamic[feature.key] ?: emptyList(),
                     readout = readouts[feature.key],
                     briefs = if (feature.key == THERMAL_POLICY_KEY) briefs else emptyMap(),
+                    policies = if (feature.key == THERMAL_POLICY_KEY) thermalPolicies else emptyMap(),
                 )
             }
 
@@ -229,6 +261,41 @@ class LabViewModel(private val container: AppContainer) : ViewModel() {
                         )
                     },
             )
+        }
+    }
+
+    /**
+     * 开关类功能的设备现状。
+     *
+     * - `core_online`：读各簇 `affected_cpus`，核心在任一簇的列表里就算在线。
+     * - `core_pause`：`affected_cpus` 看不出"暂停"，只能算未知 —— 暂停的核仍可能
+     *   留在列表里。不拿它冒充在线状态。
+     * - 其余（fpsgo、perf_mode、syslimiter…）节点为 null，本来就没有判据。
+     *
+     * @return 读得到时返回每个 key 的值；读不到返回 null。
+     */
+    private fun toggleValuesFromDevice(
+        feature: LabFeature,
+        clusters: List<CpuCluster>,
+        batch: Map<String, String?>,
+    ): Map<String, Int>? {
+        if (feature.key != "core_online") {
+            val node = displayNode(feature, clusters) ?: return null
+            // 无论怎么分区，初值都是 0 或 1；节点里除了 0/1 还可能带空白。
+            val raw = batch[node]?.trim()?.split(Regex("\\s+"))?.firstOrNull() ?: return null
+            val value = raw.toIntOrNull() ?: return null
+            return mapOf(GLOBAL to value)
+        }
+        val online = mutableSetOf<Int>()
+        for (cluster in clusters) {
+            val node = feature.node?.replace("%s", cluster.policy) ?: return null
+            val list = batch[node]?.trim() ?: return null
+            list.split(Regex("\\s+")).forEach { token -> token.toIntOrNull()?.let(online::add) }
+        }
+        if (online.isEmpty()) return null
+        return LabCores.keys.associateWith { key ->
+            val core = key.removePrefix("cpu").toIntOrNull() ?: return@associateWith 0
+            if (core in online) 1 else 0
         }
     }
 
@@ -385,12 +452,11 @@ class LabViewModel(private val container: AppContainer) : ViewModel() {
      * 与 CPU 页「释放」撤的是同一套东西。
      */
     override fun onCleared() {
-        // onCleared 不在协程里，而 reset() 要跑 binder。用 applicationScope 之类
-        // 长寿命作用域会越过 ViewModel 寿命，所以这里起一个一次性的：
-        // ViewModel 已死，但释放必须跑完。
-        viewModelScope.launch {
+        // **不能在这个 ViewModel 的 scope 上 launch**：`viewModelScope` 在 clear() 时
+        // 先于 onCleared 被取消，launch 出来的协程来不及跑第一句就被取消 ——
+        // 释放看起来执行了，实际一个请求都没撤。用容器级作用域，ViewModel 死了它也继续跑。
+        container.applicationScope.launch {
             runCatching { container.labController.reset() }
-                .onFailure { if (it is CancellationException) throw it }
         }
         super.onCleared()
     }

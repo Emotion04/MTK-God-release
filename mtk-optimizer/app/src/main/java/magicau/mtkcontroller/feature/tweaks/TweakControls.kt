@@ -35,10 +35,14 @@ fun VivoFeature.labelText(): String = stringResource(labelRes)
  */
 @Composable
 fun VivoFeature.detailText(): String {
-    val detail = stringResource(detailRes)
+    val detail = detailRes?.let { stringResource(it) }.orEmpty()
     if (hintRes == 0) return detail
     val hint = stringResource(hintRes)
-    return if (hint.isBlank()) detail else "$detail\n$hint"
+    return when {
+        detail.isBlank() -> hint
+        hint.isBlank() -> detail
+        else -> "$detail\n$hint"
+    }
 }
 
 /**
